@@ -1,16 +1,18 @@
-# Agent Guidance MCP
+# Agent-Guidance-Rust
 
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Language: Rust](https://img.shields.io/badge/language-Rust-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Version](https://img.shields.io/badge/mcp-%3E%3D1.0.0-green)](https://modelcontextprotocol.io/)
-![GitHub license](https://img.shields.io/github/license/JunMystery/Agent-Guidance-MCP)
-![GitHub repo size](https://img.shields.io/github/repo-size/JunMystery/Agent-Guidance-MCP)
+![GitHub license](https://img.shields.io/github/license/JunMystery/Agent-Guidance-Rust)
+![GitHub repo size](https://img.shields.io/github/repo-size/JunMystery/Agent-Guidance-Rust)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/JunMystery)
 
 <img src="docs/images/hero-banner.png" alt="Agent Guidance MCP">
 
-MCP server serving AI agent guidance through a **185-skill catalog**, bundled guidance corpus, workflow prompts, bounded project-code context tools, and a **token optimization engine** — all over **Stdio** transport.
+High-performance **100% Native Rust 2024 Edition** MCP server serving AI agent guidance through a **168-skill embedded catalog**, bundled guidance corpus, workflow prompts, bounded project-code context tools, and a **token optimization engine** — delivering **< 1ms cold startup** and a **~35MB RAM footprint** over **Stdio** transport.
+
+> 🐍 **Looking for the Python legacy version?** Check out [Agent-Guidance-Python](https://github.com/JunMystery/Agent-Guidance-Python)!
 
 Skills are sourced from [Everything Claude Code (ECC) v2.0.0](https://github.com/affaan-m/ECC) and community contributions, covering backend, frontend, testing, security, DevOps, data, research, and 12+ language ecosystems.
 
