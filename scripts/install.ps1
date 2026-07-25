@@ -59,15 +59,24 @@ if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Pat
     $env:Path += ";$HOME\.cargo\bin"
 }
 
-$buildDir = Get-Location
-if (-not (Test-Path "Cargo.toml")) {
+# ── Determine project source root (current directory, script directory, or git clone) ──
+$buildDir = ""
+$scriptParent = if ($PSScriptRoot) { Join-Path $PSScriptRoot ".." } else { "" }
+
+if (Test-Path "Cargo.toml") {
+    $buildDir = (Get-Location).Path
+} elseif ($scriptParent -and (Test-Path (Join-Path $scriptParent "Cargo.toml"))) {
+    $buildDir = (Get-Item $scriptParent).FullName
+} else {
+    Write-Host ""
     Write-Host "📥 Standalone execution detected. Cloning repository..." -ForegroundColor Cyan
     $tmpClone = Join-Path $env:TEMP ([Guid]::NewGuid().ToString())
     git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $tmpClone
     $buildDir = $tmpClone
 }
 
-Write-Host "🔨 Building release binary..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "🔨 Building release binary from source..." -ForegroundColor Cyan
 Push-Location $buildDir
 try {
     cargo build --release
