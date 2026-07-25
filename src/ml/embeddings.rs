@@ -15,9 +15,6 @@ pub struct EmbeddingModel {
 #[allow(dead_code)]
 impl EmbeddingModel {
     pub fn load_from_local_cache() -> Result<Self> {
-        unsafe {
-            std::env::set_var("HF_HUB_OFFLINE", "1");
-        }
         let device = Device::Cpu;
         let api = ApiBuilder::new().with_progress(false).build()?;
         let repo = api.repo(Repo::new(
@@ -35,6 +32,8 @@ impl EmbeddingModel {
         let tokenizer = Tokenizer::from_file(tokenizer_filename)
             .map_err(|e| anyhow::anyhow!("Tokenizer load error: {}", e))?;
 
+        // SAFETY: VarBuilder::from_mmaped_safetensors memory-maps the model weight files on disk.
+        // The files are loaded read-only from local cache and not mutated concurrently.
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(&[weights_filename], candle_core::DType::F32, &device)?
         };

@@ -82,6 +82,11 @@ impl CodeGraphDb {
     }
 
     pub fn search_symbols(&self, query: &str, limit: usize) -> Result<Vec<(String, String, usize)>> {
+        let safe_query = sanitize_fts5_query(query);
+        if safe_query.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let mut stmt = self.conn.prepare(
             "SELECT s.file_path, s.name, s.start_line 
              FROM symbols s
@@ -90,7 +95,7 @@ impl CodeGraphDb {
              LIMIT ?",
         )?;
 
-        let rows = stmt.query_map(params![query, limit as i64], |row| {
+        let rows = stmt.query_map(params![safe_query, limit as i64], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -103,5 +108,36 @@ impl CodeGraphDb {
             results.push(r?);
         }
         Ok(results)
+    }
+}
+
+pub fn sanitize_fts5_query(query: &str) -> String {
+    // Strip FTS5 operators and special chars: double quotes, asterisks, AND, OR, NOT, NEAR, etc.
+    let cleaned: String = query
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c.is_whitespace() || c == '_' { c } else { ' ' })
+        .collect();
+
+    let tokens: Vec<&str> = cleaned
+        .split_whitespace()
+        .filter(|t| !t.eq_ignore_ascii_case("AND") && !t.eq_ignore_ascii_case("OR") && !t.eq_ignore_ascii_case("NOT") && !t.eq_ignore_ascii_case("NEAR"))
+        .collect();
+
+    if tokens.is_empty() {
+        String::new()
+    } else {
+        tokens.iter().map(|t| format!("\"{}\"", t)).collect::<Vec<_>>().join(" ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_fts5_query() {
+        let input = "fn_test OR NOT * NEAR 'quote'";
+        let sanitized = sanitize_fts5_query(input);
+        assert_eq!(sanitized, "\"fn_test\" \"quote\"");
     }
 }

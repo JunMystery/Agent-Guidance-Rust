@@ -13,6 +13,7 @@ mod optimizer;
 use mcp::config::run_setup;
 use mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use mcp::router::handle_request;
+use mcp::state::ServerState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -40,9 +41,25 @@ async fn main() -> Result<()> {
     let stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     let mut reader = BufReader::new(stdin).lines();
+    let mut state = ServerState::new();
+
+    const MAX_LINE_BYTES: usize = 10 * 1024 * 1024; // 10MB max per line
 
     while let Some(line) = reader.next_line().await? {
         if line.trim().is_empty() {
+            continue;
+        }
+
+        if line.len() > MAX_LINE_BYTES {
+            error!("Request line exceeded max limit of {} bytes", MAX_LINE_BYTES);
+            let err_resp = JsonRpcResponse::error(
+                serde_json::Value::Null,
+                -32600,
+                "Invalid Request: payload too large",
+            );
+            let out = serde_json::to_string(&err_resp)? + "\n";
+            stdout.write_all(out.as_bytes()).await?;
+            stdout.flush().await?;
             continue;
         }
 
@@ -62,8 +79,22 @@ async fn main() -> Result<()> {
             }
         };
 
+        if request.jsonrpc != "2.0" {
+            error!("Unsupported JSON-RPC version: {}", request.jsonrpc);
+            let id = request.id.unwrap_or(serde_json::Value::Null);
+            let err_resp = JsonRpcResponse::error(
+                id,
+                -32600,
+                format!("Invalid Request: jsonrpc must be '2.0', got '{}'", request.jsonrpc),
+            );
+            let out = serde_json::to_string(&err_resp)? + "\n";
+            stdout.write_all(out.as_bytes()).await?;
+            stdout.flush().await?;
+            continue;
+        }
+
         let req_id = request.id.clone();
-        match handle_request(&request.method, request.params) {
+        match handle_request(&request.method, request.params, &mut state) {
             Ok(result) => {
                 if let Some(id) = req_id {
                     let resp = JsonRpcResponse::success(id, result);
@@ -73,11 +104,12 @@ async fn main() -> Result<()> {
                 }
             }
             Err((code, msg)) => {
-                let id = req_id.unwrap_or(serde_json::Value::Null);
-                let resp = JsonRpcResponse::error(id, code, msg);
-                let out = serde_json::to_string(&resp)? + "\n";
-                stdout.write_all(out.as_bytes()).await?;
-                stdout.flush().await?;
+                if let Some(id) = req_id {
+                    let resp = JsonRpcResponse::error(id, code, msg);
+                    let out = serde_json::to_string(&resp)? + "\n";
+                    stdout.write_all(out.as_bytes()).await?;
+                    stdout.flush().await?;
+                }
             }
         }
     }

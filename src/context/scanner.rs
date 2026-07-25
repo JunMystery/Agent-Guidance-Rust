@@ -11,7 +11,14 @@ pub struct FileEntry {
 
 pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
     let mut entries = Vec::new();
-    let walker = WalkBuilder::new(root)
+
+    // Canonicalize root to resolve relative paths like '..' and symlinks safely
+    let target_root = match root.canonicalize() {
+        Ok(path) => path,
+        Err(_) => return entries,
+    };
+
+    let walker = WalkBuilder::new(&target_root)
         .max_depth(Some(max_depth))
         .hidden(true)
         .git_ignore(true)
@@ -23,10 +30,10 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
                 continue;
             }
             let path = entry.path();
-            let relative = path.strip_prefix(root).unwrap_or(path);
+            let relative = path.strip_prefix(&target_root).unwrap_or(path);
             let rel_str = relative.to_string_lossy().to_string();
 
-            if rel_str.starts_with(".git") || rel_str.starts_with(".agent-context") {
+            if rel_str == ".git" || rel_str.starts_with(".git/") || rel_str == ".agent-context" || rel_str.starts_with(".agent-context/") {
                 continue;
             }
 
@@ -43,4 +50,17 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
 
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     entries
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_project() {
+        let current_dir = Path::new(".");
+        let files = scan_project(current_dir, 2);
+        assert!(!files.is_empty());
+        assert!(files.iter().any(|f| f.path == "Cargo.toml"));
+    }
 }
