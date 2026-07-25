@@ -20,29 +20,29 @@ Skills are sourced from [Everything Claude Code (ECC) v2.0.0](https://github.com
 
 ## Installation
 
-Install the Agent Guidance MCP server and configure all local IDE clients with a single command:
+Install the Agent Guidance Rust MCP server with a single command:
 
 **Linux / macOS (Bash):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-MCP/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash
 ```
 
 **Windows (CMD / PowerShell):**
 ```cmd
-powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-MCP/main/scripts/install.ps1 | iex"
+powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
 ```
 
-*No prior Python installation required — the script bootstraps `uv` (a single-binary Python toolchain) automatically.*
+*Builds native release binary (`target/release/agent-guidance`) and copies to `~/.local/bin/agent-guidance`.*
 
 ### Verify Installation
 
 Test locally with MCP Inspector:
 
 ```bash
-DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector .venv/bin/python -m agent_guidance_mcp
+DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector ./target/release/agent-guidance
 ```
 
-Then call `agent-guidance-mcp_task_pipeline(...)` to load guidance and bounded project context. See [Usage Guide](docs/usage.md) for workflows.
+Then call `task_pipeline(...)` to load guidance and bounded project context. See [Usage Guide](docs/usage.md) for workflows.
 
 ### Upgrading
 
