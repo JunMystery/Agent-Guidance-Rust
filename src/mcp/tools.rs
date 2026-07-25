@@ -82,7 +82,12 @@ pub fn handle_tool_call(
                         .filter(|s| query.is_empty() || s.to_lowercase().contains(&query))
                         .take(20)
                         .collect();
-                    format!("# Guidance Search Results for '{}'\n\nTotal Matches: {}\n\n{}", query, matches.len(), matches.join("\n"))
+                    format!(
+                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Vector Embedding Match) -> Stage 2 (Qwen Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n-> Next Step for Agent: Use `view_file` on the top skill's SKILL.md before proceeding with work.",
+                        query,
+                        matches.len(),
+                        if matches.is_empty() { "No matching skills found.".to_string() } else { matches.join("\n") }
+                    )
                 },
                 "workflow" => {
                     let stage = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("plan");
