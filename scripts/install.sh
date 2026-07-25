@@ -6,9 +6,6 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; PURPLE='\033[0;35m'; BOLD='\033[1m'
 GRAY='\033[0;90m'; NC='\033[0m'
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
 # ── Header ────────────────────────────────────────────────────────────────────
 echo -e ""
 echo -e "${PURPLE}${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"
@@ -88,11 +85,16 @@ else
     echo -e "  ${GREEN}✓${NC} Found Cargo in PATH"
 fi
 
-# ── Clone repository if running standalone via curl | bash ───────────────────
-BUILD_DIR="$REPO_ROOT"
-if [ ! -f "$REPO_ROOT/Cargo.toml" ]; then
+# ── Determine project source root ─────────────────────────────────────────────
+# Check current directory, then script directory, otherwise clone
+BUILD_DIR=""
+if [ -f "./Cargo.toml" ]; then
+    BUILD_DIR="$(pwd)"
+elif [ -f "$(dirname "$0")/../Cargo.toml" ]; then
+    BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+else
     echo -e ""
-    echo -e "${CYAN}📥 Standalone curl execution detected. Cloning repo...${NC}"
+    echo -e "${CYAN}📥 Standalone execution detected. Cloning repository...${NC}"
     TMP_CLONE="$(mktemp -d)"
     git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$TMP_CLONE"
     BUILD_DIR="$TMP_CLONE"
