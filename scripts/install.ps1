@@ -47,7 +47,7 @@ Write-Host "⚡ Enforcing exclusive edition: Removing Python runtime & old insta
 Get-Process -Name "agent-guidance-mcp*" -ErrorAction SilentlyContinue | Stop-Process -Force
 
 if (Get-Command "uv" -ErrorAction SilentlyContinue) {
-    & uv tool uninstall agent-guidance-mcp 2>$null
+    $null = & uv tool uninstall agent-guidance-mcp 2>&1
 }
 
 if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Path "$HOME\.cargo\bin\cargo.exe")) {
