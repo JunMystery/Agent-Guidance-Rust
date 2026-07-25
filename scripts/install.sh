@@ -86,18 +86,25 @@ else
 fi
 
 # ── Determine project source root ─────────────────────────────────────────────
-# Check current directory, then script directory, otherwise clone
+# Check current directory, then script directory, otherwise fixed global directory
 BUILD_DIR=""
 if [ -f "./Cargo.toml" ]; then
     BUILD_DIR="$(pwd)"
 elif [ -f "$(dirname "$0")/../Cargo.toml" ]; then
     BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 else
-    echo -e ""
-    echo -e "${CYAN}📥 Standalone execution detected. Cloning repository...${NC}"
-    TMP_CLONE="$(mktemp -d)"
-    git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$TMP_CLONE"
-    BUILD_DIR="$TMP_CLONE"
+    GLOBAL_SRC="$HOME/.agent-guidance/src"
+    if [ -f "$GLOBAL_SRC/Cargo.toml" ]; then
+        echo -e ""
+        echo -e "${CYAN}🔄 Standalone execution: Updating existing repository at $GLOBAL_SRC...${NC}"
+        (cd "$GLOBAL_SRC" && git fetch --depth 1 origin main &>/dev/null && git reset --hard origin/main &>/dev/null) || true
+    else
+        echo -e ""
+        echo -e "${CYAN}📥 Standalone execution: Cloning repository into $GLOBAL_SRC...${NC}"
+        mkdir -p "$GLOBAL_SRC"
+        git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC"
+    fi
+    BUILD_DIR="$GLOBAL_SRC"
 fi
 
 echo -e ""
@@ -111,10 +118,6 @@ cp "$BUILD_DIR/target/release/agent-guidance" "$HOME/.local/bin/agent-guidance"
 echo -e ""
 echo -e "${PURPLE}▶${NC} Registering Agent Guidance Rust server with detected IDE clients..."
 "$HOME/.local/bin/agent-guidance" --setup
-
-if [ -n "${TMP_CLONE:-}" ] && [ -d "$TMP_CLONE" ]; then
-    rm -rf "$TMP_CLONE"
-fi
 
 echo -e ""
 echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"

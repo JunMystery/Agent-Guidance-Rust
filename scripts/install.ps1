@@ -50,7 +50,7 @@ Write-Host "⚡ Enforcing exclusive edition: Removing Python runtime & old insta
 # Terminate existing server processes
 cmd /c "taskkill /F /IM agent-guidance* >nul 2>&1"
 
-# Silently remove Python MCP edition if present via uv (bypass PowerShell NativeCommandError interception)
+# Silently remove Python MCP edition if present via uv
 if (Get-Command "uv" -ErrorAction SilentlyContinue) {
     cmd /c "uv tool uninstall agent-guidance-mcp >nul 2>&1"
 }
@@ -65,25 +65,37 @@ if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Pat
     $env:Path += ";$HOME\.cargo\bin"
 }
 
-# ── Determine project source root (current directory, script directory, or git clone) ──
+# ── Determine project source root (current directory, script directory, or fixed global directory) ──
 $buildDir = ""
 $scriptParent = if ($PSScriptRoot) { Join-Path $PSScriptRoot ".." } else { "" }
-$tmpClone = ""
 
 if (Test-Path "Cargo.toml") {
     $buildDir = (Get-Location).Path
 } elseif ($scriptParent -and (Test-Path (Join-Path $scriptParent "Cargo.toml"))) {
     $buildDir = (Get-Item $scriptParent).FullName
 } else {
-    Write-Host ""
-    Write-Host "📥 Standalone execution detected. Cloning repository..." -ForegroundColor Cyan
-    $tmpClone = Join-Path $env:TEMP ([Guid]::NewGuid().ToString())
-    & git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $tmpClone
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $tmpClone "Cargo.toml"))) {
-        Write-Host "❌ Failed to clone repository. Please check git or network connection." -ForegroundColor Red
-        exit 1
+    $globalSrc = Join-Path $HOME ".agent-guidance\src"
+    if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
+        Write-Host ""
+        Write-Host "🔄 Standalone execution: Updating existing repository at $globalSrc..." -ForegroundColor Cyan
+        Push-Location $globalSrc
+        try {
+            cmd /c "git fetch --depth 1 origin main >nul 2>&1"
+            cmd /c "git reset --hard origin/main >nul 2>&1"
+        } finally {
+            Pop-Location
+        }
+    } else {
+        Write-Host ""
+        Write-Host "📥 Standalone execution: Cloning repository into $globalSrc..." -ForegroundColor Cyan
+        if (-not (Test-Path $globalSrc)) { New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null }
+        & git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $globalSrc
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $globalSrc "Cargo.toml"))) {
+            Write-Host "❌ Failed to clone repository into $globalSrc. Check network connection or git." -ForegroundColor Red
+            exit 1
+        }
     }
-    $buildDir = $tmpClone
+    $buildDir = $globalSrc
 }
 
 Write-Host ""
@@ -116,10 +128,6 @@ Copy-Item $builtBinary "$localBin\agent-guidance.exe" -Force
 Write-Host ""
 Write-Host ">> Registering Agent Guidance Rust server with detected IDE clients..." -ForegroundColor Magenta
 & "$localBin\agent-guidance.exe" --setup
-
-if ($tmpClone -and (Test-Path $tmpClone)) {
-    Remove-Item -Recurse -Force $tmpClone -ErrorAction SilentlyContinue
-}
 
 Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
