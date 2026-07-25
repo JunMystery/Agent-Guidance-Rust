@@ -7,6 +7,7 @@ CYAN='\033[0;36m'; PURPLE='\033[0;35m'; BOLD='\033[1m'
 GRAY='\033[0;90m'; NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ── Header ────────────────────────────────────────────────────────────────────
 echo -e ""
@@ -87,13 +88,27 @@ else
     echo -e "  ${GREEN}✓${NC} Found Cargo in PATH"
 fi
 
+# ── Clone repository if running standalone via curl | bash ───────────────────
+BUILD_DIR="$REPO_ROOT"
+if [ ! -f "$REPO_ROOT/Cargo.toml" ]; then
+    echo -e ""
+    echo -e "${CYAN}📥 Standalone curl execution detected. Cloning repo...${NC}"
+    TMP_CLONE="$(mktemp -d)"
+    git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$TMP_CLONE"
+    BUILD_DIR="$TMP_CLONE"
+fi
+
 echo -e ""
 echo -e "${CYAN}🔨 Building 100% Rust release binary from source...${NC}"
-cargo build --release
+(cd "$BUILD_DIR" && cargo build --release)
 
 # Ensure binary is in ~/.local/bin
 mkdir -p "$HOME/.local/bin"
-cp target/release/agent-guidance "$HOME/.local/bin/agent-guidance"
+cp "$BUILD_DIR/target/release/agent-guidance" "$HOME/.local/bin/agent-guidance"
+
+if [ -n "${TMP_CLONE:-}" ] && [ -d "$TMP_CLONE" ]; then
+    rm -rf "$TMP_CLONE"
+fi
 
 echo -e ""
 echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"

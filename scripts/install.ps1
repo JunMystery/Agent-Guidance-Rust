@@ -59,12 +59,29 @@ if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Pat
     $env:Path += ";$HOME\.cargo\bin"
 }
 
+$buildDir = Get-Location
+if (-not (Test-Path "Cargo.toml")) {
+    Write-Host "📥 Standalone execution detected. Cloning repository..." -ForegroundColor Cyan
+    $tmpClone = Join-Path $env:TEMP ([Guid]::NewGuid().ToString())
+    git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $tmpClone
+    $buildDir = $tmpClone
+}
+
 Write-Host "🔨 Building release binary..." -ForegroundColor Cyan
-cargo build --release
+Push-Location $buildDir
+try {
+    cargo build --release
+} finally {
+    Pop-Location
+}
 
 $localBin = "$HOME\.local\bin"
 if (-not (Test-Path $localBin)) { New-Item -ItemType Directory -Path $localBin | Out-Null }
-Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
+Copy-Item (Join-Path $buildDir "target\release\agent-guidance.exe") "$localBin\agent-guidance.exe" -Force
+
+if ($tmpClone -and (Test-Path $tmpClone)) {
+    Remove-Item -Recurse -Force $tmpClone
+}
 
 Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
