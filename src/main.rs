@@ -1,0 +1,72 @@
+use anyhow::Result;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
+
+mod catalog;
+mod context;
+mod mcp;
+mod ml;
+mod optimizer;
+
+use mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
+use mcp::router::handle_request;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize logging to stderr (never stdout to avoid corrupting MCP JSON-RPC protocol)
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
+        .with_writer(std::io::stderr)
+        .init();
+
+    info!("Starting Agent Guidance MCP Rust Server v{}", env!("CARGO_PKG_VERSION"));
+
+    let stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    let mut reader = BufReader::new(stdin).lines();
+
+    while let Some(line) = reader.next_line().await? {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let request: JsonRpcRequest = match serde_json::from_str(&line) {
+            Ok(req) => req,
+            Err(e) => {
+                error!("Invalid JSON-RPC request: {}", e);
+                let err_resp = JsonRpcResponse::error(
+                    serde_json::Value::Null,
+                    -32700,
+                    format!("Parse error: {}", e),
+                );
+                let out = serde_json::to_string(&err_resp)? + "\n";
+                stdout.write_all(out.as_bytes()).await?;
+                stdout.flush().await?;
+                continue;
+            }
+        };
+
+        let req_id = request.id.clone();
+        match handle_request(&request.method, request.params) {
+            Ok(result) => {
+                if let Some(id) = req_id {
+                    let resp = JsonRpcResponse::success(id, result);
+                    let out = serde_json::to_string(&resp)? + "\n";
+                    stdout.write_all(out.as_bytes()).await?;
+                    stdout.flush().await?;
+                }
+            }
+            Err((code, msg)) => {
+                let id = req_id.unwrap_or(serde_json::Value::Null);
+                let resp = JsonRpcResponse::error(id, code, msg);
+                let out = serde_json::to_string(&resp)? + "\n";
+                stdout.write_all(out.as_bytes()).await?;
+                stdout.flush().await?;
+            }
+        }
+    }
+
+    info!("Agent Guidance MCP Rust Server shutting down cleanly.");
+    Ok(())
+}
