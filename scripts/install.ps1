@@ -88,6 +88,10 @@ $localBin = "$HOME\.local\bin"
 if (-not (Test-Path $localBin)) { New-Item -ItemType Directory -Path $localBin | Out-Null }
 Copy-Item (Join-Path $buildDir "target\release\agent-guidance.exe") "$localBin\agent-guidance.exe" -Force
 
+Write-Host ""
+Write-Host ">> Registering Agent Guidance Rust server with detected IDE clients..." -ForegroundColor Magenta
+& "$localBin\agent-guidance.exe" --setup
+
 if ($tmpClone -and (Test-Path $tmpClone)) {
     Remove-Item -Recurse -Force $tmpClone
 }

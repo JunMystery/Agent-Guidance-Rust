@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::env;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -9,11 +10,25 @@ mod mcp;
 mod ml;
 mod optimizer;
 
+use mcp::config::run_setup;
 use mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use mcp::router::handle_request;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Check command line arguments for --setup flag
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--setup".to_string()) {
+        let exe_path = env::current_exe()?;
+        let target_bin = dirs::home_dir()
+            .map(|h| h.join(".local").join("bin").join(if cfg!(windows) { "agent-guidance.exe" } else { "agent-guidance" }))
+            .unwrap_or(exe_path);
+        
+        run_setup(&target_bin)?;
+        println!("✓ Agent Guidance Rust MCP server configured in all IDE clients successfully!");
+        return Ok(());
+    }
+
     // Initialize logging to stderr (never stdout to avoid corrupting MCP JSON-RPC protocol)
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))

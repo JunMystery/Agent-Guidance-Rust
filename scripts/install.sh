@@ -108,6 +108,10 @@ echo -e "${CYAN}🔨 Building 100% Rust release binary from source...${NC}"
 mkdir -p "$HOME/.local/bin"
 cp "$BUILD_DIR/target/release/agent-guidance" "$HOME/.local/bin/agent-guidance"
 
+echo -e ""
+echo -e "${PURPLE}▶${NC} Registering Agent Guidance Rust server with detected IDE clients..."
+"$HOME/.local/bin/agent-guidance" --setup
+
 if [ -n "${TMP_CLONE:-}" ] && [ -d "$TMP_CLONE" ]; then
     rm -rf "$TMP_CLONE"
 fi
