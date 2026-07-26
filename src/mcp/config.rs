@@ -69,12 +69,7 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
         }
     }
 
-    let opencode_path = if cfg!(target_os = "windows") {
-        let appdata = std::env::var("APPDATA").unwrap_or_default();
-        PathBuf::from(appdata).join("opencode").join("opencode.json")
-    } else {
-        home.join(".config").join("opencode").join("opencode.json")
-    };
+    let opencode_path = home.join(".config").join("opencode").join("opencode.json");
     configure_opencode(&opencode_path, &bin_str)?;
 
     let codex_path = home.join(".codex").join("config.toml");
