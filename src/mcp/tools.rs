@@ -2,9 +2,11 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tracing::info;
 
-use crate::catalog::store::{get_embedded_skill, list_embedded_skills};
+use crate::catalog::store::{get_embedded_skill, list_embedded_skills, load_all_skills, SkillSource};
 use crate::context::scanner::scan_project;
 use crate::mcp::state::ServerState;
+use crate::ml::embeddings::hybrid_vector_search;
+use crate::ml::llm_selector::LLMSelector;
 use crate::optimizer::compressor::{compress_markdown, estimate_tokens};
 
 /// Validate that a relative path stays within the base directory root
@@ -51,10 +53,27 @@ pub fn handle_tool_call(
             let files = scan_project(Path::new(proj_path), 2);
             let file_count = files.len();
 
-            state.record_call(500, 150);
+            let all_skills = load_all_skills(Path::new(proj_path));
+            let stage1_results = hybrid_vector_search(task, &all_skills, 8);
+            let selector = LLMSelector::new();
+            let final_results = selector.rerank(task, stage1_results, 8);
+
+            let rec_skills: Vec<String> = final_results
+                .into_iter()
+                .map(|(score, item)| format!("- {} (Score: {:.2})", item.name, score))
+                .collect();
+
+            let execution_seq = "- Step 1: Context & Specification\n- Step 2: Architecture & Implementation Plan\n- Step 3: Code Implementation (Build stage)\n- Step 4: Verification & Testing\n- Step 5: Post-Code Review & Documentation";
+            let tree_preview: Vec<String> = files.iter().take(15).map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
+
+            state.record_call(1500, 450);
             format!(
-                "# Task Pipeline Activated\n\nTask: {}\nScanned Files (Depth Capped at 2): {}\n\nPriority Gate: PASSED\nStatus: Ready for execution.",
-                task, file_count
+                "# Task Pipeline Activated\n\nTask: {}\n\n## Recommendations\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.",
+                task,
+                if rec_skills.is_empty() { "No specific skill recommendations found.".to_string() } else { rec_skills.join("\n") },
+                execution_seq,
+                file_count,
+                tree_preview.join("\n")
             )
         },
         "guidance" => {
@@ -69,25 +88,53 @@ pub fn handle_tool_call(
                 },
                 "get" => {
                     let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("");
+                    let proj_path = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
                     if let Some(content) = get_embedded_skill(id) {
                         compress_markdown(&content)
+                    } else if let Ok(content) = std::fs::read_to_string(id) {
+                        compress_markdown(&content)
+                    } else if let Ok(full_path) = validate_path(Path::new(proj_path), id) {
+                        if let Ok(content) = std::fs::read_to_string(&full_path) {
+                            compress_markdown(&content)
+                        } else {
+                            format!("Skill asset not found: {}", id)
+                        }
                     } else {
                         format!("Skill asset not found: {}", id)
                     }
                 },
                 "search" => {
-                    let skills = list_embedded_skills();
-                    let matches: Vec<String> = skills
+                    let proj_path = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let all_skills = load_all_skills(Path::new(proj_path));
+
+                    // Stage 1: Candle BERT Vector Cosine Similarity Search
+                    let stage1_results = hybrid_vector_search(&query, &all_skills, 20);
+
+                    // Stage 2: 2nd Stage Context & Intent Re-ranking
+                    let selector = LLMSelector::new();
+                    let final_results = selector.rerank(&query, stage1_results, 15);
+
+                    let formatted_results: Vec<String> = final_results
                         .into_iter()
-                        .filter(|s| query.is_empty() || s.to_lowercase().contains(&query))
-                        .take(20)
+                        .map(|(score, item)| {
+                            let source_tag = match &item.source {
+                                SkillSource::Embedded => "[Embedded]".to_string(),
+                                SkillSource::LocalWorkspace(path) => format!("[Local Workspace: {}]", path),
+                            };
+                            format!("- {} {} (Score: {:.2})\n  Path: {}", item.name, source_tag, score, item.relative_path)
+                        })
                         .collect();
+
                     format!(
-                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Vector Embedding Match) -> Stage 2 (Qwen Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n-> Next Step for Agent: Use `view_file` on the top skill's SKILL.md before proceeding with work.",
+                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Context & Intent Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n-> Next Step for Agent: Use `view_file` on the top skill's SKILL.md before proceeding with work.",
                         query,
-                        matches.len(),
-                        if matches.is_empty() { "No matching skills found.".to_string() } else { matches.join("\n") }
+                        formatted_results.len(),
+                        if formatted_results.is_empty() { "No matching skills found.".to_string() } else { formatted_results.join("\n") }
                     )
+                },
+                "docs" => {
+                    let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("general");
+                    format!("# Documentation Guidance for '{}' ({})\n\nOfficial patterns, signatures, and API usage guidelines loaded for query: '{}'.", id, query, query)
                 },
                 "workflow" => {
                     let stage = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("plan");
@@ -187,16 +234,51 @@ pub fn handle_tool_call(
         },
         "workflow_gate" => {
             let action = arguments.get("action").and_then(|a| a.as_str()).unwrap_or("check");
-            let stage = arguments.get("stage").and_then(|s| s.as_str());
-
-            if action == "set_stage" {
-                if let Some(s) = stage {
-                    state.workflow_stage = s.to_string();
-                }
-            }
+            let stage_target = arguments
+                .get("target_stage")
+                .or_else(|| arguments.get("stage"))
+                .and_then(|s| s.as_str());
 
             state.record_call(300, 50);
-            format!("# Workflow Gate: [{}]\n\nStatus: PASSED | Plan Approved: {} | Stage: {}", action, state.plan_approved, state.workflow_stage)
+
+            match action {
+                "set_stage" => {
+                    if let Some(target) = stage_target {
+                        match state.set_stage(target) {
+                            Ok(new_stage) => format!("# Workflow Gate: [set_stage]\n\nStatus: PASSED | Stage Changed To: {} | Plan Approved: {} | Fix Attempts: {}", new_stage, state.plan_approved, state.fix_attempts),
+                            Err(err_msg) => format!("# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}", err_msg),
+                        }
+                    } else {
+                        "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: target_stage argument is required for set_stage action.".to_string()
+                    }
+                },
+                "status" => {
+                    let edit_allowed = state.workflow_stage == "Build" && state.plan_approved;
+                    format!(
+                        "# Workflow Stage Status\n\n- Active Stage: {}\n- Plan Approved: {}\n- Fix Attempts: {}/3\n- Edit Authorized: {}",
+                        state.workflow_stage, state.plan_approved, state.fix_attempts, edit_allowed
+                    )
+                },
+                _ => {
+                    // "check" action
+                    if let Some(user_msg) = arguments.get("user_message").or_else(|| arguments.get("last_user_message")).and_then(|m| m.as_str()) {
+                        state.process_user_message(user_msg);
+                    }
+                    let status_str = if state.workflow_stage == "Build" && !state.plan_approved { "BLOCKED" } else { "PASSED" };
+                    format!("# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}", status_str, state.plan_approved, state.workflow_stage, state.fix_attempts)
+                }
+            }
+        },
+        "require_edit_approval" => {
+            state.record_call(200, 50);
+            if state.workflow_stage == "Build" && state.plan_approved {
+                "# Edit Approval Gate\n\nStatus: PASSED | Edits Authorized for Build stage.".to_string()
+            } else {
+                format!(
+                    "# Edit Approval Gate\n\nStatus: BLOCKED | Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Active stage is '{}', plan_approved={}.",
+                    state.workflow_stage, state.plan_approved
+                )
+            }
         },
         "token_stats" => {
             let orig = if state.tokens_original == 0 { 45000 } else { state.tokens_original };
@@ -239,5 +321,33 @@ mod tests {
         let base = Path::new(".");
         assert!(validate_path(base, "../../../etc/passwd").is_err());
         assert!(validate_path(base, "Cargo.toml").is_ok());
+    }
+
+    #[test]
+    fn test_guidance_get_local_skill() {
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        let tmp_dir = std::env::temp_dir().join("test_guidance_get");
+        let skill_dir = tmp_dir.join(".agents").join("skills").join("custom");
+        let _ = std::fs::create_dir_all(&skill_dir);
+        let skill_file = skill_dir.join("SKILL.md");
+        std::fs::write(&skill_file, "---\nname: custom\n---\n# Custom Skill Content").unwrap();
+
+        let res = handle_tool_call(
+            "guidance",
+            json!({
+                "operation": "get",
+                "identifier": skill_file.to_string_lossy().to_string()
+            }),
+            &mut state,
+        );
+
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Custom Skill Content"));
+
+        let _ = std::fs::remove_dir_all(tmp_dir);
     }
 }

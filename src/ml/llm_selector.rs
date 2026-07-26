@@ -1,6 +1,8 @@
 use anyhow::Result;
 use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
 
+use crate::catalog::store::SkillItem;
+
 #[allow(dead_code)]
 pub struct LLMSelector {
     loaded: bool,
@@ -12,7 +14,6 @@ impl Default for LLMSelector {
     }
 }
 
-#[allow(dead_code)]
 impl LLMSelector {
     pub fn new() -> Self {
         Self { loaded: false }
@@ -42,8 +43,8 @@ impl LLMSelector {
         Ok(())
     }
 
-    /// 2nd Stage Selection: Re-ranks 1st stage candidates using task context & instruction prompt matching
-    pub fn select_skills(&self, task: &str, candidates: Vec<String>, limit: usize) -> Vec<String> {
+    /// 2nd Stage Selection: Re-ranks 1st stage vector candidates using task context & instruction prompt matching
+    pub fn rerank(&self, task: &str, candidates: Vec<(f32, SkillItem)>, limit: usize) -> Vec<(f32, SkillItem)> {
         let task_keywords: Vec<String> = task
             .to_lowercase()
             .split_whitespace()
@@ -54,41 +55,58 @@ impl LLMSelector {
             return candidates.into_iter().take(limit).collect();
         }
 
-        let mut scored: Vec<(usize, String)> = candidates
+        let mut scored: Vec<(f32, SkillItem)> = candidates
             .into_iter()
-            .map(|cand| {
-                let cand_lower = cand.to_lowercase();
-                let mut score = 0;
+            .map(|(base_score, skill)| {
+                let name_lower = skill.name.to_lowercase();
+                let content_lower = skill.content.to_lowercase();
+                let mut bonus = 0.0f32;
+
                 for kw in &task_keywords {
-                    if cand_lower == *kw {
-                        score += 10;
-                    } else if cand_lower.contains(kw) {
-                        score += 3;
+                    if name_lower == *kw {
+                        bonus += 0.3;
+                    } else if name_lower.contains(kw) {
+                        bonus += 0.15;
+                    }
+                    if content_lower.contains(kw) {
+                        bonus += 0.05;
                     }
                 }
-                (score, cand)
+
+                let final_score = base_score + bonus;
+                (final_score, skill)
             })
             .collect();
 
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
-        scored.into_iter().map(|(_, cand)| cand).take(limit).collect()
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.into_iter().take(limit).collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::store::SkillSource;
 
     #[test]
     fn test_select_skills_ranking() {
         let selector = LLMSelector::new();
         let candidates = vec![
-            "rust-testing".to_string(),
-            "python-web".to_string(),
-            "rust-async".to_string(),
+            (0.5, SkillItem {
+                name: "rust-testing".to_string(),
+                relative_path: "rust-testing/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "Testing in Rust.".to_string(),
+            }),
+            (0.8, SkillItem {
+                name: "rust-async".to_string(),
+                relative_path: "rust-async/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "Async programming in Rust.".to_string(),
+            }),
         ];
-        let ranked = selector.select_skills("rust async programming", candidates, 2);
+        let ranked = selector.rerank("rust async programming", candidates, 2);
         assert_eq!(ranked.len(), 2);
-        assert_eq!(ranked[0], "rust-async");
+        assert_eq!(ranked[0].1.name, "rust-async");
     }
 }

@@ -65,7 +65,12 @@ if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Pat
     $env:Path += ";$HOME\.cargo\bin"
 }
 
-# ── Determine project source root (current directory, script directory, or fixed global directory) ──
+# ── Determine project source root or download prebuilt binary ──
+$localBin = "$HOME\.local\bin"
+if (-not (Test-Path $localBin)) { 
+    New-Item -ItemType Directory -Path $localBin -Force | Out-Null 
+}
+
 $buildDir = ""
 $scriptParent = if ($PSScriptRoot) { Join-Path $PSScriptRoot ".." } else { "" }
 
@@ -73,57 +78,67 @@ if (Test-Path "Cargo.toml") {
     $buildDir = (Get-Location).Path
 } elseif ($scriptParent -and (Test-Path (Join-Path $scriptParent "Cargo.toml"))) {
     $buildDir = (Get-Item $scriptParent).FullName
+}
+
+if ($buildDir) {
+    Write-Host ""
+    Write-Host "🔨 Building release binary from local source ($buildDir)..." -ForegroundColor Cyan
+    Push-Location $buildDir
+    try {
+        & cargo build --release
+        if ($LASTEXITCODE -eq 0 -and (Test-Path "target\release\agent-guidance.exe")) {
+            Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
+        } else {
+            Write-Host "❌ Cargo build failed with exit code $LASTEXITCODE." -ForegroundColor Red
+            Pop-Location
+            exit 1
+        }
+    } finally {
+        Pop-Location
+    }
 } else {
-    $globalSrc = Join-Path $HOME ".agent-guidance\src"
-    if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
-        Write-Host ""
-        Write-Host "🔄 Standalone execution: Updating existing repository at $globalSrc..." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "🚀 Fast install: Downloading pre-compiled release binary..." -ForegroundColor Cyan
+    $downloadUrl = "https://github.com/JunMystery/Agent-Guidance-Rust/releases/latest/download/agent-guidance-x86_64-pc-windows-msvc.exe"
+    $targetExe = Join-Path $localBin "agent-guidance.exe"
+    
+    $downloadSuccess = $false
+    try {
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $targetExe -ErrorAction Stop
+        if (Test-Path $targetExe) {
+            $downloadSuccess = $true
+            Write-Host "  ✓ Downloaded pre-built binary successfully!" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "  ⚠️ Pre-built binary download unavailable. Falling back to source clone & build..." -ForegroundColor Yellow
+    }
+
+    if (-not $downloadSuccess) {
+        $globalSrc = Join-Path $HOME ".agent-guidance\src"
+        if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
+            Push-Location $globalSrc
+            try {
+                cmd /c "git fetch --depth 1 origin main >nul 2>&1"
+                cmd /c "git reset --hard origin/main >nul 2>&1"
+            } finally {
+                Pop-Location
+            }
+        } else {
+            if (-not (Test-Path $globalSrc)) { New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null }
+            & git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $globalSrc
+        }
+
         Push-Location $globalSrc
         try {
-            cmd /c "git fetch --depth 1 origin main >nul 2>&1"
-            cmd /c "git reset --hard origin/main >nul 2>&1"
+            & cargo build --release
+            if ($LASTEXITCODE -eq 0 -and (Test-Path "target\release\agent-guidance.exe")) {
+                Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
+            }
         } finally {
             Pop-Location
         }
-    } else {
-        Write-Host ""
-        Write-Host "📥 Standalone execution: Cloning repository into $globalSrc..." -ForegroundColor Cyan
-        if (-not (Test-Path $globalSrc)) { New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null }
-        & git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $globalSrc
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $globalSrc "Cargo.toml"))) {
-            Write-Host "❌ Failed to clone repository into $globalSrc. Check network connection or git." -ForegroundColor Red
-            exit 1
-        }
     }
-    $buildDir = $globalSrc
 }
-
-Write-Host ""
-Write-Host "🔨 Building release binary from source..." -ForegroundColor Cyan
-Push-Location $buildDir
-try {
-    & cargo build --release
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Cargo build failed with exit code $LASTEXITCODE." -ForegroundColor Red
-        Pop-Location
-        exit 1
-    }
-} finally {
-    Pop-Location
-}
-
-$localBin = "$HOME\.local\bin"
-if (-not (Test-Path $localBin)) { 
-    New-Item -ItemType Directory -Path $localBin -Force | Out-Null 
-}
-
-$builtBinary = Join-Path $buildDir "target\release\agent-guidance.exe"
-if (-not (Test-Path $builtBinary)) {
-    Write-Host "❌ Built binary not found at $builtBinary" -ForegroundColor Red
-    exit 1
-}
-
-Copy-Item $builtBinary "$localBin\agent-guidance.exe" -Force
 
 Write-Host ""
 Write-Host ">> Registering Agent Guidance Rust server with detected IDE clients..." -ForegroundColor Magenta

@@ -5,7 +5,8 @@ use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
 use tokenizers::Tokenizer;
 
-#[allow(dead_code)]
+use crate::catalog::store::SkillItem;
+
 pub struct EmbeddingModel {
     model: BertModel,
     tokenizer: Tokenizer,
@@ -26,9 +27,8 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     }
 }
 
-#[allow(dead_code)]
 impl EmbeddingModel {
-    pub fn load_from_local_cache() -> Result<Self> {
+    pub fn load_or_download() -> Result<Self> {
         let device = Device::Cpu;
         let repo_spec = Repo::new(
             "intfloat/multilingual-e5-small".to_string(),
@@ -109,24 +109,84 @@ impl EmbeddingModel {
         let vec = normalized.squeeze(0)?.to_vec1::<f32>()?;
         Ok(vec)
     }
+}
 
-    pub fn rank_candidates(&self, query: &str, candidates: &[String], top_k: usize) -> Result<Vec<(f32, String)>> {
-        let query_vec = self.embed_text(query, Some("query"))?;
-        let mut scored = Vec::new();
-        for cand in candidates {
-            if let Ok(cand_vec) = self.embed_text(cand, Some("passage")) {
-                let score = cosine_similarity(&query_vec, &cand_vec);
+pub fn hybrid_vector_search(query: &str, candidates: &[SkillItem], top_k: usize) -> Vec<(f32, SkillItem)> {
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    let q_lower = query.to_lowercase();
+    let words: Vec<&str> = q_lower.split_whitespace().collect();
+
+    let mut scored: Vec<(f32, SkillItem)> = Vec::new();
+
+    if let Ok(model) = EmbeddingModel::load_or_download() {
+        if let Ok(q_vec) = model.embed_text(query, Some("query")) {
+            for cand in candidates {
+                let text_sample = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
+                let mut score = if let Ok(c_vec) = model.embed_text(&text_sample, Some("passage")) {
+                    cosine_similarity(&q_vec, &c_vec)
+                } else {
+                    0.0
+                };
+
+                // Exact keyword match boost
+                let name_lower = cand.name.to_lowercase();
+                if name_lower == q_lower {
+                    score += 0.5;
+                } else if name_lower.contains(&q_lower) {
+                    score += 0.3;
+                } else {
+                    for w in &words {
+                        if name_lower.contains(w) {
+                            score += 0.1;
+                        }
+                    }
+                }
+
                 scored.push((score, cand.clone()));
             }
+
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            return scored.into_iter().take(top_k).collect();
         }
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        Ok(scored.into_iter().take(top_k).collect())
     }
+
+    // Resilient fallback: BM25 / token-frequency keyword ranking
+    for cand in candidates {
+        let name_lower = cand.name.to_lowercase();
+        let content_lower = cand.content.to_lowercase();
+        let mut score = 0.0f32;
+
+        if name_lower == q_lower {
+            score += 1.0;
+        } else if name_lower.contains(&q_lower) {
+            score += 0.7;
+        }
+
+        for w in &words {
+            if name_lower.contains(w) {
+                score += 0.4;
+            }
+            if content_lower.contains(w) {
+                score += 0.1;
+            }
+        }
+
+        if score > 0.0 || query.is_empty() {
+            scored.push((score, cand.clone()));
+        }
+    }
+
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored.into_iter().take(top_k).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::store::SkillSource;
 
     #[test]
     fn test_prefix_formatting() {
@@ -143,5 +203,27 @@ mod tests {
         let v3 = vec![0.0, 1.0, 0.0];
         assert!((cosine_similarity(&v1, &v2) - 1.0).abs() < 1e-5);
         assert!((cosine_similarity(&v1, &v3) - 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_hybrid_vector_search_fallback() {
+        let candidates = vec![
+            SkillItem {
+                name: "context-budget".to_string(),
+                relative_path: "context-budget/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "Reducing context size and managing token limits.".to_string(),
+            },
+            SkillItem {
+                name: "rust-testing".to_string(),
+                relative_path: "rust-testing/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "Rust unit and integration testing.".to_string(),
+            },
+        ];
+
+        let results = hybrid_vector_search("reducing context size", &candidates, 2);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].1.name, "context-budget");
     }
 }

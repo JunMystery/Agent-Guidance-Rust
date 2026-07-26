@@ -2,46 +2,42 @@
 
 [Back to README](../README.md)
 
-This project is a small Python package that exposes Agent Guidance MCP over MCP, backed by the bundled agent guidance corpus.
+This project is a high-performance **100% Native Rust 2024 Edition** MCP server exposing Agent Guidance MCP over Stdio transport.
 
-## Setup
+## Setup & Build
 
-Install the package in editable mode with dev dependencies:
+Build the server using Rust 2024 (`cargo`):
 
 ```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+cargo build
 ```
 
-On Windows:
+Build optimized release binary:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\pip install -e ".[dev]"
+cargo build --release
 ```
 
-## Source-Only Execution
+## Running the Server
 
-To run and debug the project directly from the local source directory without installing it globally (ensuring edits are used instantly):
+Run directly with Cargo:
 
 ```bash
-PYTHONPATH=src python3 -m agent_guidance_mcp --dashboard
+cargo run -- --setup
 ```
 
-This works for all commands. Replace `agent-guidance-mcp` with `PYTHONPATH=src python3 -m agent_guidance_mcp`.
-
-## Test
-
-Run the test suite:
+Start native web dashboard server:
 
 ```bash
-python -m pytest
+cargo run -- --dashboard
 ```
 
-If the system Python does not have `pytest`, use the repository virtual environment:
+## Testing
+
+Run the automated Rust test suite:
 
 ```bash
-.venv/bin/python -m pytest
+cargo test
 ```
 
 Run a whitespace check before committing:

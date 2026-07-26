@@ -1,13 +1,19 @@
 # Getting Started with Agent Guidance MCP
 
-Agent Guidance MCP is a Python MCP server that gives AI coding agents standards guidance, skill references, workflow prompts, bounded project code context, and token optimization — all over Stdio transport.
+Agent Guidance MCP is a 100% Native Rust MCP server that gives AI coding agents standards guidance, skill references, workflow prompts, bounded project code context, and token optimization — all over Stdio transport.
 
 ## Quick Start
 
 ### 1. Install
 
+**Windows (PowerShell):**
+```powershell
+powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
+```
+
+**Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-MCP/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash
 ```
 
 See [Installation](installation.md) for manual setup.
@@ -17,7 +23,7 @@ See [Installation](installation.md) for manual setup.
 Test the server with MCP Inspector:
 
 ```bash
-DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector .venv/bin/python -m agent_guidance_mcp
+DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector target/release/agent-guidance
 ```
 
 ### 3. Use in your workflow

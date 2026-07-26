@@ -4,13 +4,13 @@ Agent Guidance MCP runs as a subprocess managed by each IDE or CLI tool. When yo
 
 ## How It Works
 
-Each IDE registers `agent-guidance-mcp` in its MCP config:
+Each IDE registers `agent-guidance` in its MCP config:
 
 ```json
 {
   "mcpServers": {
-    "agent-guidance-mcp": {
-      "command": "agent-guidance-mcp",
+    "agent-guidance": {
+      "command": "agent-guidance",
       "args": []
     }
   }
@@ -19,26 +19,7 @@ Each IDE registers `agent-guidance-mcp` in its MCP config:
 
 When the IDE starts, it spawns the command as a child process. This is **stdio transport** — the IDE and MCP server communicate over stdin/stdout pipes.
 
-The embedding model is not loaded per-process. Instead, a cross-process **embed daemon** serves all MCP processes:
-
-```
-VS Code         → MCP process A ──┐
-Cursor          → MCP process B ──┼──► embed_daemon (127.0.0.1)
-Claude Desktop  → MCP process C ──┘     │
-                                    [SentenceTransformer]
-                                    intfloat/multilingual-e5-small
-```
-
-## Memory Impact
-
-| IDEs open | MCP processes | Model instances | Total RAM (model only) |
-|---|---|---|---|
-| 1 | 1 | 1 (daemon) | 466 MB |
-| 2 | 2 | 1 (daemon) | 466 MB |
-| 3 | 3 | 1 (daemon) | 466 MB |
-| 4 | 4 | 1 (daemon) | 466 MB |
-
-The daemon is spawned lazily on the first call to `agent-guidance-mcp_guidance(operation="search")` across any IDE. If you never use semantic search, the model never loads and the cost is just the base server process (~30 MB per IDE).
+The embedding model executes in-process natively via Candle BERT (`candle-core` / `candle-transformers`) with a ~35MB RSS memory footprint and sub-1ms cold startup.
 
 ### How the daemon works
 

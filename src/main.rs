@@ -6,6 +6,7 @@ use tracing_subscriber::EnvFilter;
 
 mod catalog;
 mod context;
+mod dashboard;
 mod mcp;
 mod ml;
 mod optimizer;
@@ -17,8 +18,14 @@ use mcp::state::ServerState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Check command line arguments for --setup flag
+    // Check command line arguments for --setup, --dashboard, --session-start, and --re-gate flags
     let args: Vec<String> = env::args().collect();
+    if args.contains(&"--dashboard".to_string()) {
+        let port = 3000;
+        dashboard::run_dashboard_server(port, None)?;
+        return Ok(());
+    }
+
     if args.contains(&"--setup".to_string()) {
         let exe_path = env::current_exe()?;
         let target_bin = dirs::home_dir()
@@ -27,6 +34,23 @@ async fn main() -> Result<()> {
         
         run_setup(&target_bin)?;
         println!("✓ Agent Guidance Rust MCP server configured in all IDE clients successfully!");
+        return Ok(());
+    }
+
+    if args.contains(&"--update".to_string()) || args.contains(&"--auto-update".to_string()) {
+        catalog::updater::run_update()?;
+        return Ok(());
+    }
+
+    if args.contains(&"--session-start".to_string()) || args.contains(&"--re-gate".to_string()) {
+        let mut state = ServerState::new();
+        state.priority_gate_pass();
+        
+        let json_payload = serde_json::json!({
+            "priority": "INFO",
+            "message": "agent-guidance-mcp session started. Priority gate passed and sentinel file created."
+        });
+        println!("{}", serde_json::to_string(&json_payload)?);
         return Ok(());
     }
 

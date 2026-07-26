@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerState {
+    pub priority_gate_passed: bool,
     pub workflow_stage: String,
     pub plan_approved: bool,
+    pub fix_attempts: u32,
     pub tool_calls: u32,
     pub tokens_original: u64,
     pub tokens_optimized: u64,
@@ -14,8 +17,10 @@ pub struct ServerState {
 impl Default for ServerState {
     fn default() -> Self {
         Self {
+            priority_gate_passed: false,
             workflow_stage: "Context".to_string(),
-            plan_approved: true,
+            plan_approved: false,
+            fix_attempts: 0,
             tool_calls: 0,
             tokens_original: 0,
             tokens_optimized: 0,
@@ -28,10 +33,180 @@ impl ServerState {
         Self::default()
     }
 
+    pub fn priority_gate_path() -> std::path::PathBuf {
+        dirs::home_dir()
+            .map(|h| h.join(".agent-guidance").join(".gate_passed"))
+            .unwrap_or_else(|| std::path::PathBuf::from(".gate_passed"))
+    }
+
+    pub fn priority_gate_pass(&mut self) {
+        self.priority_gate_passed = true;
+        let path = Self::priority_gate_path();
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::write(&path, "PASSED\n");
+    }
+
+    pub fn priority_gate_check(&mut self) -> Result<(), String> {
+        if self.priority_gate_passed {
+            return Ok(());
+        }
+
+        let path = Self::priority_gate_path();
+        if path.exists() {
+            self.priority_gate_passed = true;
+            let _ = fs::remove_file(&path);
+            return Ok(());
+        }
+
+        Err("PRIORITY_REQUIRED: Priority gate locked. Call agent-guidance-mcp_task_pipeline first to unlock gated tools.".to_string())
+    }
+
     pub fn record_call(&mut self, orig_tokens: u64, opt_tokens: u64) {
         self.tool_calls += 1;
         self.tokens_original += orig_tokens;
         self.tokens_optimized += opt_tokens;
+    }
+
+    pub fn set_stage(&mut self, target: &str) -> Result<String, String> {
+        let normalized = match target.trim().to_lowercase().as_str() {
+            "context" => "Context",
+            "plan" => "Plan",
+            "ask_revise" | "ask" | "revise" | "ask/revise" => "Ask_Revise",
+            "build" => "Build",
+            "test_recheck" | "test" | "recheck" | "test/recheck" => "Test_Recheck",
+            "fix" => "Fix",
+            "proposal" | "document" => "Proposal",
+            _ => return Err(format!("Invalid workflow stage '{}'. Allowed stages: Context, Plan, Ask_Revise, Build, Test_Recheck, Fix, Proposal.", target)),
+        };
+
+        if normalized == "Plan" {
+            self.plan_approved = false;
+        }
+
+        if normalized == "Build" && !self.plan_approved {
+            return Err("WORKFLOW_STAGE_BLOCKED: Cannot enter 'Build' stage because plan_approved is false. Obtain explicit user approval first.".to_string());
+        }
+
+        if normalized == "Fix" {
+            self.fix_attempts += 1;
+            if self.fix_attempts > 3 {
+                self.workflow_stage = "Ask_Revise".to_string();
+                self.plan_approved = false;
+                self.fix_attempts = 0;
+                return Err("WORKFLOW_STAGE_BLOCKED: Circuit breaker triggered after 3 consecutive failed fix attempts. Workflow stage automatically reset to 'Ask_Revise' with plan_approved=false. Please request user guidance.".to_string());
+            }
+        } else if normalized == "Test_Recheck" || normalized == "Proposal" || normalized == "Context" {
+            self.fix_attempts = 0;
+        }
+
+        self.workflow_stage = normalized.to_string();
+        Ok(self.workflow_stage.clone())
+    }
+
+    pub fn process_user_message(&mut self, message: &str) -> bool {
+        let msg = message.trim().to_lowercase();
+        if msg.is_empty() {
+            return false;
+        }
+
+        let approval_keywords = [
+            "ok", "proceed", "approved", "approve", "start", "go ahead",
+            "do it", "làm đi", "đồng ý", "chấp nhận", "yes", "yep", "lgtm",
+            "looks good", "agree", "let's do it", "make the change", "exec"
+        ];
+
+        for kw in approval_keywords {
+            if msg.contains(kw) {
+                self.plan_approved = true;
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn can_call_tool(&mut self, tool_name: &str, args: &Value) -> Result<(), String> {
+        // 1. Unlocks gate tool
+        if tool_name == "task_pipeline" {
+            self.priority_gate_pass();
+            return Ok(());
+        }
+
+        // 2. Whitelisted & Not Gated tools bypass priority gate check
+        let is_whitelisted_or_ungated = matches!(
+            tool_name,
+            "health_check" | "diagnose" | "token_stats" | "require_edit_approval" | "usage_report"
+        );
+
+        if !is_whitelisted_or_ungated {
+            // Check Layer 2 / Layer 3 Priority Gate
+            self.priority_gate_check()?;
+        }
+
+        // 3. Perform Stage Checks
+        match self.workflow_stage.as_str() {
+            "Context" => {
+                if !is_whitelisted_or_ungated && tool_name != "workflow_gate" && tool_name != "session_continuity" {
+                    return Err(format!(
+                        "WORKFLOW_STAGE_BLOCKED: Tool '{}' is blocked in 'Context' stage. Call task_pipeline and workflow_gate(action=\"set_stage\", target_stage=\"Plan\") first.",
+                        tool_name
+                    ));
+                }
+                Ok(())
+            },
+            "Plan" => {
+                if tool_name == "project_context" {
+                    let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
+                    if op == "diff" || op == "architecture" {
+                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Operation '{}' on project_context is blocked in 'Plan' stage.", op));
+                    }
+                }
+                Ok(())
+            },
+            "Ask_Revise" => {
+                if tool_name == "project_context" {
+                    let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
+                    if matches!(op, "read" | "search" | "symbols" | "references" | "structure" | "callers" | "callees" | "diff") {
+                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Code reading operation '{}' is blocked in 'Ask_Revise' stage.", op));
+                    }
+                } else if tool_name == "guidance" {
+                    let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
+                    if op == "precode" || op == "verify" {
+                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Guidance operation '{}' is blocked in 'Ask_Revise' stage.", op));
+                    }
+                }
+                Ok(())
+            },
+            "Build" => {
+                if !self.plan_approved {
+                    Err("WORKFLOW_STAGE_BLOCKED: Tool execution in 'Build' stage is blocked because plan_approved is false. Obtain user approval first.".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+            "Test_Recheck" => {
+                if tool_name == "guidance" {
+                    let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
+                    if op == "precode" {
+                        return Err("WORKFLOW_STAGE_BLOCKED: Operation 'precode' is blocked in 'Test_Recheck' stage.".to_string());
+                    }
+                }
+                Ok(())
+            },
+            "Fix" => Ok(()),
+            "Proposal" => {
+                if tool_name == "project_context" {
+                    let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
+                    if matches!(op, "diff" | "structure" | "symbols") {
+                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Operation '{}' is blocked in 'Proposal' stage.", op));
+                    }
+                }
+                Ok(())
+            },
+            _ => Ok(()),
+        }
     }
 
     pub fn save_to_dir(&self, proj_path: &Path) -> Result<(), String> {
@@ -51,5 +226,80 @@ impl ServerState {
         }
         let content = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
         serde_json::from_str(&content).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stage_transitions_and_circuit_breaker() {
+        let mut state = ServerState::new();
+        state.priority_gate_pass();
+        assert_eq!(state.workflow_stage, "Context");
+        assert!(!state.plan_approved);
+
+        assert!(state.set_stage("Plan").is_ok());
+        assert_eq!(state.workflow_stage, "Plan");
+
+        // Transitioning to Build should fail if not approved
+        assert!(state.set_stage("Build").is_err());
+
+        // Process approval
+        assert!(state.process_user_message("Looks good, proceed!"));
+        assert!(state.plan_approved);
+
+        // Now transition to Build succeeds
+        assert!(state.set_stage("Build").is_ok());
+
+        // Test Circuit breaker in Fix stage
+        assert!(state.set_stage("Fix").is_ok());
+        assert_eq!(state.fix_attempts, 1);
+        assert!(state.set_stage("Fix").is_ok());
+        assert_eq!(state.fix_attempts, 2);
+        assert!(state.set_stage("Fix").is_ok());
+        assert_eq!(state.fix_attempts, 3);
+
+        // 4th Fix attempt triggers circuit breaker reset
+        let res = state.set_stage("Fix");
+        assert!(res.is_err());
+        assert_eq!(state.workflow_stage, "Ask_Revise");
+        assert!(!state.plan_approved);
+        assert_eq!(state.fix_attempts, 0);
+    }
+
+    #[test]
+    fn test_priority_gate_and_tool_categories() {
+        // Ensure sentinel file from previous runs is cleaned up for test isolation
+        let path = ServerState::priority_gate_path();
+        if path.exists() {
+            let _ = fs::remove_file(&path);
+        }
+
+        let mut state = ServerState::new();
+
+        // 1. Gated tool fails initially with PRIORITY_REQUIRED
+        let err = state.can_call_tool("guidance", &serde_json::json!({})).unwrap_err();
+        assert!(err.contains("PRIORITY_REQUIRED"));
+
+        // 2. Whitelisted & Not Gated tools succeed without priority gate unlock
+        assert!(state.can_call_tool("health_check", &serde_json::json!({})).is_ok());
+        assert!(state.can_call_tool("diagnose", &serde_json::json!({})).is_ok());
+        assert!(state.can_call_tool("token_stats", &serde_json::json!({})).is_ok());
+        assert!(state.can_call_tool("require_edit_approval", &serde_json::json!({})).is_ok());
+        assert!(state.can_call_tool("usage_report", &serde_json::json!({})).is_ok());
+
+        // 3. Calling task_pipeline unlocks priority gate
+        assert!(state.can_call_tool("task_pipeline", &serde_json::json!({})).is_ok());
+        assert!(state.priority_gate_passed);
+
+        // 4. Now gated tool passes priority check (and workflow_gate passes in Context stage)
+        assert!(state.can_call_tool("workflow_gate", &serde_json::json!({})).is_ok());
+
+        // Clean up sentinel file created by task_pipeline
+        if path.exists() {
+            let _ = fs::remove_file(&path);
+        }
     }
 }

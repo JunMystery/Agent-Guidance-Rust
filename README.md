@@ -46,23 +46,16 @@ Then call `task_pipeline(...)` to load guidance and bounded project context. See
 
 ### Upgrading
 
-**Server + IDE registrations:** rerun the install command above.
-
-**Standards catalog & skills only:**
+**Server + IDE registrations:** Rerun the install script or rebuild via Cargo:
 ```bash
-agent-guidance-mcp --update
-```
-
-**Executable package only:**
-```bash
-uv tool update agent-guidance-mcp
+cargo build --release
 ```
 
 ### Scheduled Auto-Update
 
 ```bash
-agent-guidance-mcp --auto-update          # weekly (default)
-agent-guidance-mcp --auto-update monthly  # monthly
+agent-guidance --auto-update          # weekly (default)
+agent-guidance --auto-update monthly  # monthly
 ```
 
 Or via environment variable: `AGENT_AUTO_UPDATE_INTERVAL=weekly`
@@ -71,26 +64,25 @@ Or via environment variable: `AGENT_AUTO_UPDATE_INTERVAL=weekly`
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-MCP/main/scripts/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash -s -- --uninstall
 ```
 
 **Windows:**
 ```cmd
-powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-MCP/main/scripts/uninstall.ps1 | iex"
+powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/uninstall.ps1 | iex"
 ```
 
 ### Manual / Developer Install
 
-```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev]"      # Linux / macOS
-.venv\Scripts\pip install -e ".[dev]"  # Windows
-```
+Build natively using Rust 2024 edition:
 
 ```bash
-agent-guidance-mcp
-.venv/bin/python -m agent_guidance_mcp          # Linux / macOS
-.venv\Scripts\python.exe -m agent_guidance_mcp  # Windows
+cargo build --release
+```
+
+Run directly:
+```bash
+./target/release/agent-guidance
 ```
 
 Custom corpus path:
@@ -398,10 +390,8 @@ Data is persisted to `.agent-context/usage.db` in the project directory and surv
 | `AGENT_AUTO_UPDATE_INTERVAL` | Auto-update schedule via env var | `weekly` |
 | `--auto-update` / `--update` | CLI flags for manual update + model download | — |
 | `--session-start` | CLI flag for session-start hook auto-activation | — |
-| `--embed-daemon` | Start embedding daemon as foreground process | — |
-| `--dashboard` | Start usage dashboard server | — |
 | `--re-gate` | Re-pass priority gate for subagent recovery | — |
-| `--no-optimize` | Disable token optimization and savings tracking | — |
+| `--dashboard` | Start native web usage dashboard server (`http://127.0.0.1:3000`) | — |
 
 For full tool documentation, response formats, and examples, see [MCP Surface](docs/reference/mcp-surface.md).
 
@@ -476,7 +466,7 @@ Even with the shared embedding daemon, each MCP process still runs its own stdio
 ## Development
 
 ```bash
-python -m pytest
+cargo test
 ```
 
-The test suite verifies catalog discovery, MCP handler registration, standards search, recommendation behavior, project-context tooling (18 tests), and priority + workflow gate enforcement (13 tests covering block/pass/reset/thread-safety/sentinel persistence/edit-approval). See [Development Guide](docs/development.md) for more detail.
+The test suite verifies catalog discovery, MCP handler registration, standards search, recommendation behavior, project-context tooling, resources surface, and priority + workflow gate enforcement. See [Development Guide](docs/development.md) for more detail.

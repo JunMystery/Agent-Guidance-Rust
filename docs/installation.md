@@ -2,42 +2,49 @@
 
 [Back to README](../README.md)
 
-This project runs as a Python MCP server over Stdio transport. It requires Python 3.10 or newer.
+This project runs as a high-performance **100% Native Rust 2024 Edition** MCP server serving AI agent guidance over Stdio transport.
 
 ## Automatic Install
 
-Use the bundled installer when setting up the server for local MCP clients:
+Use the one-line installer script:
 
-```bash
-python3 scripts/install-mcp.py        # Linux / macOS
-python  scripts/install-mcp.py        # Windows
+**Windows (PowerShell):**
+```powershell
+powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
 ```
 
-The installer creates a local `.venv`, installs the package in editable mode, and attempts to configure supported MCP clients.
-
-## Manual Install
-
-Create a virtual environment and install the package locally:
-
+**Linux / macOS:**
 ```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev]"      # Linux / macOS
-.venv\Scripts\pip install -e ".[dev]"  # Windows
+curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash
 ```
 
-For runtime-only usage, the project depends on `mcp>=1.0.0`. The `dev` extra adds test dependencies such as `pytest`.
+The installer builds the native release binary (`agent-guidance`) and configures all detected IDE client configurations via `--setup`.
+
+## Manual Build from Source
+
+Build the binary directly using `cargo`:
+
+```bash
+git clone https://github.com/JunMystery/Agent-Guidance-Rust.git
+cd Agent-Guidance-Rust
+cargo build --release
+```
+
+The compiled executable binary will be created at `target/release/agent-guidance`.
 
 ## Run The Server
 
-After installation, run the MCP server with:
+Register the built binary across all installed MCP IDE clients:
 
 ```bash
-agent-guidance-mcp
-.venv/bin/python -m agent_guidance_mcp      # Linux / macOS
-.venv\Scripts\python.exe -m agent_guidance_mcp  # Windows
+./target/release/agent-guidance --setup
 ```
 
-The server uses Stdio transport, so it is normally launched by an MCP client rather than directly by a human-operated terminal.
+Or start the native web usage dashboard server:
+
+```bash
+./target/release/agent-guidance --dashboard
+```
 
 ## Standards Corpus Root
 

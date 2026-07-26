@@ -4,57 +4,40 @@
 
 ## Overview
 
-Agent Guidance MCP is a Python MCP server that gives AI coding agents standards guidance, skill references, workflow prompts, and bounded project code context. It enforces a priority gate so `agent-guidance-mcp_task_pipeline` is always called before gated tools.
+Agent Guidance MCP is a **100% Native Rust 2024 Edition** MCP server that gives AI coding agents standards guidance, skill references, workflow prompts, and bounded project code context over Stdio transport. It enforces a priority gate so `agent-guidance-mcp_task_pipeline` is always called before gated tools.
 
 ---
 
-## Module Map
+## Rust Module Map
 
 ```
-src/agent_guidance_mcp/
-├── __init__.py         # Package version, public API exports
-├── __main__.py         # CLI entry: --setup, --update, --session-start, server
-├── server.py           # FastMCP registration, priority gate, sentinel, run_session_start
-├── catalog.py          # StandardsCatalog: indexing, search, recommendations, hybrid search (keyword + vector cosine similarity)
-├── pipelines.py        # Tool dispatchers: task_pipeline, guidance, project_context, ui_ux
-├── pipeline_helpers.py # Shared helpers: framework detection, lifecycle sort, response wrapping
-│
-├── project_context.py  # Tool handlers: tree, search, read, snapshot, symbols, diff, architecture
-├── project_scan.py     # os.walk traversal, file filtering, ignore lists, doc probes
-├── project_codegraph.py# CodeGraph semantic indexing integration
-│
-├── embeddings.py       # SentenceTransformer model (intfloat/multilingual-e5-small) lazy load
-├── embed_daemon.py     # Cross-process embedding inference daemon (HTTP, file lock, health probes)
-├── reasoning.py        # 6 framework templates (decision, bug, architecture, security, perf)
-│
-├── setup.py            # Post-install: IDE registration, rule/skill deployment, uninstall
-├── updater.py          # Skill repo download, commit-SHA skip, model pre-download
-├── deploy_rules.py     # Auto-deploy rules/skills to workspace on server start
-│
-├── response_optimizer.py   # 8-stage token optimization pipeline
-├── token_analytics.py      # Token savings tracking (in-memory, ephemeral)
-├── usage.py                # Persistent usage tracking (tool calls, token savings, skill loads, embed queries → usage.db)
-├── token_config.py         # Token optimization config from env vars
-├── token_filter.py         # Filter levels: minimal, balanced, aggressive
-├── content_compressor.py   # Language-aware source truncation
-│
-├── parallel.py         # ThreadPoolExecutor helpers: parallel_map, parallel_run
-├── text.py             # Tokenization, code term extraction, text normalization
-├── paths.py            # Standards root discovery, safe path resolution
-├── symbols.py          # Tree-sitter AST extraction with regex fallback
-├── database.py         # SQLite FTS5 index for CodeGraph
-├── indexer.py          # Incremental workspace indexer
-├── watcher.py          # Background file watcher daemon
-├── tree_cache.py       # Persistent project tree cache in SQLite
-├── diagnostics.py      # Self-diagnostics: system, tree-sitter, DB, Context7
-├── session.py          # Session continuity persistence
-├── dashboard_server.py  # Standalone stdlib HTTP dashboard server (/api/stats, /health)
-├── dashboard_src/       # Dashboard HTML/CSS/JS assets (written to ~/.agent-guidance/dashboard/)
-├── ui_ux.py            # UI/UX Pro Max design guidance
-├── docs.py             # Context7 live documentation search
-├── utils.py            # Misc helpers
-├── constants.py        # PROJECT_IGNORED_PARTS, TASK_ANCHORS, etc.
-└── deploy_rules.py     # AGENTS.md / SKILL.md deployment to workspace
+src/
+├── main.rs            # Binary entrypoint (CLI args: --setup, --dashboard, --update, --session-start)
+├── catalog/           # Skills catalog management
+│   ├── store.rs       # Embedded rust_embed skills + workspace-local (.agents/skills) scanning
+│   ├── updater.rs     # Async auto-updater for 3rd-party skill repositories
+│   └── mod.rs
+├── context/           # Project context & indexing
+│   ├── scanner.rs     # Bounded workspace scanner & ignore filter
+│   ├── db.rs          # SQLite FTS5 code symbol indexing & usage database
+│   └── mod.rs
+├── dashboard/         # Native HTTP usage dashboard server & embedded HTML frontend
+│   └── mod.rs
+├── mcp/               # Model Context Protocol engine
+│   ├── protocol.rs    # JSON-RPC request & response structs
+│   ├── router.rs      # Tool dispatcher & resource router
+│   ├── state.rs       # ServerState priority gate, stage matrix & circuit breaker
+│   ├── tools.rs       # Tool handlers (task_pipeline, guidance, project_context, etc.)
+│   ├── config.rs      # IDE client auto-registration & tagged block section deployment
+│   ├── templates.rs   # Embedded AGENTS.md rules & SKILL.md templates
+│   └── mod.rs
+├── ml/                # Machine learning & vector search
+│   ├── embeddings.rs  # Candle BERT (intfloat/multilingual-e5-small) embedding engine
+│   ├── llm_selector.rs# 2nd-stage context & intent re-ranker
+│   └── mod.rs
+└── optimizer/         # Token optimization engine
+    ├── compressor.rs  # Language-aware token compressor & comment stripper
+    └── mod.rs
 ```
 
 ---
@@ -392,9 +375,6 @@ All rule/skill sections use HTML-comment tags (`<!-- agent-guidance:start -->` /
 | `--uninstall` | Remove all registrations, rules, and skill folders |
 | `--project-path` | Project root for `--session-start` and `--re-gate` |
 | `--re-gate` | Re-pass priority gate and refresh sentinel (for subagent recovery) |
-| `--embed-daemon` | Start embedding inference daemon as foreground process |
-| `--dashboard` | Start usage dashboard server |
-| `--no-optimize` | Disable token optimization and savings tracking |
 
 ---
 
