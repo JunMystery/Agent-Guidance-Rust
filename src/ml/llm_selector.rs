@@ -19,6 +19,7 @@ impl LLMSelector {
         Self { loaded: false }
     }
 
+    #[allow(dead_code)]
     pub fn load_from_local_cache(&mut self) -> Result<()> {
         if self.loaded {
             return Ok(());
