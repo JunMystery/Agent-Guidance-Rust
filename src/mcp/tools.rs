@@ -57,7 +57,16 @@ fn detect_project_path(arg_path: &str, task_text: Option<&str>, state: &mut Serv
         }
     }
 
-    // 3. Extract from task text if available
+    // 3. Fallback to workspace roots from initialize
+    if !state.workspace_roots.is_empty() {
+        let p = PathBuf::from(&state.workspace_roots[0]);
+        if p.is_dir() {
+            state.project_path = Some(p.to_string_lossy().to_string());
+            return p;
+        }
+    }
+
+    // 4. Extract from task text if available
     if let Some(task) = task_text {
         for token in task.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '`') {
             let clean = token.trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != '\\');
@@ -480,11 +489,18 @@ mod tests {
         let res2 = detect_project_path(".", None, &mut state);
         assert_eq!(res2, explicit);
 
-        // 3. Extract path from task text
+        // 3. Check workspace roots
+        let mut state3 = ServerState::new();
+        state3.workspace_roots = vec![explicit.to_string_lossy().to_string()];
+        let res3 = detect_project_path(".", None, &mut state3);
+        assert_eq!(res3, explicit);
+        assert_eq!(state3.project_path, Some(explicit.to_string_lossy().to_string()));
+
+        // 4. Extract path from task text
         let mut state2 = ServerState::new();
         let task_text = format!("Task to read at {}", explicit.to_string_lossy());
-        let res3 = detect_project_path(".", Some(&task_text), &mut state2);
-        assert_eq!(res3, explicit);
+        let res4 = detect_project_path(".", Some(&task_text), &mut state2);
+        assert_eq!(res4, explicit);
         assert_eq!(state2.project_path, Some(explicit.to_string_lossy().to_string()));
     }
 }

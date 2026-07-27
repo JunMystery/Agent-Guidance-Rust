@@ -8,17 +8,22 @@ pub fn handle_request(
     state: &mut ServerState,
 ) -> Result<Value, (i32, String)> {
     match method {
-        "initialize" => Ok(json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {
-                "tools": {},
-                "resources": {}
-            },
-            "serverInfo": {
-                "name": "Agent Guidance MCP Rust",
-                "version": env!("CARGO_PKG_VERSION")
+        "initialize" => {
+            if let Some(ref p) = params {
+                state.set_roots_from_initialize(p);
             }
-        })),
+            Ok(json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {},
+                    "resources": {}
+                },
+                "serverInfo": {
+                    "name": "Agent Guidance MCP Rust",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
+            }))
+        },
         "notifications/initialized" => Ok(json!({})),
         "ping" => Ok(json!({})),
         "resources/list" => Ok(json!({

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use tracing::info;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerState {
@@ -13,6 +14,7 @@ pub struct ServerState {
     pub tokens_original: u64,
     pub tokens_optimized: u64,
     pub project_path: Option<String>,
+    pub workspace_roots: Vec<String>,
 }
 
 impl Default for ServerState {
@@ -26,6 +28,7 @@ impl Default for ServerState {
             tokens_original: 0,
             tokens_optimized: 0,
             project_path: None,
+            workspace_roots: Vec::new(),
         }
     }
 }
@@ -35,10 +38,38 @@ impl ServerState {
         Self::default()
     }
 
+    pub fn set_roots_from_initialize(&mut self, params: &Value) {
+        if let Some(roots) = params.get("roots").and_then(|r| r.as_array()) {
+            let mut parsed_roots = Vec::new();
+            for r in roots {
+                if let Some(uri) = r.get("uri").and_then(|u| u.as_str()) {
+                    let mut path_str = uri.to_string();
+                    if path_str.starts_with("file://") {
+                        path_str = path_str.trim_start_matches("file://").to_string();
+                    }
+                    // Handle Windows file:///C:/path
+                    #[cfg(windows)]
+                    if path_str.starts_with('/') && path_str.chars().nth(2) == Some(':') {
+                        path_str = path_str.trim_start_matches('/').to_string();
+                    }
+                    parsed_roots.push(path_str);
+                }
+            }
+            if !parsed_roots.is_empty() {
+                info!("Captured workspace roots from initialize: {:?}", parsed_roots);
+                self.workspace_roots = parsed_roots;
+            }
+        }
+    }
+
     pub fn priority_gate_path() -> std::path::PathBuf {
-        dirs::home_dir()
-            .map(|h| h.join(".agent-guidance").join(".gate_passed"))
-            .unwrap_or_else(|| std::path::PathBuf::from(".gate_passed"))
+        if cfg!(test) {
+            std::env::temp_dir().join(format!("gate_passed_test_{}", std::process::id()))
+        } else {
+            dirs::home_dir()
+                .map(|h| h.join(".agent-guidance").join(".gate_passed"))
+                .unwrap_or_else(|| std::path::PathBuf::from(".gate_passed"))
+        }
     }
 
     pub fn priority_gate_pass(&mut self) {
