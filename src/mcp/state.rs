@@ -12,6 +12,7 @@ pub struct ServerState {
     pub tool_calls: u32,
     pub tokens_original: u64,
     pub tokens_optimized: u64,
+    pub project_path: Option<String>,
 }
 
 impl Default for ServerState {
@@ -24,6 +25,7 @@ impl Default for ServerState {
             tool_calls: 0,
             tokens_original: 0,
             tokens_optimized: 0,
+            project_path: None,
         }
     }
 }

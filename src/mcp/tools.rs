@@ -39,6 +39,117 @@ pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String
     }
 }
 
+fn detect_project_path(arg_path: &str, task_text: Option<&str>, state: &mut ServerState) -> PathBuf {
+    // 1. If explicit non-default argument is passed
+    if !arg_path.is_empty() && arg_path != "." {
+        let p = PathBuf::from(arg_path);
+        if p.is_dir() {
+            state.project_path = Some(p.to_string_lossy().to_string());
+            return p;
+        }
+    }
+
+    // 2. Fallback to cached path
+    if let Some(ref cached) = state.project_path {
+        let p = PathBuf::from(cached);
+        if p.is_dir() {
+            return p;
+        }
+    }
+
+    // 3. Extract from task text if available
+    if let Some(task) = task_text {
+        for token in task.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '`') {
+            let clean = token.trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != '\\');
+            if !clean.is_empty() {
+                let p = PathBuf::from(clean);
+                if p.is_absolute() && p.is_dir() {
+                    state.project_path = Some(p.to_string_lossy().to_string());
+                    return p;
+                }
+            }
+        }
+    }
+
+    // 4. Check common workspace environment variables
+    for var in &["VSCODE_WORKSPACE_FOLDER", "WORKSPACE", "PROJECT_DIR", "PWD"] {
+        if let Ok(val) = std::env::var(var) {
+            let p = PathBuf::from(&val);
+            if p.is_dir() && val != "/" {
+                if let Some(home) = dirs::home_dir() {
+                    if p != home {
+                        state.project_path = Some(p.to_string_lossy().to_string());
+                        return p;
+                    }
+                } else {
+                    state.project_path = Some(p.to_string_lossy().to_string());
+                    return p;
+                }
+            }
+        }
+    }
+
+    // 5. Parent process Cwd on Linux
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(stat) = std::fs::read_to_string("/proc/self/stat") {
+            let parts: Vec<&str> = stat.split_whitespace().collect();
+            if parts.len() > 3 {
+                if let Ok(ppid) = parts[3].parse::<u32>() {
+                    if let Ok(cwd) = std::fs::read_link(format!("/proc/{}/cwd", ppid)) {
+                        if cwd.is_dir() {
+                            if let Some(home) = dirs::home_dir() {
+                                if cwd != home {
+                                    state.project_path = Some(cwd.to_string_lossy().to_string());
+                                    return cwd;
+                                }
+                            } else {
+                                state.project_path = Some(cwd.to_string_lossy().to_string());
+                                return cwd;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 6. Walk up from Cwd looking for project markers
+    if let Ok(current) = std::env::current_dir() {
+        let is_home = dirs::home_dir().map(|h| h == current).unwrap_or(false);
+        if !is_home {
+            let mut path = current.as_path();
+            loop {
+                if path.join(".git").exists()
+                    || path.join("Cargo.toml").exists()
+                    || path.join("package.json").exists()
+                    || path.join("go.mod").exists()
+                    || path.join("AGENTS.md").exists()
+                {
+                    state.project_path = Some(path.to_string_lossy().to_string());
+                    return path.to_path_buf();
+                }
+                match path.parent() {
+                    Some(parent) => {
+                        if let Some(home) = dirs::home_dir() {
+                            if parent == home {
+                                break;
+                            }
+                        }
+                        path = parent;
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+
+    // 7. Fallback to Cwd
+    let fallback = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    state.project_path = Some(fallback.to_string_lossy().to_string());
+    fallback
+}
+
 pub fn handle_tool_call(
     name: &str,
     arguments: Value,
@@ -49,11 +160,12 @@ pub fn handle_tool_call(
     let response_text = match name {
         "task_pipeline" => {
             let task = arguments.get("task").and_then(|t| t.as_str()).unwrap_or("general task");
-            let proj_path = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-            let files = scan_project(Path::new(proj_path), 2);
+            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let proj_path = detect_project_path(proj_path_arg, Some(task), state);
+            let files = scan_project(&proj_path, 2);
             let file_count = files.len();
 
-            let all_skills = load_all_skills(Path::new(proj_path));
+            let all_skills = load_all_skills(&proj_path);
             let stage1_results = hybrid_vector_search(task, &all_skills, 8);
             let selector = LLMSelector::new();
             let final_results = selector.rerank(task, stage1_results, 8);
@@ -88,12 +200,13 @@ pub fn handle_tool_call(
                 },
                 "get" => {
                     let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("");
-                    let proj_path = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, None, state);
                     if let Some(content) = get_embedded_skill(id) {
                         compress_markdown(&content)
                     } else if let Ok(content) = std::fs::read_to_string(id) {
                         compress_markdown(&content)
-                    } else if let Ok(full_path) = validate_path(Path::new(proj_path), id) {
+                    } else if let Ok(full_path) = validate_path(&proj_path, id) {
                         if let Ok(content) = std::fs::read_to_string(&full_path) {
                             compress_markdown(&content)
                         } else {
@@ -104,8 +217,9 @@ pub fn handle_tool_call(
                     }
                 },
                 "search" => {
-                    let proj_path = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-                    let all_skills = load_all_skills(Path::new(proj_path));
+                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, None, state);
+                    let all_skills = load_all_skills(&proj_path);
 
                     // Stage 1: Candle BERT Vector Cosine Similarity Search
                     let stage1_results = hybrid_vector_search(&query, &all_skills, 20);
@@ -151,13 +265,14 @@ pub fn handle_tool_call(
         },
         "project_context" => {
             let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("tree");
-            let proj_path = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let proj_path = detect_project_path(proj_path_arg, None, state);
             let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("");
             let rel_path = arguments.get("relative_path").and_then(|r| r.as_str()).unwrap_or("");
 
             match op {
                 "tree" => {
-                    let files = scan_project(Path::new(proj_path), 2);
+                    let files = scan_project(&proj_path, 2);
                     let file_list: Vec<String> = files.into_iter().map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
                     state.record_call(2000, 400);
                     format!("# Project Tree (Depth Capped at 2)\n\n{}", file_list.join("\n"))
@@ -166,7 +281,7 @@ pub fn handle_tool_call(
                     if rel_path.is_empty() {
                         "Error: relative_path is required for read operation.".to_string()
                     } else {
-                        match validate_path(Path::new(proj_path), rel_path) {
+                        match validate_path(&proj_path, rel_path) {
                             Ok(full_path) => {
                                 match std::fs::read_to_string(&full_path) {
                                     Ok(content) => {
@@ -185,11 +300,11 @@ pub fn handle_tool_call(
                     }
                 },
                 "search" => {
-                    let files = scan_project(Path::new(proj_path), 3);
+                    let files = scan_project(&proj_path, 3);
                     let mut results = Vec::new();
                     if !query.is_empty() {
                         for file in files.iter().filter(|f| f.file_type == "file").take(50) {
-                            if let Ok(path) = validate_path(Path::new(proj_path), &file.path) {
+                            if let Ok(path) = validate_path(&proj_path, &file.path) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if content.contains(query) {
                                         results.push(format!("- {}", file.path));
@@ -211,17 +326,18 @@ pub fn handle_tool_call(
         },
         "session_continuity" => {
             let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("load");
-            let proj_path = Path::new(arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or("."));
+            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let proj_path = detect_project_path(proj_path_arg, None, state);
 
             match op {
                 "save" => {
-                    match state.save_to_dir(proj_path) {
+                    match state.save_to_dir(&proj_path) {
                         Ok(_) => "# Session Continuity\n\nSession state saved successfully to `.agent-context/session.json`.".to_string(),
                         Err(e) => format!("Failed to save session: {}", e),
                     }
                 },
                 "load" => {
-                    match ServerState::load_from_dir(proj_path) {
+                    match ServerState::load_from_dir(&proj_path) {
                         Ok(loaded) => {
                             *state = loaded;
                             format!("# Session Continuity\n\nLoaded state. Stage: {}, Total Calls: {}", state.workflow_stage, state.tool_calls)
@@ -349,5 +465,26 @@ mod tests {
         assert!(text.contains("Custom Skill Content"));
 
         let _ = std::fs::remove_dir_all(tmp_dir);
+    }
+
+    #[test]
+    fn test_detect_project_path() {
+        let mut state = ServerState::new();
+        // 1. Check explicit path
+        let explicit = std::env::current_dir().unwrap();
+        let res = detect_project_path(&explicit.to_string_lossy(), None, &mut state);
+        assert_eq!(res, explicit);
+        assert_eq!(state.project_path, Some(explicit.to_string_lossy().to_string()));
+
+        // 2. Check fallback to cached path
+        let res2 = detect_project_path(".", None, &mut state);
+        assert_eq!(res2, explicit);
+
+        // 3. Extract path from task text
+        let mut state2 = ServerState::new();
+        let task_text = format!("Task to read at {}", explicit.to_string_lossy());
+        let res3 = detect_project_path(".", Some(&task_text), &mut state2);
+        assert_eq!(res3, explicit);
+        assert_eq!(state2.project_path, Some(explicit.to_string_lossy().to_string()));
     }
 }
