@@ -50,7 +50,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}.exe" "${{ matrix.artifact_name }}"
+            cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "${{ matrix.artifact_name }}"
           else
             cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "${{ matrix.artifact_name }}"
             chmod +x "${{ matrix.artifact_name }}"
