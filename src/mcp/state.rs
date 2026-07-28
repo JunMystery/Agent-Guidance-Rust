@@ -227,6 +227,7 @@ impl ServerState {
         let is_whitelisted_or_ungated = matches!(
             tool_name,
             "health_check" | "diagnose" | "token_stats" | "require_edit_approval" | "usage_report"
+            | "workflow_gate" | "session_continuity"
         );
 
         if !is_whitelisted_or_ungated {
@@ -378,6 +379,8 @@ mod tests {
         assert!(state.can_call_tool("token_stats", &serde_json::json!({})).is_ok());
         assert!(state.can_call_tool("require_edit_approval", &serde_json::json!({})).is_ok());
         assert!(state.can_call_tool("usage_report", &serde_json::json!({})).is_ok());
+        assert!(state.can_call_tool("workflow_gate", &serde_json::json!({})).is_ok());
+        assert!(state.can_call_tool("session_continuity", &serde_json::json!({"operation": "load"})).is_ok());
 
         // 3. Calling task_pipeline unlocks priority gate
         assert!(state.can_call_tool("task_pipeline", &serde_json::json!({})).is_ok());
