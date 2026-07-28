@@ -47,6 +47,11 @@ pub async fn try_proxy_mode() -> bool {
                 }
                 Err(e) => {
                     info!("Socket connect failed ({}), retrying...", e);
+                    // Stale socket — daemon died without cleanup. Remove it.
+                    if attempt == 2 {
+                        let _ = fs::remove_file(&path);
+                        info!("Removed stale socket: {:?}", path);
+                    }
                 }
             }
         }
@@ -64,17 +69,19 @@ pub async fn try_proxy_mode() -> bool {
 #[cfg(unix)]
 async fn proxy_main(stream: UnixStream) {
     let socket = stream;
+    let sent_connect = std::env::var("AGENT_CLIENT_NAME").is_ok();
 
-    // Send client/connect metadata before forwarding JSON-RPC
-    if let Ok(name) = std::env::var("AGENT_CLIENT_NAME") {
-        let meta = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "client/connect",
-            "params": { "name": name }
-        });
-        let meta_bytes = (serde_json::to_string(&meta).unwrap_or_default() + "\n").into_bytes();
-        let _ = socket.writable().await;
-        let _ = socket.try_write(&meta_bytes);
+    if sent_connect {
+        if let Ok(name) = std::env::var("AGENT_CLIENT_NAME") {
+            let meta = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "client/connect",
+                "params": { "name": name }
+            });
+            let meta_bytes = (serde_json::to_string(&meta).unwrap_or_default() + "\n").into_bytes();
+            let _ = socket.writable().await;
+            let _ = socket.try_write(&meta_bytes);
+        }
     }
 
     let (socket_rx, socket_tx) = socket.into_split();
@@ -104,8 +111,10 @@ async fn proxy_main(stream: UnixStream) {
 
     let to_stdout = tokio::spawn(async move {
         let mut reader = BufReader::new(socket_rx).lines();
-        // Skip the connect response (first line from daemon)
-        let _ = reader.next_line().await;
+        // Skip the connect response (first line from daemon) only if we sent one
+        if sent_connect {
+            let _ = reader.next_line().await;
+        }
         let mut stdout = tokio::io::stdout();
         loop {
             match reader.next_line().await {
@@ -272,18 +281,29 @@ fn acquire_daemon_lock() -> Option<std::fs::File> {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    // create_new(true) atomically creates the file only if it doesn't exist
+    // Use advisory flock so the lock auto-releases when the process dies
     match fs::OpenOptions::new()
         .write(true)
-        .create_new(true)
+        .create(true)
         .open(&path)
     {
         Ok(file) => {
-            info!("Daemon lock acquired.");
-            Some(file)
+            use fs2::FileExt;
+            match file.try_lock_exclusive() {
+                Ok(()) => {
+                    info!("Daemon lock acquired.");
+                    // Write PID for debugging
+                    let _ = fs::write(&path, format!("{}", std::process::id()));
+                    Some(file)
+                }
+                Err(_) => {
+                    info!("Another daemon is already running (lock held).");
+                    None
+                }
+            }
         }
-        Err(_) => {
-            info!("Another daemon is already running (lock exists).");
+        Err(e) => {
+            error!("Failed to open daemon lock file: {}", e);
             None
         }
     }

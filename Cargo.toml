@@ -24,4 +24,5 @@ regex = "1.10"
 dirs = "5.0"
 tiny_http = "0.12"
 toml = "0.8"
+fs2 = "0.4"
 
