@@ -11,6 +11,9 @@ on:
         required: true
         default: v1.1.6
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build ${{ matrix.target }}
@@ -31,10 +34,10 @@ jobs:
             os: macos-latest
             binary: agent-guidance
             asset: agent-guidance-aarch64-apple-darwin
-          - target: x86_64-pc-windows-gnu
-            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
             binary: agent-guidance.exe
-            asset: agent-guidance-x86_64-pc-windows-gnu
+            asset: agent-guidance-x86_64-pc-windows-msvc.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -44,15 +47,12 @@ jobs:
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install Windows cross toolchain
-        if: matrix.target == 'x86_64-pc-windows-gnu'
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
-
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary
-        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
+        shell: bash
+        run: cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "${{ matrix.asset }}"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
