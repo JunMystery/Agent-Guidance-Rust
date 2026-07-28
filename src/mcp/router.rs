@@ -12,6 +12,10 @@ pub fn handle_request(
             if let Some(ref p) = params {
                 state.set_roots_from_initialize(p);
             }
+            std::thread::spawn(|| {
+                drop(crate::ml::embeddings::cached_model());
+                drop(crate::ml::llm_selector::cached_cross_encoder());
+            });
             Ok(json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {

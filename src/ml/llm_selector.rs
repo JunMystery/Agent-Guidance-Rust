@@ -8,7 +8,7 @@ use tokenizers::Tokenizer;
 
 use crate::catalog::store::SkillItem;
 
-struct CrossEncoder {
+pub(crate) struct CrossEncoder {
     model: BertModel,
     classifier: candle_nn::Linear,
     tokenizer: Tokenizer,
@@ -74,7 +74,7 @@ impl CrossEncoder {
     }
 }
 
-fn cached_cross_encoder() -> Result<std::sync::MutexGuard<'static, CrossEncoder>, String> {
+pub fn cached_cross_encoder() -> Result<std::sync::MutexGuard<'static, CrossEncoder>, String> {
     static CE: OnceLock<Mutex<CrossEncoder>> = OnceLock::new();
     let ce = CE.get_or_init(|| {
         CrossEncoder::load()

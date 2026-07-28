@@ -112,7 +112,7 @@ impl EmbeddingModel {
     }
 }
 
-fn cached_model() -> Result<std::sync::MutexGuard<'static, EmbeddingModel>, String> {
+pub fn cached_model() -> Result<std::sync::MutexGuard<'static, EmbeddingModel>, String> {
     static MODEL: OnceLock<Mutex<EmbeddingModel>> = OnceLock::new();
     let model = MODEL.get_or_init(|| {
         EmbeddingModel::load_or_download()
