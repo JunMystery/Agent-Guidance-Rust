@@ -11,7 +11,7 @@ mod mcp;
 mod ml;
 mod optimizer;
 
-use mcp::config::run_setup;
+use mcp::config::{run_setup, run_verify_setup, run_uninstall};
 
 #[cfg(not(unix))]
 use daemon::handle_mcp_lines;
@@ -41,12 +41,29 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    if args.contains(&"--verify-setup".to_string()) {
+        let exe_path = env::current_exe()?;
+        run_verify_setup(&exe_path)?;
+        return Ok(());
+    }
+
+    if args.contains(&"--uninstall".to_string()) {
+        run_uninstall()?;
+        println!("Agent Guidance Rust MCP server uninstalled from all IDE clients successfully!");
+        return Ok(());
+    }
+
     if args.contains(&"--session-start".to_string()) || args.contains(&"--re-gate".to_string()) {
         let mut state = mcp::state::ServerState::new();
         state.priority_gate_pass();
+        let freshness = state.session_freshness_note();
+        let mut msg = "agent-guidance-mcp session started. Priority gate passed and sentinel file created.".to_string();
+        if let Some(note) = freshness {
+            msg.push_str(&format!(" {}", note));
+        }
         let json_payload = serde_json::json!({
             "priority": "INFO",
-            "message": "agent-guidance-mcp session started. Priority gate passed and sentinel file created."
+            "message": msg
         });
         println!("{}", serde_json::to_string(&json_payload)?);
         return Ok(());

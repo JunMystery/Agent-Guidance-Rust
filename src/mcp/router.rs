@@ -12,8 +12,6 @@ pub fn handle_request(
             if let Some(ref p) = params {
                 state.set_roots_from_initialize(p);
             }
-            let _ = crate::ml::embeddings::warmup_cache();
-            drop(crate::ml::llm_selector::cached_cross_encoder());
             Ok(json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
@@ -27,6 +25,14 @@ pub fn handle_request(
             }))
         },
         "notifications/initialized" => Ok(json!({})),
+        "client/connect" => {
+            if let Some(ref p) = params {
+                if let Some(name) = p.get("name").and_then(|n| n.as_str()) {
+                    state.agent_client_name = Some(name.to_string());
+                }
+            }
+            Ok(json!({}))
+        },
         "ping" => Ok(json!({})),
         "resources/list" => Ok(json!({
             "resources": [

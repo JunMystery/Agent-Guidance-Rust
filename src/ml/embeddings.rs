@@ -3,7 +3,7 @@ use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 use tokenizers::Tokenizer;
 
 use crate::catalog::store::SkillItem;
@@ -115,14 +115,24 @@ impl EmbeddingModel {
 
 static PASSAGE_CACHE: OnceLock<Mutex<Vec<Vec<f32>>>> = OnceLock::new();
 
-pub fn cached_model() -> Result<std::sync::MutexGuard<'static, EmbeddingModel>, String> {
-    static MODEL: OnceLock<Mutex<EmbeddingModel>> = OnceLock::new();
+pub fn cached_model() -> Result<std::sync::RwLockReadGuard<'static, EmbeddingModel>, String> {
+    static MODEL: OnceLock<RwLock<EmbeddingModel>> = OnceLock::new();
     let model = MODEL.get_or_init(|| {
         EmbeddingModel::load_or_download()
-            .map(Mutex::new)
+            .map(RwLock::new)
             .expect("Failed to load embedding model. Check HuggingFace cache and network connectivity.")
     });
-    model.lock().map_err(|_| "Mutex poisoned".to_string())
+    model.read().map_err(|_| "RwLock poisoned".to_string())
+}
+
+pub fn cached_model_write() -> Result<std::sync::RwLockWriteGuard<'static, EmbeddingModel>, String> {
+    static MODEL: OnceLock<RwLock<EmbeddingModel>> = OnceLock::new();
+    let model = MODEL.get_or_init(|| {
+        EmbeddingModel::load_or_download()
+            .map(RwLock::new)
+            .expect("Failed to load embedding model. Check HuggingFace cache and network connectivity.")
+    });
+    model.write().map_err(|_| "RwLock poisoned".to_string())
 }
 
 pub fn warmup_cache() {
@@ -138,7 +148,7 @@ pub fn warmup_cache() {
             })
         })
         .collect();
-    if let Ok(model) = cached_model() {
+    if let Ok(model) = cached_model_write() {
         let mut vecs = Vec::with_capacity(candidates.len());
         for cand in &candidates {
             let text = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());

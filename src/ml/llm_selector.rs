@@ -3,10 +3,11 @@ use candle_core::{Device, Module, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{OnceLock, RwLock};
 use tokenizers::Tokenizer;
 
 use crate::catalog::store::SkillItem;
+use rayon::prelude::*;
 
 pub(crate) struct CrossEncoder {
     model: BertModel,
@@ -74,14 +75,14 @@ impl CrossEncoder {
     }
 }
 
-pub fn cached_cross_encoder() -> Result<std::sync::MutexGuard<'static, CrossEncoder>, String> {
-    static CE: OnceLock<Mutex<CrossEncoder>> = OnceLock::new();
+pub fn cached_cross_encoder() -> Result<std::sync::RwLockReadGuard<'static, CrossEncoder>, String> {
+    static CE: OnceLock<RwLock<CrossEncoder>> = OnceLock::new();
     let ce = CE.get_or_init(|| {
         CrossEncoder::load()
-            .map(Mutex::new)
+            .map(RwLock::new)
             .expect("Failed to load cross-encoder model. Reranking will use keyword fallback.")
     });
-    ce.lock().map_err(|_| "Mutex poisoned".to_string())
+    ce.read().map_err(|_| "RwLock poisoned".to_string())
 }
 
 pub struct LLMSelector;
@@ -98,22 +99,22 @@ impl LLMSelector {
     }
 
     pub fn rerank(&self, task: &str, candidates: Vec<(f32, SkillItem)>, limit: usize) -> Vec<(f32, SkillItem)> {
-        if let Ok(ce) = cached_cross_encoder() {
-            let mut scored: Vec<(f32, SkillItem)> = Vec::new();
-            for (_score, skill) in candidates.iter() {
+        let mut scored: Vec<(f32, SkillItem)> = candidates
+            .par_iter()
+            .filter_map(|(_score, skill)| {
                 let text = format!(
                     "{} {}",
                     skill.name,
                     skill.content.chars().take(200).collect::<String>()
                 );
-                if let Ok(s) = ce.score(task, &text) {
-                    scored.push((s, skill.clone()));
-                }
-            }
-            if !scored.is_empty() {
-                scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-                return scored.into_iter().take(limit).collect();
-            }
+                cached_cross_encoder().ok().and_then(|ce| {
+                    ce.score(task, &text).ok().map(|s| (s, skill.clone()))
+                })
+            })
+            .collect();
+        if !scored.is_empty() {
+            scored.par_sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            return scored.into_iter().take(limit).collect();
         }
 
         self.keyword_fallback(task, candidates, limit)

@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
+
+const SESSION_STALE_TIMEOUT_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerState {
@@ -14,7 +17,9 @@ pub struct ServerState {
     pub tokens_original: u64,
     pub tokens_optimized: u64,
     pub project_path: Option<String>,
+    pub agent_client_name: Option<String>,
     pub workspace_roots: Vec<String>,
+    pub last_session_start: Option<u64>,
 }
 
 impl Default for ServerState {
@@ -28,15 +33,34 @@ impl Default for ServerState {
             tokens_original: 0,
             tokens_optimized: 0,
             project_path: None,
+            agent_client_name: None,
             workspace_roots: Vec::new(),
+            last_session_start: None,
         }
     }
 }
 
 impl ServerState {
     pub fn new() -> Self {
-        Self::default()
+        Self::with_client_name(None)
     }
+
+    pub fn with_client_name(client_name: Option<String>) -> Self {
+        Self {
+            priority_gate_passed: false,
+            workflow_stage: "Context".to_string(),
+            plan_approved: false,
+            fix_attempts: 0,
+            tool_calls: 0,
+            tokens_original: 0,
+            tokens_optimized: 0,
+            project_path: None,
+            workspace_roots: Vec::new(),
+            last_session_start: None,
+            agent_client_name: client_name,
+        }
+    }
+
 
     pub fn set_roots_from_initialize(&mut self, params: &Value) {
         if let Some(roots) = params.get("roots").and_then(|r| r.as_array()) {
@@ -74,26 +98,58 @@ impl ServerState {
 
     pub fn priority_gate_pass(&mut self) {
         self.priority_gate_passed = true;
+        self.last_session_start = Some(
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+        );
         let path = Self::priority_gate_path();
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        let _ = fs::write(&path, "PASSED\n");
+        let sentinel = serde_json::json!({
+            "status": "PASSED",
+            "timestamp": self.last_session_start
+        });
+        let _ = fs::write(&path, serde_json::to_string(&sentinel).unwrap_or_default());
     }
 
     pub fn priority_gate_check(&mut self) -> Result<(), String> {
         if self.priority_gate_passed {
+            if let Some(ts) = self.last_session_start {
+                let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+                if now > ts && now - ts > SESSION_STALE_TIMEOUT_SECS {
+                    let mins = (now - ts) / 60;
+                    info!("Session is stale ({}m since last task_pipeline). Agent should re-call task_pipeline.", mins);
+                }
+            }
             return Ok(());
         }
 
         let path = Self::priority_gate_path();
         if path.exists() {
             self.priority_gate_passed = true;
-            let _ = fs::remove_file(&path);
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(sentinel) = serde_json::from_str::<serde_json::Value>(&content) {
+                    self.last_session_start = sentinel.get("timestamp").and_then(|t| t.as_u64());
+                }
+            }
             return Ok(());
         }
 
         Err("PRIORITY_REQUIRED: Priority gate locked. Call agent-guidance-mcp_task_pipeline first to unlock gated tools.".to_string())
+    }
+
+    pub fn session_freshness_note(&self) -> Option<String> {
+        let ts = self.last_session_start?;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        if now > ts && now - ts > SESSION_STALE_TIMEOUT_SECS {
+            let mins = (now - ts) / 60;
+            Some(format!(
+                "⚠ Session may be stale — {}m since last task_pipeline. Consider re-calling task_pipeline for fresh context.",
+                mins
+            ))
+        } else {
+            None
+        }
     }
 
     pub fn record_call(&mut self, orig_tokens: u64, opt_tokens: u64) {

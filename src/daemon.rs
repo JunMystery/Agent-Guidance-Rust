@@ -1,16 +1,16 @@
+use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::time::timeout;
 use tracing::{error, info};
 
 use crate::mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::mcp::router::handle_request;
 use crate::mcp::state::ServerState;
 
-#[cfg(unix)]
-use tokio::io::AsyncReadExt;
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
 
@@ -22,6 +22,14 @@ pub fn socket_path() -> PathBuf {
         .join("mcp.sock")
 }
 
+#[cfg(unix)]
+fn lock_path() -> PathBuf {
+    dirs::cache_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("agent-guidance")
+        .join("daemon.lock")
+}
+
 #[cfg(not(unix))]
 pub fn socket_path() -> PathBuf {
     PathBuf::from("")
@@ -30,19 +38,22 @@ pub fn socket_path() -> PathBuf {
 #[cfg(unix)]
 pub async fn try_proxy_mode() -> bool {
     let path = socket_path();
-    if !path.exists() {
-        return false;
-    }
-    match UnixStream::connect(&path).await {
-        Ok(stream) => {
-            proxy_main(stream).await;
-            true
+    for attempt in 0..3 {
+        if path.exists() {
+            match UnixStream::connect(&path).await {
+                Ok(stream) => {
+                    proxy_main(stream).await;
+                    return true;
+                }
+                Err(e) => {
+                    info!("Socket connect failed ({}), retrying...", e);
+                }
+            }
         }
-        Err(e) => {
-            info!("Socket connect failed ({}), starting daemon mode.", e);
-            false
-        }
+        tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
     }
+    info!("Could not connect to existing daemon — will start new one.");
+    false
 }
 
 #[cfg(not(unix))]
@@ -52,22 +63,39 @@ pub async fn try_proxy_mode() -> bool {
 
 #[cfg(unix)]
 async fn proxy_main(stream: UnixStream) {
-    let (mut socket_rx, mut socket_tx) = stream.into_split();
-    let mut stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
+    let socket = stream;
+
+    // Send client/connect metadata before forwarding JSON-RPC
+    if let Ok(name) = std::env::var("AGENT_CLIENT_NAME") {
+        let meta = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "client/connect",
+            "params": { "name": name }
+        });
+        let meta_bytes = (serde_json::to_string(&meta).unwrap_or_default() + "\n").into_bytes();
+        let _ = socket.writable().await;
+        let _ = socket.try_write(&meta_bytes);
+    }
+
+    let (socket_rx, socket_tx) = socket.into_split();
 
     let to_daemon = tokio::spawn(async move {
-        let mut buf = [0u8; 65536];
+        let mut stdin = BufReader::new(tokio::io::stdin()).lines();
+        let mut socket_tx = socket_tx;
         loop {
-            match stdin.read(&mut buf).await {
-                Ok(0) => {
-                    let _ = socket_tx.shutdown().await;
-                    break;
-                }
-                Ok(n) => {
-                    if socket_tx.write_all(&buf[..n]).await.is_err() {
+            match stdin.next_line().await {
+                Ok(Some(line)) => {
+                    let line_bytes = (line + "\n").into_bytes();
+                    if socket_tx.write_all(&line_bytes).await.is_err() {
                         break;
                     }
+                    if socket_tx.flush().await.is_err() {
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    let _ = socket_tx.shutdown().await;
+                    break;
                 }
                 Err(_) => break,
             }
@@ -75,16 +103,22 @@ async fn proxy_main(stream: UnixStream) {
     });
 
     let to_stdout = tokio::spawn(async move {
-        let mut buf = [0u8; 65536];
+        let mut reader = BufReader::new(socket_rx).lines();
+        // Skip the connect response (first line from daemon)
+        let _ = reader.next_line().await;
+        let mut stdout = tokio::io::stdout();
         loop {
-            match socket_rx.read(&mut buf).await {
-                Ok(0) => break,
-                Ok(n) => {
-                    if stdout.write_all(&buf[..n]).await.is_err() {
+            match reader.next_line().await {
+                Ok(Some(line)) => {
+                    let line_bytes = (line + "\n").into_bytes();
+                    if stdout.write_all(&line_bytes).await.is_err() {
                         break;
                     }
-                    let _ = stdout.flush().await;
+                    if stdout.flush().await.is_err() {
+                        break;
+                    }
                 }
+                Ok(None) => break,
                 Err(_) => break,
             }
         }
@@ -99,9 +133,11 @@ where
     W: tokio::io::AsyncWrite + Unpin + Send,
 {
     let mut reader = BufReader::new(reader).lines();
-    let mut state = ServerState::new();
+    let client_name = std::env::var("AGENT_CLIENT_NAME").ok();
+    let mut state = ServerState::with_client_name(client_name);
 
     const MAX_LINE_BYTES: usize = 10 * 1024 * 1024;
+    const REQUEST_TIMEOUT_SECS: u64 = 60;
 
     loop {
         let line = match reader.next_line().await {
@@ -179,10 +215,28 @@ where
         }
 
         let req_id = request.id.clone();
-        match handle_request(&request.method, request.params, &mut state) {
-            Ok(result) => {
+
+        // P3: Timeout around handle_request to prevent indefinite blocking
+        let result = match timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS), async {
+            handle_request(&request.method, request.params, &mut state)
+        }).await {
+            Ok(res) => res,
+            Err(_) => {
+                error!("Request timed out after {}s: {}", REQUEST_TIMEOUT_SECS, request.method);
                 if let Some(id) = req_id {
-                    let resp = JsonRpcResponse::success(id, result);
+                    let resp = JsonRpcResponse::error(id, -32000, format!("Request timed out after {}s", REQUEST_TIMEOUT_SECS));
+                    let out = serde_json::to_string(&resp).unwrap_or_default() + "\n";
+                    let _ = writer.write_all(out.as_bytes()).await;
+                    let _ = writer.flush().await;
+                }
+                continue;
+            }
+        };
+
+        match result {
+            Ok(resp_value) => {
+                if let Some(id) = req_id {
+                    let resp = JsonRpcResponse::success(id, resp_value);
                     let out = serde_json::to_string(&resp).unwrap_or_default() + "\n";
                     if let Err(e) = writer.write_all(out.as_bytes()).await {
                         error!("Write error: {}", e);
@@ -213,15 +267,53 @@ where
 }
 
 #[cfg(unix)]
+fn acquire_daemon_lock() -> Option<std::fs::File> {
+    let path = lock_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    // create_new(true) atomically creates the file only if it doesn't exist
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(file) => {
+            info!("Daemon lock acquired.");
+            Some(file)
+        }
+        Err(_) => {
+            info!("Another daemon is already running (lock exists).");
+            None
+        }
+    }
+}
+
+#[cfg(unix)]
+fn release_daemon_lock() {
+    let path = lock_path();
+    let _ = fs::remove_file(&path);
+}
+
+#[cfg(unix)]
 pub async fn daemon_main() {
+    // P2: Atomic lock to prevent dual-daemon race
+    let _lock = match acquire_daemon_lock() {
+        Some(l) => l,
+        None => {
+            error!("Daemon lock held by another process. Exiting.");
+            std::process::exit(1);
+        }
+    };
+
     let path = socket_path();
     if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
+        if let Err(e) = fs::create_dir_all(parent) {
             error!("Failed to create socket directory: {}", e);
             return;
         }
     }
-    let _ = std::fs::remove_file(&path);
+    let _ = fs::remove_file(&path);
 
     let listener = match UnixListener::bind(&path) {
         Ok(l) => l,
@@ -232,17 +324,30 @@ pub async fn daemon_main() {
     };
     info!("Daemon listening on {:?}", path);
 
-    let connections = Arc::new(AtomicUsize::new(0));
+    // P0: Warm up ML models synchronously before accepting connections
+    // Uses spawn_blocking so it doesn't starve the async runtime
+    info!("Warming up ML models (this may take ~20s on first run)...");
+    let warmup = tokio::task::spawn_blocking(|| {
+        let _ = crate::ml::embeddings::warmup_cache();
+        drop(crate::ml::llm_selector::cached_cross_encoder());
+    });
+    if let Err(e) = warmup.await {
+        error!("Model warmup failed: {:?}", e);
+    } else {
+        info!("Model warmup complete.");
+    }
 
-    connections.fetch_add(1, Ordering::SeqCst);
-    let c_stdio = connections.clone();
+    let socket_connections = Arc::new(AtomicUsize::new(0));
+    let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    let sc = stdio_closed.clone();
     tokio::spawn(async move {
         info!("Handling initial stdio connection.");
         handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
-        c_stdio.fetch_sub(1, Ordering::SeqCst);
+        sc.store(true, Ordering::SeqCst);
     });
 
-    let c_accept = connections.clone();
+    let c_accept = socket_connections.clone();
     tokio::spawn(async move {
         loop {
             match listener.accept().await {
@@ -265,26 +370,27 @@ pub async fn daemon_main() {
 
     loop {
         tokio::time::sleep(Duration::from_millis(200)).await;
-        if connections.load(Ordering::SeqCst) == 0 {
+        if stdio_closed.load(Ordering::SeqCst) && socket_connections.load(Ordering::SeqCst) == 0 {
             info!("No active connections — daemon will shut down in 30s.");
             for remaining in (1..=30).rev() {
                 if remaining % 10 == 0 {
                     info!("Shutdown in {}s...", remaining);
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                if connections.load(Ordering::SeqCst) > 0 {
+                if socket_connections.load(Ordering::SeqCst) > 0 {
                     info!("New connection arrived — cancelled shutdown.");
                     break;
                 }
             }
-            if connections.load(Ordering::SeqCst) == 0 {
+            if socket_connections.load(Ordering::SeqCst) == 0 {
                 info!("Idle timeout reached — shutting down daemon.");
                 break;
             }
         }
     }
 
-    let _ = std::fs::remove_file(&path);
+    let _ = fs::remove_file(&path);
+    release_daemon_lock();
 }
 
 #[cfg(not(unix))]
