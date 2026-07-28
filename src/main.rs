@@ -13,6 +13,9 @@ mod optimizer;
 
 use mcp::config::run_setup;
 
+#[cfg(not(unix))]
+use daemon::handle_mcp_lines;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Handle flags that don't need logging
@@ -29,7 +32,7 @@ async fn main() -> Result<()> {
             .map(|h| h.join(".local").join("bin").join(if cfg!(windows) { "agent-guidance.exe" } else { "agent-guidance" }))
             .unwrap_or(exe_path);
         run_setup(&target_bin)?;
-        println!("✓ Agent Guidance Rust MCP server configured in all IDE clients successfully!");
+        println!("Agent Guidance Rust MCP server configured in all IDE clients successfully!");
         return Ok(());
     }
 
@@ -57,23 +60,38 @@ async fn main() -> Result<()> {
 
     info!("Starting Agent Guidance MCP Rust Server v{}", env!("CARGO_PKG_VERSION"));
 
-    if args.contains(&"--force-daemon".to_string()) {
+    #[cfg(unix)]
+    {
+        if args.contains(&"--force-daemon".to_string()) {
+            daemon::daemon_main().await;
+            return Ok(());
+        }
+        if args.contains(&"--force-client".to_string()) {
+            if !daemon::try_proxy_mode().await {
+                eprintln!("No daemon socket found. Is a daemon running?");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+
+        if daemon::try_proxy_mode().await {
+            return Ok(());
+        }
+
+        info!("No existing daemon found -- starting in daemon mode.");
         daemon::daemon_main().await;
-        return Ok(());
     }
-    if args.contains(&"--force-client".to_string()) {
-        if !daemon::try_proxy_mode().await {
-            eprintln!("No daemon socket found. Is a daemon running?");
+
+    #[cfg(not(unix))]
+    {
+        if args.contains(&"--force-daemon".to_string()) || args.contains(&"--force-client".to_string()) {
+            eprintln!("Daemon/proxy mode is not supported on this platform.");
             std::process::exit(1);
         }
-        return Ok(());
+
+        info!("Running in stdio mode (no daemon on this platform).");
+        handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
     }
 
-    if daemon::try_proxy_mode().await {
-        return Ok(());
-    }
-
-    info!("No existing daemon found — starting in daemon mode.");
-    daemon::daemon_main().await;
     Ok(())
 }

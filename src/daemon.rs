@@ -2,14 +2,19 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, info};
 
 use crate::mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::mcp::router::handle_request;
 use crate::mcp::state::ServerState;
 
+#[cfg(unix)]
+use tokio::io::AsyncReadExt;
+#[cfg(unix)]
+use tokio::net::{UnixListener, UnixStream};
+
+#[cfg(unix)]
 pub fn socket_path() -> PathBuf {
     dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
@@ -17,6 +22,12 @@ pub fn socket_path() -> PathBuf {
         .join("mcp.sock")
 }
 
+#[cfg(not(unix))]
+pub fn socket_path() -> PathBuf {
+    PathBuf::from("")
+}
+
+#[cfg(unix)]
 pub async fn try_proxy_mode() -> bool {
     let path = socket_path();
     if !path.exists() {
@@ -34,6 +45,12 @@ pub async fn try_proxy_mode() -> bool {
     }
 }
 
+#[cfg(not(unix))]
+pub async fn try_proxy_mode() -> bool {
+    false
+}
+
+#[cfg(unix)]
 async fn proxy_main(stream: UnixStream) {
     let (mut socket_rx, mut socket_tx) = stream.into_split();
     let mut stdin = tokio::io::stdin();
@@ -195,6 +212,7 @@ where
     }
 }
 
+#[cfg(unix)]
 pub async fn daemon_main() {
     let path = socket_path();
     if let Some(parent) = path.parent() {
@@ -267,4 +285,9 @@ pub async fn daemon_main() {
     }
 
     let _ = std::fs::remove_file(&path);
+}
+
+#[cfg(not(unix))]
+pub async fn daemon_main() {
+    // daemon mode not supported on non-unix platforms
 }
