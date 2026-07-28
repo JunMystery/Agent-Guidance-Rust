@@ -83,7 +83,7 @@ Example:
 {
   "operation": "read",
   "project_path": "/absolute/path/to/project",
-  "relative_path": "src/auth/token_service.py",
+  "relative_path": "src/auth/token_service.rs",
   "start_line": 1,
   "max_lines": 160
 }
@@ -145,7 +145,7 @@ Returns a hierarchical method-level structure map of a specific source file.
 
 ### `agent-guidance-mcp_project_context(operation="callers")`
 Traces what functions/methods call the target function.
-- **Parameters:** `query` (fully-qualified Symbol ID, e.g. `path/to/file.py::ClassName::method_name`, required).
+- **Parameters:** `query` (fully-qualified Symbol ID, e.g. `path/to/file.rs::ClassName::method_name`, required).
 
 ### `agent-guidance-mcp_project_context(operation="callees")`
 Traces what functions/methods the target function calls.

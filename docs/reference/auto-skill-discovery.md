@@ -6,19 +6,18 @@ This document describes the three-tier pipeline used by the Agent Guidance MCP s
 
 ## 🏗️ Architecture Workflow
 
-The following flowchart illustrates how a raw user task prompt is processed to identify and prioritize matching skills:
-
 ```mermaid
 graph TD
-    A["User Task Prompt (e.g., 'Make an Android app')"] --> B["Tokenization (text.py)"]
-    B --> C["Keyword Inference & Set Intersection (text.py)"]
+    A["User Task Prompt (e.g., 'Make an Android app')"] --> B["Tokenization (lowercase, split)"]
+    B --> C["Keyword Matching & Set Intersection"]
     D["Frontmatter 'triggers' in SKILL.md"] --> C
     E["Built-in TASK_KEYWORD_TRIGGERS"] --> C
     C --> F["Matches (Keywords & Identifiers)"]
-    F --> G["BM25 Query Boosting (catalog.py)"]
-    F --> H["O(1) Task Anchor Retrieval (catalog.py)"]
-    G --> I["Final Recommendations List"]
+    F --> G["Hybrid Vector Search (embedding + keyword boost)"]
+    F --> H["O(1) Task Anchor Retrieval"]
+    G --> I["Cross-Encoder Rerank (minilm)"]
     H --> I
+    I --> J["Final Recommendations List"]
 ```
 
 ---
@@ -26,30 +25,29 @@ graph TD
 ## ⚙️ Processing Phases
 
 ### 1. Tokenization & Normalization
-* **File**: `src/agent_guidance_mcp/text.py`
-* **Action**: Extracts tokens from the task string, filters out single-character words, and converts all strings to lowercase.
+* **Files**: `src/mcp/tools.rs` (keyword extraction in `hybrid_vector_search`)
+* **Action**: Extracts tokens from the task string, filters out single-character words, converts to lowercase. Embedded in the hybrid search pipeline.
 
 ### 2. Flexible Keyword Inference & Root Mapping
-* **File**: `src/agent_guidance_mcp/text.py` (`infer_task_keywords`)
-* **Action**: Compares extracted task terms against the trigger dictionary. To handle grammatical variations and compound terms, the matching engine applies three fallback mechanisms:
-  * **Exact Match**: Returns triggers that are exactly matched in task terms.
-  * **Prefix Matching**: Matches variants like `testing` -> `test` or `authentication` -> `auth` by checking if either string starts with the other.
-  * **Common Root Matching**: Matches words with length $\ge 6$ sharing the same 6-character prefix (e.g., `accessible` maps to `accessibility`).
-  * **Suffix/Plural Removal**: Strips common plural and gerund endings (`-s`, `-es`, `-ing`, `-ed`) to match keywords like `databases` to `database`.
+* **File**: `src/mcp/tools.rs` & `src/ml/embeddings.rs`
+* **Action**: Compares extracted task terms against skill names and content. Three matching levels:
+  * **Exact Match**: skill name equals query → +0.5 score boost
+  * **Name Contains**: skill name contains query → +0.3 score boost
+  * **Word Match**: query word found in skill name → +0.1 score boost each
 
-### 3. Catalog Matching & Priority Routing
-* **File**: `src/agent_guidance_mcp/catalog.py` (`recommend_context`)
-* **Action**: Matches the inferred keywords to pull relevant documentation:
-  * **O(1) Anchor Promotion**: If an inferred keyword matches a declared `anchor` in any skill frontmatter, that skill file path is immediately loaded into recommendations.
-  * **BM25 Search Weight Boosting**: Matched keywords are appended twice to the semantic query to bias search rankings towards documents in the relevant domains (e.g., `security`, `frontend`, `api`).
+### 3. Catalog Matching & Anchor Routing
+* **File**: `src/catalog/store.rs` (`load_all_skills`) & `src/mcp/tools.rs` (`task_pipeline`)
+* **Action**: Loads all embedded skills + workspace-local skills. Matches keywords to pull relevant entries:
+  * **Anchor Promotion**: Frontmatter `anchors` promote matching skills to top recommendations.
+  * **Name/Content Keyword Scoring**: Additional weight for skills matching task keywords.
 
-### 4. Semantic Search & Hybrid Similarity Ranking
-* **File**: `src/agent_guidance_mcp/catalog.py` (`search_entries`) & `src/agent_guidance_mcp/embeddings.py`
-* **Action**: Generates a query vector embedding and uses cosine similarity to score skills:
-  * **Pre-computed Embeddings**: Bundled global skills are loaded instantly from a pre-computed `skills_embeddings.json` index.
-  * **Dynamic Workspace Skill Embedding**: Local skills located in `.agents/skills/`, `.opencode/skills/`, or `.claude/skills/` are dynamically loaded and embedded on startup using the local model.
-  * **Hybrid Rank Blending**: Final ranking combines the term-frequency keyword score and the vector cosine similarity score (scaled to 0-50 and added to the keyword score).
-  * **Graceful Fallback**: If the `sentence-transformers` library is not installed, the search engine gracefully falls back to pure keyword-based search.
+### 4. Hybrid Vector Search & Cross-Encoder Rerank
+* **File**: `src/ml/embeddings.rs` (`hybrid_vector_search`) & `src/ml/llm_selector.rs` (`LLMSelector::rerank`)
+* **Action**: Generates a query vector embedding via multilingual-e5-small, scores all 276 cached passage vectors by cosine similarity, then re-ranks top-8 with a cross-encoder:
+  * **Cached Passage Vectors**: All skills pre-embedded during `warmup_cache()` at daemon startup — stored in `PASSAGE_CACHE` module-level `OnceLock`
+  * **Hybrid Score**: `cosine_similarity(q_vec, passage_vec) + keyword_boost`
+  * **Cross-Encoder Rerank**: `LLMSelector::rerank()` scores top-8 with cross-encoder/ms-marco-MiniLM-L-6-v2 (single-output regression, num_labels=1)
+  * **Graceful Fallback**: If the cross-encoder fails, falls back to keyword-frequency ranking
 
 ---
 

@@ -2,7 +2,7 @@
 
 [Back to README](../README.md)
 
-This project is a high-performance **100% Native Rust 2024 Edition** MCP server exposing Agent Guidance MCP over Stdio transport.
+This project is a high-performance **100% Native Rust 2024 Edition** MCP server exposing Agent Guidance MCP over Unix socket daemon transport.
 
 ## Setup & Build
 
@@ -20,7 +20,7 @@ cargo build --release
 
 ## Running the Server
 
-Run directly with Cargo:
+Run directly with Cargo (auto-detects daemon mode):
 
 ```bash
 cargo run -- --setup
@@ -30,6 +30,13 @@ Start native web dashboard server:
 
 ```bash
 cargo run -- --dashboard
+```
+
+Force daemon or client mode:
+
+```bash
+cargo run -- --force-daemon   # start as daemon (skip auto-detect)
+cargo run -- --force-client   # connect to existing daemon
 ```
 
 ## Testing
@@ -51,27 +58,38 @@ git diff --check
 ```text
 Agent-Guidance-MCP/
 ├── agent-guidance/          # Core standards corpus
-├── docs/                        # Maintainer and user documentation
-├── karpathy/                    # Karpathy framework references
-├── scripts/                     # Installer, launchers, docs generators
-├── skills/                      # On-demand skill capsules
-├── src/agent_guidance_mcp/  # Python package source
-├── tests/                       # Pytest suite
-├── PROJECT-STANDARDS.md         # Project-specific agent standards
-├── pyproject.toml               # Python package metadata
-├── README.md                    # Compact landing page
-└── SKILL-REFERENCE.md           # Skill category reference
+├── docs/                    # Maintainer and user documentation
+├── karpathy/                # Karpathy framework references
+├── scripts/                 # Installer, launchers
+├── skills/                  # On-demand skill capsules
+├── src/                     # Rust source code
+│   ├── main.rs              # Binary entrypoint — auto-detect daemon/proxy
+│   ├── daemon.rs            # Unix socket daemon, ref-counted connections
+│   ├── catalog/             # Skills catalog (store, updater)
+│   ├── context/             # Project scanner, SQLite FTS5 index
+│   ├── dashboard/           # HTTP usage dashboard
+│   ├── mcp/                 # MCP protocol engine (router, tools, state)
+│   ├── ml/                  # ML models (BERT embeddings, cross-encoder)
+│   └── optimizer/           # Token compressor
+├── Cargo.toml               # Rust package metadata
+├── PROJECT-STANDARDS.md     # Project-specific agent standards
+├── README.md                # Compact landing page
+└── SKILL-REFERENCE.md       # Skill category reference
 ```
 
 ## Core Source Files
 
-- `server.py`: FastMCP registration and MCP surface declarations.
-- `catalog.py`: standards catalog indexing, search, and recommendations.
-- `paths.py`: standards root discovery and safe corpus path resolution.
-- `text.py`: text normalization, snippet, and keyword helpers.
-- `project_context.py`: public project-context tool helpers.
-- `project_scan.py`: project-context traversal and filtering internals.
-- `__main__.py`: command-line module launcher.
+| Module | File | Role |
+|---|---|---|
+| Entrypoint | `src/main.rs` | CLI flags, auto-detect daemon/proxy mode |
+| Daemon | `src/daemon.rs` | Unix socket lifecycle, connection tracking, 30s idle timeout |
+| MCP Router | `src/mcp/router.rs` | Tool dispatcher, resource router, initialize handshake |
+| MCP Tools | `src/mcp/tools.rs` | Tool handlers (task_pipeline, guidance, project_context, etc.) |
+| MCP State | `src/mcp/state.rs` | ServerState priority gate, stage matrix, circuit breaker |
+| Embeddings | `src/ml/embeddings.rs` | Candle BERT embedding engine + cached passage vectors |
+| Reranker | `src/ml/llm_selector.rs` | Cross-encoder skill reranker |
+| Scanner | `src/context/scanner.rs` | Bounded workspace scanner & ignore filter |
+| Compressor | `src/optimizer/compressor.rs` | Language-aware token compressor & comment stripper |
 
 ## Documentation Notes
 
@@ -80,18 +98,6 @@ Agent-Guidance-MCP/
 - Add new user-facing reference docs under `docs/`.
 - Use relative Markdown links so GitHub and IDE previews can open files directly.
 
-## Packaging Notes
-
-The wheel includes:
-
-- `SKILL-REFERENCE.md`
-- `docs/`
-- `karpathy/`
-- `skills/`
-- `agent-guidance/`
-
-These paths are configured in `pyproject.toml`.
-
 ## Version Bump
 
 Update these files when releasing a new version:
@@ -99,11 +105,12 @@ Update these files when releasing a new version:
 | File | Line | Action |
 |---|---|---|
 | `Cargo.toml` | 3 | Set `version = "X.Y.Z"` |
+| `.github/workflows/release.yml` | 5 | Update default tag for workflow_dispatch (optional) |
 
 Files that auto-follow via `env!("CARGO_PKG_VERSION")` (no manual change):
-- `src/main.rs`, `src/mcp/router.rs`, `src/mcp/tools.rs`
+- `src/main.rs`, `src/mcp/router.rs`
 
-Procedure: `Cargo.toml` → `cargo build --release` → test.
+Procedure: `Cargo.toml` → `cargo build --release` → `git tag vX.Y.Z` → `git push --tags`.
 
 ## Related Docs
 

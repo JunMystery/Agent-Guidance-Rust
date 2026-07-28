@@ -125,10 +125,10 @@ project_context(
 ```
 project_context(operation="read", relative_path="src/auth.js", max_lines=160)
 project_context(operation="search", query="JWT middleware")
-project_context(operation="symbols", relative_path="src/server.py")
+project_context(operation="symbols", relative_path="src/server.rs")
 project_context(operation="references", query="build_catalog")
-project_context(operation="structure", relative_path="src/parallel.py")
-project_context(operation="callers", query="src/parallel.py::parallel_map::1")
+project_context(operation="structure", relative_path="src/parallel.rs")
+project_context(operation="callers", query="src/parallel.rs::parallel_map::1")
 project_context(operation="diff")
 ```
 
@@ -284,8 +284,8 @@ Comprehensive diagnostics across 7 subsystems:
 
 | Key | Contents |
 |---|---|
-| `system` | OS, Python version, PID, project root |
-| `tree_sitter` | Installed status, supported languages (python, javascript, typescript, go, rust, java, csharp) |
+| `system` | OS, PID, project root |
+| `tree_sitter` | Installed status, supported languages |
 | `database` | CodeGraph DB path, exists, size, files_indexed, symbols_indexed, call_edges_indexed, status |
 | `context7_api` | DNS resolution, IP, TCP connection status |
 | `watcher` | DB exists, DB size |
@@ -340,15 +340,19 @@ Workflow modes are accessed through two separate tools:
 
 ---
 
-## Internal Subsystems (12)
+## Internal Subsystems
 
 These modules power the MCP tools but are not directly callable via the MCP protocol.
 
 | Subsystem | Module | Role |
 |---|---|---|
-| **CodeGraph Database** | `database.py` | SQLite FTS5 symbol index. Tables: `files`, `symbols`, `call_edges`, `symbols_fts` (virtual). WAL mode, thread-safe. |
-| **Indexer** | `indexer.py` | Incremental workspace scanner. Parallel file parsing with `parallel_map`. Thread-safe DB access via `threading.Lock`. Detects file changes via mtime + content hash. |
-| **Watcher** | `watcher.py` | Background daemon thread. Polls for file changes at configurable interval (`AGENT_WATCHER_INTERVAL`). Debounced, batched reference resolution. |
-| **Symbol Extractor** | `symbols.py` | Tree-sitter AST parsing (7 languages: Python, JS, TS, Go, Rust, Java, C#) with regex fallback (13 languages: + Ruby, PHP, Kotlin, Swift, C, C++). Graceful degradation when tree-sitter not installed. |
-| **Parallel Engine** | `parallel.py` | `ThreadPoolExecutor` helpers: `parallel_map` (order-preserving, None-filtering), `parallel_filter_map` (keep/discard), `parallel_run` (named concurrent tasks with exception isolation). |
-| **Reasoning Engine** | `reasoning.py` | 6 framework templates (decision/bug/architecture/security/performance/general). Keyword classifier maps task text to framework type. Returns framework markdown, key questions, skill URIs. |
+| **Daemon** | `src/daemon.rs` | Unix socket lifecycle, connection tracking, 30s idle timeout |
+| **MCP Router** | `src/mcp/router.rs` | Tool dispatcher, resource router, initialize handshake |
+| **MCP State** | `src/mcp/state.rs` | ServerState priority gate, stage transitions, circuit breaker |
+| **MCP Tools** | `src/mcp/tools.rs` | Tool handlers (task_pipeline, guidance, project_context, etc.) |
+| **Embeddings** | `src/ml/embeddings.rs` | Candle BERT embedding engine + cached passage vectors + warmup_cache() |
+| **Reranker** | `src/ml/llm_selector.rs` | Cross-encoder skill reranker with keyword fallback |
+| **Skill Catalog** | `src/catalog/store.rs` | Embedded skill loading + workspace-local scanning |
+| **Project Scanner** | `src/context/scanner.rs` | Bounded workspace traversal & ignore filter |
+| **CodeGraph DB** | `src/context/db.rs` | SQLite FTS5 symbol index. Tables: `files`, `symbols`, `call_edges`, `symbols_fts` (virtual). WAL mode. |
+| **Token Compressor** | `src/optimizer/compressor.rs` | Language-aware comment/whitespace stripping |

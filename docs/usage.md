@@ -9,7 +9,7 @@ Use this MCP server to give AI agents standards guidance, skill references, work
 After installation, launch the MCP Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector .venv/bin/python -m agent_guidance_mcp
+npx @modelcontextprotocol/inspector agent-guidance
 ```
 
 Open the printed URL, usually `http://localhost:5173`, and inspect the registered tools, prompts, and resources.
@@ -72,7 +72,7 @@ Read the current source file before editing:
 {
   "operation": "read",
   "project_path": "/absolute/path/to/project",
-  "relative_path": "src/auth/token_service.py",
+  "relative_path": "src/auth/token_service.rs",
   "start_line": 1,
   "max_lines": 160
 }

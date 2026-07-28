@@ -12,33 +12,40 @@ Use this map before changing the repository. Prefer the smallest relevant source
 - `.cursorrules`: Windsurf and legacy Cursor fallback.
 - `.cursor/rules/karpathy-guidelines.mdc`: Cursor rule file with frontmatter.
 
-These files are generated. Edit `karpathy/principles.md`, `rules/agent-manifest.json`, or `rules/templates/`, then run `python scripts/generate-rules.py`. *(Note: The rules template configuration, manifest, and rules-generation scripts are located in the upstream parent repository and are excluded from standalone MCP server packages).*
+These files are generated in the upstream parent repository from `karpathy/principles.md`, `rules/agent-manifest.json`, and `rules/templates/`. The generated files are shipped in this package as-is.
 
 ## Core Sources
 
-- `karpathy/`: source of truth for the 6 Core Principles and examples.
-- `rules/`: manifest and templates (available in upstream repository).
-- `scripts/`: Server launchers (run-mcp.py, run-mcp.cmd, run-mcp.sh, run-mcp.ps1).
-- `src/`: Python source code for the MCP server.
-- `tests/`: Pytest test suite for the server and catalog.
-- `skills/`: On-demand workflow capsules.
-- `agent-guidance/`: Framework documentation, standards, checklists, prompts, and compliance docs.
-- `docs/`: Maintainer-facing documentation for the repository.
+| Path | Description |
+|---|---|
+| `src/` | Rust source code for the MCP server |
+| `src/main.rs` | Binary entrypoint — daemon/proxy auto-detection, CLI flags |
+| `src/daemon.rs` | Unix socket daemon, ref-counted connections, 30s idle timeout |
+| `src/mcp/` | MCP protocol engine (router, tools, state, config) |
+| `src/ml/` | ML models (BERT embeddings, cross-encoder reranker) |
+| `src/catalog/` | Skills catalog (embedded store, updater) |
+| `src/context/` | Project scanner, SQLite FTS5 code index |
+| `src/optimizer/` | Token compressor |
+| `src/dashboard/` | HTTP usage dashboard |
+| `Cargo.toml` | Rust package metadata |
+| `skills/` | On-demand workflow capsules |
+| `agent-guidance/` | Framework documentation, standards, checklists, prompts |
+| `docs/` | Maintainer-facing documentation |
 
 ## Common Workflows
 
-- Updating core behavior: edit `karpathy/principles.md`, regenerate rules, run generator check.
-- Adding or changing an agent instruction file: update `rules/agent-manifest.json` and a template, regenerate, then verify setup still lists the agent.
-- Updating task-specific standards: edit the relevant file under `agent-guidance/`.
+- Updating core behavior: edit `karpathy/principles.md` in upstream repo.
 - Updating a skill: edit only the matching `skills/<name>/SKILL.md`.
-- Refactoring large files or reducing monolithic modules: load `skills/large-file-refactor/SKILL.md`.
+- Adding/updating tools: edit `src/mcp/tools.rs` and `src/mcp/router.rs`.
+- Updating ML models: edit `src/ml/embeddings.rs` or `src/ml/llm_selector.rs`.
+- Releasing: bump `Cargo.toml` → `cargo build --release` → `git tag vX.Y.Z` → `git push --tags`.
+- Refactoring large files: load `skills/large-file-refactor/SKILL.md`.
 
 ## Verification
 
 Use the narrowest checks that prove the change:
 
 ```bash
-python scripts/generate-rules.py --check
-python -m pytest
+cargo test
 git diff --check
 ```

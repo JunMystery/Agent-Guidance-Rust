@@ -1,6 +1,6 @@
 # Multi-IDE / Multi-CLI Usage
 
-Agent Guidance MCP runs as a subprocess managed by each IDE or CLI tool. When you use multiple IDEs simultaneously, each one spawns its own MCP server process — but the **embedding model is shared** via a local HTTP daemon.
+Agent Guidance MCP runs as a **ref-counted daemon** over a Unix socket. The first process becomes the daemon (loads models, binds socket); subsequent processes auto-detect the socket and connect as a stdio-to-socket proxy. All share a single model instance.
 
 ## How It Works
 
@@ -17,66 +17,66 @@ Each IDE registers `agent-guidance` in its MCP config:
 }
 ```
 
-When the IDE starts, it spawns the command as a child process. This is **stdio transport** — the IDE and MCP server communicate over stdin/stdout pipes.
+### Connection Flow
 
-The embedding model executes in-process natively via Candle BERT (`candle-core` / `candle-transformers`) with a ~35MB RSS memory footprint and sub-1ms cold startup.
+```
+IDE 1 → agent-guidance ── stdin/stdout ──→ DAEMON
+                                               │
+                                          Unix socket
+                                               │
+IDE 2 → agent-guidance ── stdin/stdout ──→ PROXY ──→ socket
+IDE 3 → agent-guidance ── stdin/stdout ──→ PROXY ──→ socket
+```
 
-### How the daemon works
-
-| Layer | Mechanism |
+| Step | What happens |
 |---|---|
-| **Daemon spawn** | First MCP process needing embeddings acquires `~/.agent-guidance/daemon.lock` (fcntl flock) and spawns the daemon subprocess |
-| **Service discovery** | Daemon writes `~/.agent-guidance/daemon.json` with its port and PID |
-| **Client connection** | All MCP processes POST to `http://127.0.0.1:<port>/embed` |
-| **Health checks** | Daemon exposes `GET /health` echoing its PID + `embed_ready`; clients detect stale manifests |
-| **Client registration** | Each MCP process calls `POST /register` with its PID; daemon background-reaps dead clients |
-| **Auto-shutdown** | Daemon exits after 600s idle or when all clients disconnect (30s grace) |
+| IDE 1 launches | No socket exists → becomes **daemon**, loads models (~20s init), handles stdio |
+| IDE 2 launches | Socket exists → becomes **proxy**, connects socket, forwards stdio↔socket |
+| IDE 3, 4, ... | Same as IDE 2 — all share the daemon's models |
+| IDE 1 exits | Daemon continues serving remaining connections |
+| All IDEs exit | Ref count hits 0 → **30s idle timer** → daemon exits, RAM freed |
 
-### Fallback (daemon unavailable)
+### Models & Cache (shared)
 
-If the daemon cannot start (lock contention, `AGENT_EMBEDDING_DAEMON=0`, or under pytest), each MCP process falls back to a **process-local singleton** — each loads its own 466 MB model. This is transparent to the caller.
+| Component | Shared? | Notes |
+|---|---|---|
+| BERT embedding model | ✅ `OnceLock<Mutex<...>>` | Loaded once, 118MB RSS |
+| Cross-encoder | ✅ `OnceLock<Mutex<...>>` | Loaded once, 80MB RSS |
+| Passage embeddings (276 skills) | ✅ `OnceLock<Mutex<Vec<Vec<f32>>>>` | Pre-computed during init, 424KB |
+| ServerState (workflow stage, plan) | ❌ Per connection | Each IDE has independent state |
+| Usage tracking | ❌ Per connection | SQLite per-process |
+
+### Socket path
+
+```
+~/.cache/agent-guidance/mcp.sock
+```
+
+Created when the daemon starts, deleted on clean shutdown. The directory is auto-created.
 
 ## Which Tools Trigger Model Load
 
-| Tool | Daemon started? | Notes |
+Models are loaded once during `initialize` (first MCP handshake). All tools after that are instant:
+
+| Tool | First call latency | Subsequent |
 |---|---|---|
-| `agent-guidance-mcp_task_pipeline` | No | Uses precomputed embeddings JSON |
-| `agent-guidance-mcp_guidance(operation="search")` | **Yes** | First call spawns daemon, subsequent calls reuse |
-| `agent-guidance-mcp_guidance(operation="list\|get\|recommend")` | No | Catalog metadata only |
-| `agent-guidance-mcp_guidance(operation="docs")` | No | Context7 API, no model needed |
-| `agent-guidance-mcp_project_context` (all ops) | No | File system operations |
-| `agent-guidance-mcp_session_continuity` | No | JSON state, no model |
-| `agent-guidance-mcp_workflow_gate` | No | Stage management, no model |
-| `agent-guidance-mcp_health_check / diagnose` | No | Server info |
+| `task_pipeline` | ~200ms (cache hit) | ~200ms |
+| `guidance(search)` | ~200ms | ~200ms |
+| All other tools | Instant | Instant |
+| **initialize** (daemon only) | **~20s** (warmup) | 0s (subsequent IDEs) |
 
-## SSE Mode (Not Yet Implemented)
+## Benefits
 
-The current server uses **stdio transport only**. A future SSE (Server-Sent Events) transport mode would allow a single long-running MCP daemon process to serve multiple IDE/CLI clients — sharing not just the embed model but also the MCP server state:
+- **Single model in RAM**: 200MB total regardless of IDE count (vs 200MB × N without daemon)
+- **No cold start**: second IDE onward skip the 20s model warmup
+- **Zero config**: auto-detection via socket existence — no systemd, no manual daemon management
+- **Self-cleaning**: 30s idle timeout means no zombie processes
 
-```
-Current (stdio):                Future (SSE):
-VS Code ──→ MCP(A)             VS Code ──┐
-Cursor  ──→ MCP(B)             Cursor  ──┤──→ MCP Daemon
-Claude  ──→ MCP(C)             Claude  ──┘
-```
+## RAM Usage Estimates
 
-**Benefits:**
-- Single MCP process (not just single model)
-- Single codegraph index (shared across IDEs)
-- No duplicate rule/skill deployment
-
-**Cost:**
-- You manage the daemon lifecycle (systemd/launchd/auto-start)
-- HTTP round-trip latency vs direct pipe
-- One process crash takes down all IDEs
-
-**Implementation not started.** The embed daemon already solves the model-sharing problem; SSE would solve the MCP state-sharing problem. If this is a priority for your workflow, see the [GitHub Issues](https://github.com/JunMystery/Agent-Guidance-MCP/issues) or contribute.
-
-## Recommendations
-
-| Setup | Recommendation |
-|---|---|
-| Single IDE, 16+ GB RAM | No action needed — default stdio mode |
-| 2+ IDEs, 16+ GB RAM | Daemon already shares one model — no extra RAM cost |
-| 2+ IDEs, 8-16 GB RAM | Daemon keeps model at 466 MB regardless of IDE count |
-| 8 GB or less | Daemon still shares, but close unused IDEs to free MCP process memory (~30 MB each) |
+| Setup | Without daemon | With daemon |
+|---|---|---|
+| 1 IDE | 200 MB | 200 MB |
+| 2 IDEs | 400 MB | **200 MB** |
+| 3 IDEs | 600 MB | **200 MB** |
+| N IDEs | N × 200 MB | **200 MB** |
