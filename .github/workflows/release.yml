@@ -9,7 +9,7 @@ on:
       tag:
         description: Git tag to build for
         required: true
-        default: v1.1.6
+        default: v1.1.7
 
 permissions:
   contents: write

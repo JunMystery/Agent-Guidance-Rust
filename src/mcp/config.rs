@@ -5,48 +5,6 @@ use std::path::{Path, PathBuf};
 use tracing::info;
 use crate::mcp::templates::*;
 
-const HOOK_SCRIPT: &str = r#"#!/bin/bash
-exec agent-guidance --session-start 2>/dev/null
-"#;
-
-fn hook_script_name() -> &'static str {
-    "agent-guidance-session-start.sh"
-}
-
-fn make_claude_hooks_json() -> Value {
-    json!({
-        "hooks": {
-            "SessionStart": [
-                {
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": "agent-guidance --session-start"
-                        }
-                    ]
-                }
-            ]
-        }
-    })
-}
-
-fn make_generic_hooks_json() -> Value {
-    json!({
-        "hooks": {
-            "SessionStart": [
-                {
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": "agent-guidance --session-start"
-                        }
-                    ]
-                }
-            ]
-        }
-    })
-}
-
 pub fn run_setup(binary_path: &Path) -> Result<()> {
     info!("Configuring MCP clients with binary at {:?}", binary_path);
     let bin_str = binary_path.to_string_lossy().to_string();
@@ -119,7 +77,6 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
 
     configure_global_rules(&home)?;
     configure_skills_enforcer(&home)?;
-    configure_hooks(&home)?;
 
     println!();
     println!("Pre-downloading ML models for skill search...");
@@ -168,28 +125,7 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
         );
     }
 
-    // 3. Check hooks
-    println!("\n--- Session-Start Hooks ---");
-    let hook_targets: Vec<(&str, PathBuf)> = vec![
-        ("Claude Code", home.join(".claude").join("hooks.json")),
-        ("Antigravity CLI", home.join(".gemini").join("antigravity-cli").join("hooks.json")),
-        ("Gemini CLI", home.join(".gemini").join("config").join("hooks.json")),
-        ("Cursor", home.join(".cursor").join("hooks.json")),
-        ("Cline/Roo-Code", home.join(".agents").join("hooks").join(hook_script_name())),
-        ("Windsurf", home.join(".codeium").join("windsurf").join("hooks").join(hook_script_name())),
-        ("OpenCode", home.join(".config").join("opencode").join("hooks").join(hook_script_name())),
-    ];
-
-    for (name, path) in &hook_targets {
-        let present = path.exists();
-        println!("[{}] {}: {}",
-            if present { "✓" } else { " " },
-            name,
-            path.display()
-        );
-    }
-
-    // 4. Check global rules
+    // 3. Check global rules
     println!("\n--- Global Rules (AGENTS.md / CLAUDE.md) ---");
     let rule_targets: Vec<(&str, PathBuf)> = vec![
         ("Gemini/Antigravity", home.join(".gemini").join("config").join("AGENTS.md")),
@@ -268,128 +204,10 @@ pub fn run_uninstall() -> Result<()> {
         }
     }
 
-    remove_hooks(&home)?;
     remove_global_rules(&home)?;
     remove_skills_enforcer(&home)?;
 
     println!("\nAgent Guidance uninstalled successfully.");
-    Ok(())
-}
-
-// ---- Hook Deployment ----
-
-fn configure_hooks(home: &Path) -> Result<()> {
-    // 1. Claude Code — hooks.json with SessionStart event
-    let claude_hooks = home.join(".claude").join("hooks.json");
-    write_json_hooks(&claude_hooks, &make_claude_hooks_json())?;
-    info!("Hook deployed: Claude Code");
-
-    // 2. Antigravity CLI — hooks.json with SessionStart event
-    let agy_hooks = home.join(".gemini").join("antigravity-cli").join("hooks.json");
-    write_json_hooks(&agy_hooks, &make_generic_hooks_json())?;
-    info!("Hook deployed: Antigravity CLI");
-
-    // 3. Gemini CLI — hooks.json
-    let gemini_hooks = home.join(".gemini").join("config").join("hooks.json");
-    write_json_hooks(&gemini_hooks, &make_generic_hooks_json())?;
-    info!("Hook deployed: Gemini CLI");
-
-    // 4. Cursor — hooks.json
-    let cursor_hooks = home.join(".cursor").join("hooks.json");
-    write_json_hooks(&cursor_hooks, &make_generic_hooks_json())?;
-    info!("Hook deployed: Cursor");
-
-    // 5. Cline / Roo-Code — script in ~/.agents/hooks/
-    let agents_hooks_dir = home.join(".agents").join("hooks");
-    let script_path = write_hook_script(&agents_hooks_dir)?;
-    info!("Hook deployed: Cline/Roo-Code ({})", script_path.display());
-
-    // 6. Windsurf — script in ~/.codeium/windsurf/hooks/
-    let windsurf_hooks_dir = home.join(".codeium").join("windsurf").join("hooks");
-    let ws_path = write_hook_script(&windsurf_hooks_dir)?;
-    info!("Hook deployed: Windsurf ({})", ws_path.display());
-
-    // 7. OpenCode — script + register in opencode.json
-    let opencode_hooks_dir = home.join(".config").join("opencode").join("hooks");
-    let oc_path = write_hook_script(&opencode_hooks_dir)?;
-    register_opencode_hook(&home.join(".config").join("opencode").join("opencode.json"), &oc_path)?;
-    info!("Hook deployed: OpenCode ({})", oc_path.display());
-
-    Ok(())
-}
-
-fn write_json_hooks(path: &Path, hooks: &Value) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let content = serde_json::to_string_pretty(hooks)?;
-    fs::write(path, content)?;
-    Ok(())
-}
-
-fn write_hook_script(dir: &Path) -> Result<PathBuf> {
-    let script_path = dir.join(hook_script_name());
-    fs::create_dir_all(dir)?;
-    fs::write(&script_path, HOOK_SCRIPT)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
-    }
-    Ok(script_path)
-}
-
-fn register_opencode_hook(config_path: &Path, script_path: &Path) -> Result<()> {
-    if !config_path.exists() {
-        return Ok(());
-    }
-    let content = fs::read_to_string(config_path)?;
-    let mut root: Value = serde_json::from_str(&content).unwrap_or_else(|_| json!({}));
-    if !root.is_object() {
-        root = json!({});
-    }
-    let obj = root.as_object_mut().expect("Root JSON must be object");
-    let hooks = obj.entry("hooks").or_insert_with(|| json!({}));
-    if let Some(h) = hooks.as_object_mut() {
-        h.insert(
-            "SessionStart".to_string(),
-            json!(script_path.to_string_lossy().to_string()),
-        );
-    }
-    fs::write(config_path, serde_json::to_string_pretty(&root)?)?;
-    Ok(())
-}
-
-// ---- Uninstall Helpers ----
-
-fn remove_hooks(home: &Path) -> Result<()> {
-    let paths = vec![
-        home.join(".claude").join("hooks.json"),
-        home.join(".gemini").join("antigravity-cli").join("hooks.json"),
-        home.join(".gemini").join("config").join("hooks.json"),
-        home.join(".cursor").join("hooks.json"),
-        home.join(".agents").join("hooks").join(hook_script_name()),
-        home.join(".codeium").join("windsurf").join("hooks").join(hook_script_name()),
-        home.join(".config").join("opencode").join("hooks").join(hook_script_name()),
-    ];
-    for path in &paths {
-        if path.exists() {
-            fs::remove_file(path)?;
-            info!("Removed hook: {}", path.display());
-        }
-    }
-    // Clean up OpenCode hooks registration
-    let opencode_cfg = home.join(".config").join("opencode").join("opencode.json");
-    if opencode_cfg.exists() {
-        if let Ok(content) = fs::read_to_string(&opencode_cfg) {
-            if let Ok(mut root) = serde_json::from_str::<Value>(&content) {
-                if let Some(obj) = root.as_object_mut() {
-                    obj.remove("hooks");
-                }
-                let _ = fs::write(&opencode_cfg, serde_json::to_string_pretty(&root)?);
-            }
-        }
-    }
     Ok(())
 }
 
