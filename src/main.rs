@@ -1,24 +1,21 @@
 use anyhow::Result;
 use std::env;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tracing::{error, info};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod catalog;
 mod context;
+mod daemon;
 mod dashboard;
 mod mcp;
 mod ml;
 mod optimizer;
 
 use mcp::config::run_setup;
-use mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
-use mcp::router::handle_request;
-use mcp::state::ServerState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Check command line arguments for --setup, --dashboard, --session-start, and --re-gate flags
+    // Handle flags that don't need logging
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--dashboard".to_string()) {
         let port = 3000;
@@ -31,7 +28,6 @@ async fn main() -> Result<()> {
         let target_bin = dirs::home_dir()
             .map(|h| h.join(".local").join("bin").join(if cfg!(windows) { "agent-guidance.exe" } else { "agent-guidance" }))
             .unwrap_or(exe_path);
-        
         run_setup(&target_bin)?;
         println!("✓ Agent Guidance Rust MCP server configured in all IDE clients successfully!");
         return Ok(());
@@ -43,9 +39,8 @@ async fn main() -> Result<()> {
     }
 
     if args.contains(&"--session-start".to_string()) || args.contains(&"--re-gate".to_string()) {
-        let mut state = ServerState::new();
+        let mut state = mcp::state::ServerState::new();
         state.priority_gate_pass();
-        
         let json_payload = serde_json::json!({
             "priority": "INFO",
             "message": "agent-guidance-mcp session started. Priority gate passed and sentinel file created."
@@ -62,82 +57,23 @@ async fn main() -> Result<()> {
 
     info!("Starting Agent Guidance MCP Rust Server v{}", env!("CARGO_PKG_VERSION"));
 
-    let stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
-    let mut reader = BufReader::new(stdin).lines();
-    let mut state = ServerState::new();
-
-    const MAX_LINE_BYTES: usize = 10 * 1024 * 1024; // 10MB max per line
-
-    while let Some(line) = reader.next_line().await? {
-        if line.trim().is_empty() {
-            continue;
+    if args.contains(&"--force-daemon".to_string()) {
+        daemon::daemon_main().await;
+        return Ok(());
+    }
+    if args.contains(&"--force-client".to_string()) {
+        if !daemon::try_proxy_mode().await {
+            eprintln!("No daemon socket found. Is a daemon running?");
+            std::process::exit(1);
         }
-
-        if line.len() > MAX_LINE_BYTES {
-            error!("Request line exceeded max limit of {} bytes", MAX_LINE_BYTES);
-            let err_resp = JsonRpcResponse::error(
-                serde_json::Value::Null,
-                -32600,
-                "Invalid Request: payload too large",
-            );
-            let out = serde_json::to_string(&err_resp)? + "\n";
-            stdout.write_all(out.as_bytes()).await?;
-            stdout.flush().await?;
-            continue;
-        }
-
-        let request: JsonRpcRequest = match serde_json::from_str(&line) {
-            Ok(req) => req,
-            Err(e) => {
-                error!("Invalid JSON-RPC request: {}", e);
-                let err_resp = JsonRpcResponse::error(
-                    serde_json::Value::Null,
-                    -32700,
-                    format!("Parse error: {}", e),
-                );
-                let out = serde_json::to_string(&err_resp)? + "\n";
-                stdout.write_all(out.as_bytes()).await?;
-                stdout.flush().await?;
-                continue;
-            }
-        };
-
-        if request.jsonrpc != "2.0" {
-            error!("Unsupported JSON-RPC version: {}", request.jsonrpc);
-            let id = request.id.unwrap_or(serde_json::Value::Null);
-            let err_resp = JsonRpcResponse::error(
-                id,
-                -32600,
-                format!("Invalid Request: jsonrpc must be '2.0', got '{}'", request.jsonrpc),
-            );
-            let out = serde_json::to_string(&err_resp)? + "\n";
-            stdout.write_all(out.as_bytes()).await?;
-            stdout.flush().await?;
-            continue;
-        }
-
-        let req_id = request.id.clone();
-        match handle_request(&request.method, request.params, &mut state) {
-            Ok(result) => {
-                if let Some(id) = req_id {
-                    let resp = JsonRpcResponse::success(id, result);
-                    let out = serde_json::to_string(&resp)? + "\n";
-                    stdout.write_all(out.as_bytes()).await?;
-                    stdout.flush().await?;
-                }
-            }
-            Err((code, msg)) => {
-                if let Some(id) = req_id {
-                    let resp = JsonRpcResponse::error(id, code, msg);
-                    let out = serde_json::to_string(&resp)? + "\n";
-                    stdout.write_all(out.as_bytes()).await?;
-                    stdout.flush().await?;
-                }
-            }
-        }
+        return Ok(());
     }
 
-    info!("Agent Guidance MCP Rust Server shutting down cleanly.");
+    if daemon::try_proxy_mode().await {
+        return Ok(());
+    }
+
+    info!("No existing daemon found — starting in daemon mode.");
+    daemon::daemon_main().await;
     Ok(())
 }

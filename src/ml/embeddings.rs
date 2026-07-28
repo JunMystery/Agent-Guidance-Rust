@@ -110,7 +110,10 @@ impl EmbeddingModel {
         let vec = normalized.squeeze(0)?.to_vec1::<f32>()?;
         Ok(vec)
     }
+
 }
+
+static PASSAGE_CACHE: OnceLock<Mutex<Vec<Vec<f32>>>> = OnceLock::new();
 
 pub fn cached_model() -> Result<std::sync::MutexGuard<'static, EmbeddingModel>, String> {
     static MODEL: OnceLock<Mutex<EmbeddingModel>> = OnceLock::new();
@@ -122,6 +125,54 @@ pub fn cached_model() -> Result<std::sync::MutexGuard<'static, EmbeddingModel>, 
     model.lock().map_err(|_| "Mutex poisoned".to_string())
 }
 
+pub fn warmup_cache() {
+    use crate::catalog::store::{get_embedded_skill, list_embedded_skills, SkillItem, SkillSource};
+    let candidates: Vec<SkillItem> = list_embedded_skills()
+        .iter()
+        .filter_map(|path| {
+            get_embedded_skill(path).map(|content| SkillItem {
+                name: path.split('/').next().unwrap_or(path).to_string(),
+                relative_path: path.clone(),
+                source: SkillSource::Embedded,
+                content,
+            })
+        })
+        .collect();
+    if let Ok(model) = cached_model() {
+        let mut vecs = Vec::with_capacity(candidates.len());
+        for cand in &candidates {
+            let text = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
+            if let Ok(v) = model.embed_text(&text, Some("passage")) {
+                vecs.push(v);
+            }
+        }
+        if let Ok(mut guard) = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new())).lock() {
+            *guard = vecs;
+        }
+    }
+}
+
+fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Vec<Vec<f32>> {
+    let cache = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new()));
+    {
+        let guard = cache.lock().unwrap();
+        if !guard.is_empty() {
+            return guard.clone();
+        }
+    }
+    let mut vecs = Vec::with_capacity(candidates.len());
+    for cand in candidates {
+        let text = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
+        if let Ok(v) = model.embed_text(&text, Some("passage")) {
+            vecs.push(v);
+        }
+    }
+    if let Ok(mut guard) = cache.lock() {
+        *guard = vecs.clone();
+    }
+    vecs
+}
+
 pub fn hybrid_vector_search(query: &str, candidates: &[SkillItem], top_k: usize) -> Vec<(f32, SkillItem)> {
     if candidates.is_empty() {
         return Vec::new();
@@ -130,19 +181,22 @@ pub fn hybrid_vector_search(query: &str, candidates: &[SkillItem], top_k: usize)
     let q_lower = query.to_lowercase();
     let words: Vec<&str> = q_lower.split_whitespace().collect();
 
+    let (q_vec, c_vecs) = match cached_model() {
+        Ok(model) => {
+            let q = model.embed_text(query, Some("query")).ok();
+            let c = embed_skills_cache(candidates, &model);
+            (q, c)
+        }
+        _ => (None, Vec::new()),
+    };
+
     let mut scored: Vec<(f32, SkillItem)> = Vec::new();
+    if let Some(ref qv) = q_vec {
+        if !c_vecs.is_empty() {
+            for (i, cand) in candidates.iter().enumerate() {
+                let vec_i = if i < c_vecs.len() { &c_vecs[i] } else { continue };
+                let mut score = cosine_similarity(qv, vec_i);
 
-    if let Ok(model) = cached_model() {
-        if let Ok(q_vec) = model.embed_text(query, Some("query")) {
-            for cand in candidates {
-                let text_sample = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
-                let mut score = if let Ok(c_vec) = model.embed_text(&text_sample, Some("passage")) {
-                    cosine_similarity(&q_vec, &c_vec)
-                } else {
-                    0.0
-                };
-
-                // Exact keyword match boost
                 let name_lower = cand.name.to_lowercase();
                 if name_lower == q_lower {
                     score += 0.5;
@@ -164,7 +218,6 @@ pub fn hybrid_vector_search(query: &str, candidates: &[SkillItem], top_k: usize)
         }
     }
 
-    // Resilient fallback: BM25 / token-frequency keyword ranking
     for cand in candidates {
         let name_lower = cand.name.to_lowercase();
         let content_lower = cand.content.to_lowercase();

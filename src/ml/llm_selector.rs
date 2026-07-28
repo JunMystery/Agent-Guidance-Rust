@@ -41,7 +41,7 @@ impl CrossEncoder {
 
         let model = BertModel::load(vb.pp("bert"), &config)?;
 
-        let num_labels = 2usize;
+        let num_labels = 1usize;
         let hidden_size = config.hidden_size;
         let classifier_w = vb.pp("classifier").get((num_labels, hidden_size), "weight")?;
         let classifier_b = vb.pp("classifier").get(num_labels, "bias")?;
@@ -69,7 +69,7 @@ impl CrossEncoder {
         let hidden = self.model.forward(&token_ids, &token_type_ids, Some(&attention_mask))?;
         let cls = hidden.narrow(1, 0, 1)?.squeeze(1)?;
         let logits = self.classifier.forward(&cls)?;
-        let score = logits.narrow(1, 1, 1)?.squeeze(1)?.to_scalar::<f32>()?;
+        let score = logits.narrow(1, 0, 1)?.squeeze(1)?.to_scalar::<f32>()?;
         Ok(score)
     }
 }
