@@ -78,6 +78,12 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     configure_global_rules(&home)?;
     configure_skills_enforcer(&home)?;
 
+    println!();
+    println!("Pre-downloading ML models for skill search...");
+    if let Err(e) = crate::ml::download_models() {
+        println!("  ⚠  Model download failed: {}. Models will download on first use.", e);
+    }
+
     Ok(())
 }
 

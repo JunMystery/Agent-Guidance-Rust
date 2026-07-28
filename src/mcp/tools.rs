@@ -39,8 +39,7 @@ pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String
     }
 }
 
-fn detect_project_path(arg_path: &str, task_text: Option<&str>, state: &mut ServerState) -> PathBuf {
-    // 1. If explicit non-default argument is passed
+fn detect_project_path(arg_path: &str, state: &mut ServerState) -> PathBuf {
     if !arg_path.is_empty() && arg_path != "." {
         let p = PathBuf::from(arg_path);
         if p.is_dir() {
@@ -49,7 +48,6 @@ fn detect_project_path(arg_path: &str, task_text: Option<&str>, state: &mut Serv
         }
     }
 
-    // 2. Fallback to cached path
     if let Some(ref cached) = state.project_path {
         let p = PathBuf::from(cached);
         if p.is_dir() {
@@ -57,7 +55,6 @@ fn detect_project_path(arg_path: &str, task_text: Option<&str>, state: &mut Serv
         }
     }
 
-    // 3. Fallback to workspace roots from initialize
     if !state.workspace_roots.is_empty() {
         let p = PathBuf::from(&state.workspace_roots[0]);
         if p.is_dir() {
@@ -66,94 +63,6 @@ fn detect_project_path(arg_path: &str, task_text: Option<&str>, state: &mut Serv
         }
     }
 
-    // 4. Extract from task text if available
-    if let Some(task) = task_text {
-        for token in task.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '`') {
-            let clean = token.trim_end_matches(|c: char| c.is_ascii_punctuation() && c != '/' && c != '\\');
-            if !clean.is_empty() {
-                let p = PathBuf::from(clean);
-                if p.is_absolute() && p.is_dir() {
-                    state.project_path = Some(p.to_string_lossy().to_string());
-                    return p;
-                }
-            }
-        }
-    }
-
-    // 4. Check common workspace environment variables
-    for var in &["VSCODE_WORKSPACE_FOLDER", "WORKSPACE", "PROJECT_DIR", "PWD"] {
-        if let Ok(val) = std::env::var(var) {
-            let p = PathBuf::from(&val);
-            if p.is_dir() && val != "/" {
-                if let Some(home) = dirs::home_dir() {
-                    if p != home {
-                        state.project_path = Some(p.to_string_lossy().to_string());
-                        return p;
-                    }
-                } else {
-                    state.project_path = Some(p.to_string_lossy().to_string());
-                    return p;
-                }
-            }
-        }
-    }
-
-    // 5. Parent process Cwd on Linux
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(stat) = std::fs::read_to_string("/proc/self/stat") {
-            let parts: Vec<&str> = stat.split_whitespace().collect();
-            if parts.len() > 3 {
-                if let Ok(ppid) = parts[3].parse::<u32>() {
-                    if let Ok(cwd) = std::fs::read_link(format!("/proc/{}/cwd", ppid)) {
-                        if cwd.is_dir() {
-                            if let Some(home) = dirs::home_dir() {
-                                if cwd != home {
-                                    state.project_path = Some(cwd.to_string_lossy().to_string());
-                                    return cwd;
-                                }
-                            } else {
-                                state.project_path = Some(cwd.to_string_lossy().to_string());
-                                return cwd;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 6. Walk up from Cwd looking for project markers
-    if let Ok(current) = std::env::current_dir() {
-        let is_home = dirs::home_dir().map(|h| h == current).unwrap_or(false);
-        if !is_home {
-            let mut path = current.as_path();
-            loop {
-                if path.join(".git").exists()
-                    || path.join("Cargo.toml").exists()
-                    || path.join("package.json").exists()
-                    || path.join("go.mod").exists()
-                    || path.join("AGENTS.md").exists()
-                {
-                    state.project_path = Some(path.to_string_lossy().to_string());
-                    return path.to_path_buf();
-                }
-                match path.parent() {
-                    Some(parent) => {
-                        if let Some(home) = dirs::home_dir() {
-                            if parent == home {
-                                break;
-                            }
-                        }
-                        path = parent;
-                    }
-                    None => break,
-                }
-            }
-        }
-    }
-
-    // 7. Fallback to Cwd
     let fallback = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     state.project_path = Some(fallback.to_string_lossy().to_string());
     fallback
@@ -170,7 +79,7 @@ pub fn handle_tool_call(
         "task_pipeline" => {
             let task = arguments.get("task").and_then(|t| t.as_str()).unwrap_or("general task");
             let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-            let proj_path = detect_project_path(proj_path_arg, Some(task), state);
+            let proj_path = detect_project_path(proj_path_arg, state);
             let files = scan_project(&proj_path, 2);
             let file_count = files.len();
 
@@ -189,7 +98,7 @@ pub fn handle_tool_call(
 
             state.record_call(1500, 450);
             format!(
-                "# Task Pipeline Activated\n\nTask: {}\n\n## Recommendations\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.",
+                "# Task Pipeline Activated\n\nTask: {}\n\n## Recommendations\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n-> Read the top 2 skills listed above before coding.",
                 task,
                 if rec_skills.is_empty() { "No specific skill recommendations found.".to_string() } else { rec_skills.join("\n") },
                 execution_seq,
@@ -210,7 +119,7 @@ pub fn handle_tool_call(
                 "get" => {
                     let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("");
                     let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-                    let proj_path = detect_project_path(proj_path_arg, None, state);
+                    let proj_path = detect_project_path(proj_path_arg, state);
                     if let Some(content) = get_embedded_skill(id) {
                         compress_markdown(&content)
                     } else if let Ok(content) = std::fs::read_to_string(id) {
@@ -227,7 +136,7 @@ pub fn handle_tool_call(
                 },
                 "search" => {
                     let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-                    let proj_path = detect_project_path(proj_path_arg, None, state);
+                    let proj_path = detect_project_path(proj_path_arg, state);
                     let all_skills = load_all_skills(&proj_path);
 
                     // Stage 1: Candle BERT Vector Cosine Similarity Search
@@ -249,7 +158,7 @@ pub fn handle_tool_call(
                         .collect();
 
                     format!(
-                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Context & Intent Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n-> Next Step for Agent: Use `view_file` on the top skill's SKILL.md before proceeding with work.",
+                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n-> Next Step for Agent: Use `view_file` on the top 2 skills' SKILL.md files before proceeding with work.",
                         query,
                         formatted_results.len(),
                         if formatted_results.is_empty() { "No matching skills found.".to_string() } else { formatted_results.join("\n") }
@@ -275,7 +184,7 @@ pub fn handle_tool_call(
         "project_context" => {
             let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("tree");
             let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-            let proj_path = detect_project_path(proj_path_arg, None, state);
+            let proj_path = detect_project_path(proj_path_arg, state);
             let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("");
             let rel_path = arguments.get("relative_path").and_then(|r| r.as_str()).unwrap_or("");
 
@@ -336,7 +245,7 @@ pub fn handle_tool_call(
         "session_continuity" => {
             let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("load");
             let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-            let proj_path = detect_project_path(proj_path_arg, None, state);
+            let proj_path = detect_project_path(proj_path_arg, state);
 
             match op {
                 "save" => {
@@ -481,26 +390,25 @@ mod tests {
         let mut state = ServerState::new();
         // 1. Check explicit path
         let explicit = std::env::current_dir().unwrap();
-        let res = detect_project_path(&explicit.to_string_lossy(), None, &mut state);
+        let res = detect_project_path(&explicit.to_string_lossy(), &mut state);
         assert_eq!(res, explicit);
         assert_eq!(state.project_path, Some(explicit.to_string_lossy().to_string()));
 
         // 2. Check fallback to cached path
-        let res2 = detect_project_path(".", None, &mut state);
+        let res2 = detect_project_path(".", &mut state);
         assert_eq!(res2, explicit);
 
         // 3. Check workspace roots
         let mut state3 = ServerState::new();
         state3.workspace_roots = vec![explicit.to_string_lossy().to_string()];
-        let res3 = detect_project_path(".", None, &mut state3);
+        let res3 = detect_project_path(".", &mut state3);
         assert_eq!(res3, explicit);
         assert_eq!(state3.project_path, Some(explicit.to_string_lossy().to_string()));
 
-        // 4. Extract path from task text
-        let mut state2 = ServerState::new();
-        let task_text = format!("Task to read at {}", explicit.to_string_lossy());
-        let res4 = detect_project_path(".", Some(&task_text), &mut state2);
+        // 4. Check fallback to current_dir when no other source
+        let mut state4 = ServerState::new();
+        let res4 = detect_project_path(".", &mut state4);
         assert_eq!(res4, explicit);
-        assert_eq!(state2.project_path, Some(explicit.to_string_lossy().to_string()));
+        assert_eq!(state4.project_path, Some(explicit.to_string_lossy().to_string()));
     }
 }

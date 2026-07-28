@@ -3,6 +3,7 @@ use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
+use std::sync::{Mutex, OnceLock};
 use tokenizers::Tokenizer;
 
 use crate::catalog::store::SkillItem;
@@ -111,6 +112,16 @@ impl EmbeddingModel {
     }
 }
 
+fn cached_model() -> Result<std::sync::MutexGuard<'static, EmbeddingModel>, String> {
+    static MODEL: OnceLock<Mutex<EmbeddingModel>> = OnceLock::new();
+    let model = MODEL.get_or_init(|| {
+        EmbeddingModel::load_or_download()
+            .map(Mutex::new)
+            .expect("Failed to load embedding model. Check HuggingFace cache and network connectivity.")
+    });
+    model.lock().map_err(|_| "Mutex poisoned".to_string())
+}
+
 pub fn hybrid_vector_search(query: &str, candidates: &[SkillItem], top_k: usize) -> Vec<(f32, SkillItem)> {
     if candidates.is_empty() {
         return Vec::new();
@@ -121,7 +132,7 @@ pub fn hybrid_vector_search(query: &str, candidates: &[SkillItem], top_k: usize)
 
     let mut scored: Vec<(f32, SkillItem)> = Vec::new();
 
-    if let Ok(model) = EmbeddingModel::load_or_download() {
+    if let Ok(model) = cached_model() {
         if let Ok(q_vec) = model.embed_text(query, Some("query")) {
             for cand in candidates {
                 let text_sample = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
