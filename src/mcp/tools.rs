@@ -128,16 +128,23 @@ pub fn handle_tool_call(
             let execution_seq = "- Step 1: Context & Specification\n- Step 2: Architecture & Implementation Plan\n- Step 3: Code Implementation (Build stage)\n- Step 4: Verification & Testing\n- Step 5: Post-Code Review & Documentation";
             let tree_preview: Vec<String> = files.iter().take(15).map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
 
+            let next_step_prompt = if rec_skills.is_empty() {
+                "-> Task requires no specific technical skills. Proceed directly with implementation."
+            } else {
+                "-> Read the top 2 skills listed above before coding."
+            };
+
             state.record_call(1500, 450);
             format!(
-                "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {}\n\n## Recommendations\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n-> Read the top 2 skills listed above before coding.",
+                "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {}\n\n## Recommendations\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
                 task,
                 phase,
                 proj_path.display(),
-                if rec_skills.is_empty() { "No specific skill recommendations found.".to_string() } else { rec_skills.join("\n") },
+                if rec_skills.is_empty() { "No specific skill recommendations required for this task (Token budget saved).".to_string() } else { rec_skills.join("\n") },
                 execution_seq,
                 file_count,
-                tree_preview.join("\n")
+                tree_preview.join("\n"),
+                next_step_prompt
             )
         },
         "guidance" => {

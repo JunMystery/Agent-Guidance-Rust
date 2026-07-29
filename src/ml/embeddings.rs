@@ -403,14 +403,14 @@ fn eager_load_models() {
 
 fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Vec<Vec<f32>> {
     let cache = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new()));
-    let guard = cache.lock().unwrap();
-    if !guard.is_empty() {
-        return guard.clone();
+    if let Ok(guard) = cache.lock() {
+        if !guard.is_empty() {
+            return guard.clone();
+        }
     }
-    if !is_warmup_complete() {
-        return Vec::new();
-    }
-    drop(guard);
+    
+    // On-the-fly parallel or serial passage embedding if cache is empty
+    info!("[ML Pipeline] Computing passage embeddings for {} skills on-the-fly...", candidates.len());
     let mut vecs = Vec::with_capacity(candidates.len());
     for cand in candidates {
         let text = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());

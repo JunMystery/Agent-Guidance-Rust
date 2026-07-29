@@ -108,15 +108,28 @@ impl LLMSelector {
                     skill.content.chars().take(200).collect::<String>()
                 );
                 cached_cross_encoder().ok().and_then(|ce| {
-                    ce.score(task, &text).ok().map(|s| (s, skill.clone()))
+                    ce.score(task, &text).ok().map(|logit| {
+                        // Apply Sigmoid probability normalization: 1 / (1 + e^-logit)
+                        let prob = 1.0 / (1.0 + (-logit).exp());
+                        (prob, skill.clone())
+                    })
                 })
             })
             .collect();
         if !scored.is_empty() {
+            tracing::info!("[ML Pipeline] Cross-Encoder reranked {} candidate skills successfully.", scored.len());
             scored.par_sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-            return scored.into_iter().take(limit).collect();
+            
+            // Relevance threshold cutoff (>= 0.35 probability)
+            let filtered: Vec<(f32, SkillItem)> = scored
+                .into_iter()
+                .filter(|(prob, _)| *prob >= 0.35)
+                .take(limit)
+                .collect();
+            return filtered;
         }
 
+        tracing::info!("[ML Pipeline] Fallback to keyword-based reranking.");
         self.keyword_fallback(task, candidates, limit)
     }
 
