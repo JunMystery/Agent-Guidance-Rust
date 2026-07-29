@@ -12,6 +12,7 @@ mod ml;
 mod optimizer;
 
 use mcp::config::{run_setup, run_verify_setup, run_uninstall};
+use ml::embeddings::generate_precomputed_cache;
 
 #[cfg(not(unix))]
 use daemon::handle_mcp_lines;
@@ -50,6 +51,16 @@ async fn main() -> Result<()> {
     if args.contains(&"--uninstall".to_string()) {
         run_uninstall()?;
         println!("Agent Guidance Rust MCP server uninstalled from all IDE clients successfully!");
+        return Ok(());
+    }
+
+    if args.contains(&"--generate-passage-cache".to_string()) {
+        tracing_subscriber::fmt()
+            .with_env_filter("info".parse::<tracing_subscriber::EnvFilter>().unwrap())
+            .with_writer(std::io::stderr)
+            .init();
+        generate_precomputed_cache()?;
+        println!("✓ Precomputed passage cache written to src/ml/");
         return Ok(());
     }
 

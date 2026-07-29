@@ -148,6 +148,10 @@ echo -e "${PURPLE}▶${NC} Registering Agent Guidance Rust server with detected 
 "$HOME/.local/bin/agent-guidance" --setup
 
 echo -e ""
+echo -e "${PURPLE}▶${NC} Precomputing skill passage cache for instant first startup..."
+"$HOME/.local/bin/agent-guidance" --generate-passage-cache
+
+echo -e ""
 echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}${BOLD}║         ✓  Rust Edition Installed Successfully!              ║${NC}"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"

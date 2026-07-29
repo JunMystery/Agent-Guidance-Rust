@@ -145,6 +145,10 @@ Write-Host ">> Registering Agent Guidance Rust server with detected IDE clients.
 & "$localBin\agent-guidance.exe" --setup
 
 Write-Host ""
+Write-Host ">> Precomputing skill passage cache for instant first startup..." -ForegroundColor Magenta
+& "$localBin\agent-guidance.exe" --generate-passage-cache
+
+Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
 Write-Host "|         ✓  Rust Edition Installed Successfully!              |" -ForegroundColor Green
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green

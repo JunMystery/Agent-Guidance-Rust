@@ -344,18 +344,19 @@ pub async fn daemon_main() {
     };
     info!("Daemon listening on {:?}", path);
 
-    // P0: Warm up ML models synchronously before accepting connections
-    // Uses spawn_blocking so it doesn't starve the async runtime
-    info!("Warming up ML models (this may take ~20s on first run)...");
-    let warmup = tokio::task::spawn_blocking(|| {
-        let _ = crate::ml::embeddings::warmup_cache();
-        drop(crate::ml::llm_selector::cached_cross_encoder());
+    // P0+: Background ML model warmup — daemon accepts connections immediately
+    // Warmup runs in background; first ML search calls use keyword fallback until ready
+    info!("Starting background ML model warmup (disk cache or ~20s compute)...");
+    tokio::spawn(async {
+        let warmup = tokio::task::spawn_blocking(|| {
+            crate::ml::embeddings::warmup_cache();
+        });
+        if let Err(e) = warmup.await {
+            error!("Model warmup failed: {:?}", e);
+        } else {
+            info!("Background model warmup completed.");
+        }
     });
-    if let Err(e) = warmup.await {
-        error!("Model warmup failed: {:?}", e);
-    } else {
-        info!("Model warmup complete.");
-    }
 
     let socket_connections = Arc::new(AtomicUsize::new(0));
     let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));

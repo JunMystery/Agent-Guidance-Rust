@@ -3,10 +3,22 @@ use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokenizers::Tokenizer;
+use tracing::info;
 
-use crate::catalog::store::SkillItem;
+use crate::catalog::store::{SkillItem, list_embedded_skills, get_embedded_skill, SkillSource};
+use crate::ml::llm_selector::cached_cross_encoder;
+use rayon::prelude::*;
+
+// Precomputed passage vectors for the 168 embedded skills.
+// Generated via `agent-guidance --generate-passage-cache`.
+// Provides instant vector search on first start — no model load needed.
+const PRECOMPUTED_VECTORS: &[u8] = include_bytes!("precomputed_vectors.bin");
+const PRECOMPUTED_MANIFEST: &[u8] = include_bytes!("precomputed_manifest.json");
 
 pub struct EmbeddingModel {
     model: BertModel,
@@ -114,29 +126,65 @@ impl EmbeddingModel {
 }
 
 static PASSAGE_CACHE: OnceLock<Mutex<Vec<Vec<f32>>>> = OnceLock::new();
+static WARMUP_DONE: OnceLock<AtomicBool> = OnceLock::new();
 
-pub fn cached_model() -> Result<std::sync::RwLockReadGuard<'static, EmbeddingModel>, String> {
-    static MODEL: OnceLock<RwLock<EmbeddingModel>> = OnceLock::new();
-    let model = MODEL.get_or_init(|| {
-        EmbeddingModel::load_or_download()
-            .map(RwLock::new)
-            .expect("Failed to load embedding model. Check HuggingFace cache and network connectivity.")
-    });
-    model.read().map_err(|_| "RwLock poisoned".to_string())
+fn cache_dir() -> PathBuf {
+    dirs::home_dir()
+        .map(|h| h.join(".agent-guidance"))
+        .unwrap_or_else(|| PathBuf::from(".agent-guidance"))
 }
 
-pub fn cached_model_write() -> Result<std::sync::RwLockWriteGuard<'static, EmbeddingModel>, String> {
-    static MODEL: OnceLock<RwLock<EmbeddingModel>> = OnceLock::new();
-    let model = MODEL.get_or_init(|| {
-        EmbeddingModel::load_or_download()
-            .map(RwLock::new)
-            .expect("Failed to load embedding model. Check HuggingFace cache and network connectivity.")
-    });
-    model.write().map_err(|_| "RwLock poisoned".to_string())
+fn manifest_path() -> PathBuf {
+    cache_dir().join("passage_manifest.json")
 }
 
-pub fn warmup_cache() {
-    use crate::catalog::store::{get_embedded_skill, list_embedded_skills, SkillItem, SkillSource};
+fn vectors_path() -> PathBuf {
+    cache_dir().join("vectors.bin")
+}
+
+/// Try to load precomputed passage vectors embedded in the binary.
+/// Only matches built-in (embedded) skills — workspace-local skills fall through.
+fn load_precomputed_cache() -> Option<Vec<Vec<f32>>> {
+    let manifest: serde_json::Value = serde_json::from_slice(PRECOMPUTED_MANIFEST).ok()?;
+    let cached_skills: Vec<String> = manifest.get("skills")?.as_array()?
+        .iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+
+    let current_skills: Vec<String> = list_embedded_skills();
+    if cached_skills != current_skills {
+        return None;
+    }
+
+    let data = PRECOMPUTED_VECTORS;
+    if data.len() < 8 {
+        return None;
+    }
+
+    let count = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
+    let dim = u32::from_le_bytes(data[4..8].try_into().ok()?) as usize;
+    let expected_len = 8 + count * dim * 4;
+    if data.len() != expected_len {
+        return None;
+    }
+
+    let mut vectors = Vec::with_capacity(count);
+    let mut offset = 8;
+    for _ in 0..count {
+        let mut vec = Vec::with_capacity(dim);
+        for _ in 0..dim {
+            let mut bytes = [0u8; 4];
+            bytes.copy_from_slice(&data[offset..offset + 4]);
+            vec.push(f32::from_le_bytes(bytes));
+            offset += 4;
+        }
+        vectors.push(vec);
+    }
+
+    Some(vectors)
+}
+
+/// Generate precomputed passage cache files for the 168 embedded skills.
+/// Called via `agent-guidance --generate-passage-cache`.
+pub fn generate_precomputed_cache() -> Result<()> {
     let candidates: Vec<SkillItem> = list_embedded_skills()
         .iter()
         .filter_map(|path| {
@@ -148,28 +196,221 @@ pub fn warmup_cache() {
             })
         })
         .collect();
-    if let Ok(model) = cached_model_write() {
-        let mut vecs = Vec::with_capacity(candidates.len());
-        for cand in &candidates {
-            let text = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
-            if let Ok(v) = model.embed_text(&text, Some("passage")) {
-                vecs.push(v);
-            }
-        }
-        if let Ok(mut guard) = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new())).lock() {
-            *guard = vecs;
+
+    info!("Computing passage embeddings for {} skills (generate-precomputed)...", candidates.len());
+    let model_guard = cached_model().map_err(|e| anyhow::anyhow!("{}", e))?;
+    let texts: Vec<String> = candidates.iter().map(|c| {
+        format!("{} {}", c.name, c.content.chars().take(300).collect::<String>())
+    }).collect();
+
+    let vecs: Vec<Vec<f32>> = texts.par_iter()
+        .filter_map(|text| model_guard.embed_text(text, Some("passage")).ok())
+        .collect();
+
+    if vecs.is_empty() || vecs[0].is_empty() {
+        return Err(anyhow::anyhow!("No passage vectors generated."));
+    }
+    let dim = vecs[0].len() as u32;
+    let count = vecs.len() as u32;
+
+    let mut buf = Vec::with_capacity(8 + count as usize * dim as usize * 4);
+    buf.extend_from_slice(&count.to_le_bytes());
+    buf.extend_from_slice(&dim.to_le_bytes());
+    for v in &vecs {
+        for &val in v {
+            buf.extend_from_slice(&val.to_le_bytes());
         }
     }
+
+    let manifest = serde_json::json!({
+        "version": 1,
+        "created_at": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+        "skills": list_embedded_skills(),
+    });
+
+    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ml_dir = crate_root.join("src").join("ml");
+    if ml_dir.exists() {
+        let _ = std::fs::write(ml_dir.join("precomputed_vectors.bin"), &buf);
+        let _ = std::fs::write(
+            ml_dir.join("precomputed_manifest.json"),
+            serde_json::to_string_pretty(&manifest)?,
+        );
+        info!("Precomputed cache written to src/ml/ ({} skills, {} bytes).", count, buf.len());
+    }
+
+    save_passage_cache(&vecs, &candidates);
+    info!("On-disk cache written to {:?} ({} skills).", vectors_path(), count);
+
+    Ok(())
+}
+
+fn is_warmup_complete() -> bool {
+    WARMUP_DONE.get().map(|v| v.load(Ordering::SeqCst)).unwrap_or(false)
+}
+
+fn mark_warmup_complete() {
+    WARMUP_DONE.get_or_init(|| AtomicBool::new(false)).store(true, Ordering::SeqCst);
+}
+
+fn save_passage_cache(vectors: &[Vec<f32>], skills: &[SkillItem]) {
+    let dir = cache_dir();
+    let _ = std::fs::create_dir_all(&dir);
+
+    let skill_names: Vec<String> = skills.iter().map(|s| s.relative_path.clone()).collect();
+    let manifest = serde_json::json!({
+        "version": 1,
+        "created_at": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+        "skills": skill_names,
+    });
+    if let Ok(content) = serde_json::to_string_pretty(&manifest) {
+        let _ = std::fs::write(manifest_path(), content);
+    }
+
+    if vectors.is_empty() || vectors[0].is_empty() {
+        return;
+    }
+    let dim = vectors[0].len() as u32;
+    let count = vectors.len() as u32;
+    let mut buf = Vec::with_capacity(8 + count as usize * dim as usize * 4);
+    buf.extend_from_slice(&count.to_le_bytes());
+    buf.extend_from_slice(&dim.to_le_bytes());
+    for v in vectors {
+        for &val in v {
+            buf.extend_from_slice(&val.to_le_bytes());
+        }
+    }
+    let _ = std::fs::write(vectors_path(), &buf);
+}
+
+fn load_passage_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
+    let manifest_content = std::fs::read_to_string(manifest_path()).ok()?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_content).ok()?;
+    let cached_skills: Vec<String> = manifest.get("skills")?.as_array()?
+        .iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+
+    let current_skills: Vec<String> = skills.iter().map(|s| s.relative_path.clone()).collect();
+    if cached_skills != current_skills {
+        return None;
+    }
+
+    let data = std::fs::read(vectors_path()).ok()?;
+    if data.len() < 8 {
+        return None;
+    }
+
+    let count = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
+    let dim = u32::from_le_bytes(data[4..8].try_into().ok()?) as usize;
+    let expected_len = 8 + count * dim * 4;
+    if data.len() != expected_len {
+        return None;
+    }
+
+    let mut vectors = Vec::with_capacity(count);
+    let mut offset = 8;
+    for _ in 0..count {
+        let mut vec = Vec::with_capacity(dim);
+        for _ in 0..dim {
+            let mut bytes = [0u8; 4];
+            bytes.copy_from_slice(&data[offset..offset + 4]);
+            vec.push(f32::from_le_bytes(bytes));
+            offset += 4;
+        }
+        vectors.push(vec);
+    }
+
+    Some(vectors)
+}
+
+pub fn cached_model() -> Result<std::sync::RwLockReadGuard<'static, EmbeddingModel>, String> {
+    static MODEL: OnceLock<RwLock<EmbeddingModel>> = OnceLock::new();
+    let model = MODEL.get_or_init(|| {
+        EmbeddingModel::load_or_download()
+            .map(RwLock::new)
+            .expect("Failed to load embedding model. Check HuggingFace cache and network connectivity.")
+    });
+    model.read().map_err(|_| "RwLock poisoned".to_string())
+}
+
+pub fn warmup_cache() {
+    let candidates: Vec<SkillItem> = list_embedded_skills()
+        .iter()
+        .filter_map(|path| {
+            get_embedded_skill(path).map(|content| SkillItem {
+                name: path.split('/').next().unwrap_or(path).to_string(),
+                relative_path: path.clone(),
+                source: SkillSource::Embedded,
+                content,
+            })
+        })
+        .collect();
+
+    // 1. Precomputed cache (embedded in binary) — instant, no model needed
+    if let Some(cached) = load_precomputed_cache() {
+        if let Ok(mut guard) = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new())).lock() {
+            *guard = cached;
+        }
+        mark_warmup_complete();
+        info!("Loaded precomputed passage cache ({} skills).", candidates.len());
+        eager_load_models();
+        return;
+    }
+
+    // 2. On-disk cache (~/.agent-guidance/vectors.bin)
+    if let Some(cached) = load_passage_cache(&candidates) {
+        if let Ok(mut guard) = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new())).lock() {
+            *guard = cached;
+        }
+        mark_warmup_complete();
+        info!("Loaded passage cache from disk ({} skills).", candidates.len());
+        eager_load_models();
+        return;
+    }
+
+    // 3. Compute from model (cache miss — first start after skill changes)
+    info!("Computing passage embeddings for {} skills...", candidates.len());
+    let cache = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new()));
+    let texts: Vec<String> = candidates.iter().map(|c| {
+        format!("{} {}", c.name, c.content.chars().take(300).collect::<String>())
+    }).collect();
+
+    let model_guard = cached_model().ok();
+    let vecs = match model_guard.as_ref() {
+        Some(guard) => {
+            texts.par_iter()
+                .filter_map(|text| guard.embed_text(text, Some("passage")).ok())
+                .collect()
+        },
+        None => Vec::new(),
+    };
+
+    save_passage_cache(&vecs, &candidates);
+    if let Ok(mut guard) = cache.lock() {
+        *guard = vecs;
+    }
+    mark_warmup_complete();
+    info!("Passage embedding warmup complete ({} skills).", candidates.len());
+
+    // 4. Preload models so first user query doesn't pay OnceLock init
+    eager_load_models();
+}
+
+/// Eagerly initialize model OnceLocks — moves ~630ms load off first user query.
+fn eager_load_models() {
+    drop(cached_model());
+    drop(cached_cross_encoder());
 }
 
 fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Vec<Vec<f32>> {
     let cache = PASSAGE_CACHE.get_or_init(|| Mutex::new(Vec::new()));
-    {
-        let guard = cache.lock().unwrap();
-        if !guard.is_empty() {
-            return guard.clone();
-        }
+    let guard = cache.lock().unwrap();
+    if !guard.is_empty() {
+        return guard.clone();
     }
+    if !is_warmup_complete() {
+        return Vec::new();
+    }
+    drop(guard);
     let mut vecs = Vec::with_capacity(candidates.len());
     for cand in candidates {
         let text = format!("{} {}", cand.name, cand.content.chars().take(300).collect::<String>());
