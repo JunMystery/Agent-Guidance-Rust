@@ -45,6 +45,7 @@ pub fn scan_workspace_skills(proj_path: &Path) -> Vec<SkillItem> {
 
     if let Some(home) = dirs::home_dir() {
         search_dirs.push(home.join(".agents").join("skills"));
+        search_dirs.push(home.join(".agent-guidance").join("skills"));
     }
 
     for base_dir in search_dirs {
@@ -62,16 +63,23 @@ fn scan_skill_dir_recursive(root_dir: &Path, current_dir: &Path, results: &mut V
             let path = entry.path();
             if path.is_dir() {
                 scan_skill_dir_recursive(root_dir, &path, results);
-            } else if path.is_file() && path.file_name().and_then(|s| s.to_str()) == Some("SKILL.md") {
+            } else if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
                 if let Ok(content) = fs::read_to_string(&path) {
-                    let parent_name = path
-                        .parent()
-                        .and_then(|p| p.file_name())
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("custom-skill")
-                        .to_string();
+                    let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    let fallback_name = if filename.to_lowercase() == "skill.md" {
+                        path.parent()
+                            .and_then(|p| p.file_name())
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("custom-skill")
+                            .to_string()
+                    } else {
+                        path.file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("custom-skill")
+                            .replace('_', " ")
+                    };
 
-                    let name = extract_frontmatter_name(&content).unwrap_or(parent_name);
+                    let name = extract_frontmatter_name(&content).unwrap_or(fallback_name);
                     let rel_path = path
                         .strip_prefix(root_dir)
                         .unwrap_or(&path)
