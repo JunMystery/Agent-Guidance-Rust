@@ -64,7 +64,7 @@ Or via environment variable: `AGENT_AUTO_UPDATE_INTERVAL=weekly`
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/uninstall.sh | bash
 ```
 
 **Windows:**
