@@ -96,51 +96,49 @@ elif [ -f "$(dirname "$0")/../Cargo.toml" ]; then
     BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 fi
 
+# Function for animated build progress spinner
+run_with_spinner() {
+    local cmd="$1"
+    local msg="$2"
+    local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    
+    eval "$cmd" &>/dev/null &
+    local pid=$!
+    
+    local i=0
+    while kill -0 $pid 2>/dev/null; do
+        i=$(( (i+1) % 10 ))
+        printf "\r  ${CYAN}%s${NC} %s" "${spin[$i]}" "$msg"
+        sleep 0.15
+    done
+    
+    wait $pid
+    local exit_code=$?
+    if [ $exit_code -eq 0 ]; then
+        printf "\r  ${GREEN}✓${NC} %sFinished successfully!            \n" "$msg"
+    else
+        printf "\r  ${RED}❌${NC} %sFailed with exit code %d.        \n" "$msg" $exit_code
+        exit 1
+    fi
+}
+
 if [ -n "$BUILD_DIR" ]; then
     echo -e ""
-    echo -e "${CYAN}🔨 Building release binary from local source ($BUILD_DIR)...${NC}"
-    (cd "$BUILD_DIR" && cargo build --release)
+    echo -e "${CYAN}⚙️  Building release binary from local source...${NC}"
+    run_with_spinner "cd '$BUILD_DIR' && RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
     cp "$BUILD_DIR/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
 else
     echo -e ""
-    echo -e "${CYAN}🚀 Fast install: Downloading pre-compiled release binary...${NC}"
-    
-    OS_TYPE="$(uname -s)"
-    ARCH_TYPE="$(uname -m)"
-    TARGET_TRIPLE=""
-
-    if [ "$OS_TYPE" = "Darwin" ]; then
-        if [ "$ARCH_TYPE" = "arm64" ]; then
-            TARGET_TRIPLE="aarch64-apple-darwin"
-        else
-            TARGET_TRIPLE="x86_64-apple-darwin"
-        fi
-    elif [ "$OS_TYPE" = "Linux" ]; then
-        TARGET_TRIPLE="x86_64-unknown-linux-gnu"
+    echo -e "${CYAN}📦 Fetching source repository & building Rust server...${NC}"
+    GLOBAL_SRC="$HOME/.agent-guidance/src"
+    if [ -f "$GLOBAL_SRC/Cargo.toml" ]; then
+        (cd "$GLOBAL_SRC" && git fetch --depth 1 origin main &>/dev/null && git reset --hard origin/main &>/dev/null) || true
+    else
+        mkdir -p "$GLOBAL_SRC"
+        git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC" &>/dev/null
     fi
-
-    DOWNLOAD_SUCCESS=false
-    if [ -n "$TARGET_TRIPLE" ]; then
-        DOWNLOAD_URL="https://github.com/JunMystery/Agent-Guidance-Rust/releases/latest/download/agent-guidance-${TARGET_TRIPLE}"
-        if curl -fsSL "$DOWNLOAD_URL" -o "$LOCAL_BIN/agent-guidance" 2>/dev/null; then
-            chmod +x "$LOCAL_BIN/agent-guidance"
-            DOWNLOAD_SUCCESS=true
-            echo -e "  ${GREEN}✓${NC} Downloaded pre-built binary (${TARGET_TRIPLE}) successfully!"
-        fi
-    fi
-
-    if [ "$DOWNLOAD_SUCCESS" = false ]; then
-        echo -e "  ${YELLOW}⚠️${NC} Pre-built binary download unavailable. Falling back to source clone & build..."
-        GLOBAL_SRC="$HOME/.agent-guidance/src"
-        if [ -f "$GLOBAL_SRC/Cargo.toml" ]; then
-            (cd "$GLOBAL_SRC" && git fetch --depth 1 origin main &>/dev/null && git reset --hard origin/main &>/dev/null) || true
-        else
-            mkdir -p "$GLOBAL_SRC"
-            git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC"
-        fi
-        (cd "$GLOBAL_SRC" && cargo build --release)
-        cp "$GLOBAL_SRC/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
-    fi
+    run_with_spinner "cd '$GLOBAL_SRC' && RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
+    cp "$GLOBAL_SRC/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
 fi
 
 echo -e ""

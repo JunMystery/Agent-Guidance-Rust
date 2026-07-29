@@ -12,20 +12,20 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 
 | You need to... | Use THIS tool first | Why |
 |---|---|---|
-| Start any task or phase | `task_pipeline(task="...")` | Recommendations + tree + code search + UI in ONE call |
+| Start any task or phase | `task_pipeline(task="...", project_path="<path>")` | Recommendations + tree + code search + UI in ONE call |
 | Check coding standards / skills | `guidance(operation="search", query="...")` | No other tool provides standards or skill lookup |
-| Read a file | `project_context(operation="read", relative_path="...")` | Token-capped at 300 lines — prevents context blowout |
-| Search codebase text | `project_context(operation="search", query="...")` | Ranked, bounded results. Fallback when codegraph unavailable |
+| Read a file | `project_context(operation="read", relative_path="...", project_path="<path>")` | Token-capped at 300 lines — prevents context blowout |
+| Search codebase text | `project_context(operation="search", query="...", project_path="<path>")` | Ranked, bounded results. Fallback when codegraph unavailable |
 | Understand code structure | `project_context(operation="structure", relative_path="...")` | Hierarchical view of classes, methods, functions in a file |
 | Extract symbols | `project_context(operation="symbols", relative_path="...")` | Flat list of classes, functions, methods with signatures |
 | Find symbol references | `project_context(operation="references", query="...")` | Locate all usages of a symbol across the codebase |
 | Get UI/design guidance | `ui_ux(operation="search", query="...")` | Style, colors, typography, charts, slides |
 | Persist/recover session | `session_continuity(operation="save"/"load"/"clear")` | State recovery / task checklist continuity |
-| Browse project tree | `project_context(operation="tree")` | Optimized directory tree view |
+| Browse project tree | `project_context(operation="tree", project_path="<path>")` | Optimized directory tree view |
 
 ### Nine Mandatory Rules
 
-1. **Context First**: Call `task_pipeline` or `project_context` BEFORE any file read or code change.
+1. **Context First**: Call `task_pipeline(task="...", project_path="<active_repo_path>")` BEFORE any file read or code change. You MUST pass your working project directory path.
 2. **Standards Check**: Use `guidance(operation="search")` BEFORE implementing or answering any prompt.
 3. **Token Budget**: Prefer MCP tools over raw file reads — built-in limits prevent context blowout.
 4. **No Direct FS**: Never manually read/search files when MCP tools do it with optimization.

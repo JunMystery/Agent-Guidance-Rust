@@ -39,8 +39,28 @@ pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String
     }
 }
 
+fn detect_parent_process_cwd() -> Option<PathBuf> {
+    use sysinfo::{Pid, System};
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let my_pid = Pid::from_u32(std::process::id());
+    if let Some(proc_) = sys.process(my_pid) {
+        if let Some(parent_pid) = proc_.parent() {
+            if let Some(parent_proc) = sys.process(parent_pid) {
+                if let Some(cwd) = parent_proc.cwd() {
+                    if cwd.is_dir() && !cwd.to_string_lossy().to_lowercase().contains("antigravity") {
+                        return Some(cwd.to_path_buf());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
-    // 1. Explicit path parameter provided in tool call (e.g., CLI agents or explicit IDE calls)
+    // 1. Explicit path parameter provided in tool call (Agent declared working dir)
     if !arg_path.is_empty() && arg_path != "." {
         let p = PathBuf::from(arg_path);
         if p.is_dir() {
@@ -48,7 +68,7 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
         }
     }
 
-    // 2. Active workspace roots set during MCP initialize or connection setup
+    // 2. Active workspace roots set during MCP initialize
     if !state.workspace_roots.is_empty() {
         let p = PathBuf::from(&state.workspace_roots[0]);
         if p.is_dir() {
@@ -56,7 +76,22 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
         }
     }
 
-    // 3. Fallback to process current working directory
+    // 3. Parent Process PID CWD Inspection (IDE/Terminal parent directory)
+    if let Some(parent_cwd) = detect_parent_process_cwd() {
+        return parent_cwd;
+    }
+
+    // 4. Environment Variables injected by IDEs (INIT_CWD, WORKSPACE_FOLDER, PROJECT_DIR, PWD)
+    for env_var in ["INIT_CWD", "WORKSPACE_FOLDER", "PROJECT_DIR", "PWD"] {
+        if let Ok(val) = std::env::var(env_var) {
+            let p = PathBuf::from(val);
+            if p.is_dir() && !p.to_string_lossy().to_lowercase().contains("antigravity") {
+                return p;
+            }
+        }
+    }
+
+    // 5. Fallback to process current working directory
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 

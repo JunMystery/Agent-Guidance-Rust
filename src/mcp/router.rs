@@ -177,15 +177,15 @@ pub fn handle_request(
             "tools": [
                 {
                     "name": "task_pipeline",
-                    "description": "CALL FIRST before any coding task. Prepares recommendations, project tree, code search, and optional UI guidance in ONE optimized call.",
+                    "description": "CALL FIRST before any coding task. Prepares recommendations, project tree, code search, and optional UI guidance in ONE optimized call. You MUST pass project_path.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "task": { "type": "string" },
-                            "project_path": { "type": "string", "default": "." },
+                            "task": { "type": "string", "description": "The task description or goal" },
+                            "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
                             "focus": { "type": "string", "default": "general" }
                         },
-                        "required": ["task"]
+                        "required": ["task", "project_path"]
                     }
                 },
                 {
@@ -208,10 +208,10 @@ pub fn handle_request(
                         "type": "object",
                         "properties": {
                             "operation": { "type": "string" },
-                            "project_path": { "type": "string", "default": "." },
+                            "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
                             "query": { "type": "string" }
                         },
-                        "required": ["operation"]
+                        "required": ["operation", "project_path"]
                     }
                 },
                 {

@@ -82,14 +82,33 @@ if (Test-Path "Cargo.toml") {
 
 if ($buildDir) {
     Write-Host ""
-    Write-Host "🔨 Building release binary from local source ($buildDir)..." -ForegroundColor Cyan
+    Write-Host "⚙️  Building release binary from local source..." -ForegroundColor Cyan
     Push-Location $buildDir
     try {
-        & cargo build --release
-        if ($LASTEXITCODE -eq 0 -and (Test-Path "target\release\agent-guidance.exe")) {
+        $env:RUSTFLAGS = "-A warnings"
+        $job = Start-Job -ScriptBlock {
+            param($dir)
+            Set-Location $dir
+            $env:RUSTFLAGS = "-A warnings"
+            cargo build --release --quiet 2>&1
+        } -ArgumentList $buildDir
+
+        $anim = @("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+        $i = 0
+        while ($job.State -eq "Running") {
+            $char = $anim[$i % $anim.Length]
+            Write-Host -NoNewline "`r  $char Compiling dependencies & Rust server... "
+            Start-Sleep -Milliseconds 150
+            $i++
+        }
+        $jobResult = Receive-Job $job
+        Remove-Job $job -Force
+
+        if (Test-Path "target\release\agent-guidance.exe") {
             Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
+            Write-Host -NoNewline "`r  ✓ Compilation & build finished successfully!            `n" -ForegroundColor Green
         } else {
-            Write-Host "❌ Cargo build failed with exit code $LASTEXITCODE." -ForegroundColor Red
+            Write-Host -NoNewline "`r❌ Cargo build failed.                                    `n" -ForegroundColor Red
             Pop-Location
             exit 1
         }
@@ -98,45 +117,52 @@ if ($buildDir) {
     }
 } else {
     Write-Host ""
-    Write-Host "🚀 Fast install: Downloading pre-compiled release binary..." -ForegroundColor Cyan
-    $downloadUrl = "https://github.com/JunMystery/Agent-Guidance-Rust/releases/latest/download/agent-guidance-x86_64-pc-windows-msvc.exe"
-    $targetExe = Join-Path $localBin "agent-guidance.exe"
-    
-    $downloadSuccess = $false
-    try {
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $targetExe -ErrorAction Stop
-        if (Test-Path $targetExe) {
-            $downloadSuccess = $true
-            Write-Host "  ✓ Downloaded pre-built binary successfully!" -ForegroundColor Green
-        }
-    } catch {
-        Write-Host "  ⚠️ Pre-built binary download unavailable. Falling back to source clone & build..." -ForegroundColor Yellow
-    }
-
-    if (-not $downloadSuccess) {
-        $globalSrc = Join-Path $HOME ".agent-guidance\src"
-        if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
-            Push-Location $globalSrc
-            try {
-                cmd /c "git fetch --depth 1 origin main >nul 2>&1"
-                cmd /c "git reset --hard origin/main >nul 2>&1"
-            } finally {
-                Pop-Location
-            }
-        } else {
-            if (-not (Test-Path $globalSrc)) { New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null }
-            & git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git $globalSrc
-        }
-
+    Write-Host "📦 Fetching source repository & building Rust server..." -ForegroundColor Cyan
+    $globalSrc = Join-Path $HOME ".agent-guidance\src"
+    if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
         Push-Location $globalSrc
         try {
-            & cargo build --release
-            if ($LASTEXITCODE -eq 0 -and (Test-Path "target\release\agent-guidance.exe")) {
-                Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
-            }
+            cmd /c "git fetch --depth 1 origin main >nul 2>&1"
+            cmd /c "git reset --hard origin/main >nul 2>&1"
         } finally {
             Pop-Location
         }
+    } else {
+        if (-not (Test-Path $globalSrc)) { New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null }
+        cmd /c "git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git `"$globalSrc`" >nul 2>&1"
+    }
+
+    Push-Location $globalSrc
+    try {
+        $env:RUSTFLAGS = "-A warnings"
+        $job = Start-Job -ScriptBlock {
+            param($dir)
+            Set-Location $dir
+            $env:RUSTFLAGS = "-A warnings"
+            cargo build --release --quiet 2>&1
+        } -ArgumentList $globalSrc
+
+        $anim = @("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+        $i = 0
+        while ($job.State -eq "Running") {
+            $char = $anim[$i % $anim.Length]
+            Write-Host -NoNewline "`r  $char Compiling dependencies & Rust server... "
+            Start-Sleep -Milliseconds 150
+            $i++
+        }
+        $jobResult = Receive-Job $job
+        Remove-Job $job -Force
+
+        if (Test-Path "target\release\agent-guidance.exe") {
+            Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
+            Write-Host -NoNewline "`r  ✓ Compilation & build finished successfully!            `n" -ForegroundColor Green
+        } else {
+            Write-Host -NoNewline "`r❌ Cargo build failed.                                    `n" -ForegroundColor Red
+            Pop-Location
+            exit 1
+        }
+    } finally {
+        Pop-Location
     }
 }
 

@@ -25,4 +25,5 @@ dirs = "5.0"
 tiny_http = "0.12"
 toml = "0.8"
 fs2 = "0.4"
+sysinfo = "0.30"
 
