@@ -4,6 +4,11 @@ param()
 
 $ErrorActionPreference = "SilentlyContinue"
 
+# Protection against CWD falling into System32 when invoked via CMD
+if ((Get-Location).Path -like "*\system32*") {
+    Set-Location $HOME
+}
+
 Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Magenta
 Write-Host "|           Agent Guidance Rust (Windows)                      |" -ForegroundColor Magenta

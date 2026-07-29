@@ -27,9 +27,14 @@ Install the Agent Guidance Rust MCP server with a single command:
 curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash
 ```
 
-**Windows (CMD / PowerShell):**
+**Windows (CMD Prompt):**
 ```cmd
-powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
+```
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
 ```
 
 *Builds native release binary (`target/release/agent-guidance`) and copies to `~/.local/bin/agent-guidance`.*
@@ -67,9 +72,9 @@ Or via environment variable: `AGENT_AUTO_UPDATE_INTERVAL=weekly`
 curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/uninstall.sh | bash
 ```
 
-**Windows:**
+**Windows (CMD / PowerShell):**
 ```cmd
-powershell -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/uninstall.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/uninstall.ps1 | iex"
 ```
 
 ### Manual / Developer Install
