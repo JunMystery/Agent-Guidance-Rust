@@ -38,6 +38,7 @@ pub struct ServerState {
     pub agent_client_name: Option<String>,
     pub workspace_roots: Vec<String>,
     pub last_session_start: Option<u64>,
+    pub user_intent_summary: Option<String>,
 }
 
 impl Default for ServerState {
@@ -54,6 +55,7 @@ impl Default for ServerState {
             agent_client_name: None,
             workspace_roots: Vec::new(),
             last_session_start: None,
+            user_intent_summary: None,
         }
     }
 }
@@ -75,6 +77,7 @@ impl ServerState {
             project_path: None,
             workspace_roots: Vec::new(),
             last_session_start: None,
+            user_intent_summary: None,
             agent_client_name: client_name,
         }
     }
@@ -215,7 +218,8 @@ impl ServerState {
         let approval_keywords = [
             "ok", "proceed", "approved", "approve", "start", "go ahead",
             "do it", "làm đi", "đồng ý", "chấp nhận", "yes", "yep", "lgtm",
-            "looks good", "agree", "let's do it", "make the change", "exec"
+            "looks good", "agree", "let's do it", "make the change", "exec",
+            "triển khai", "tiến hành", "duyệt", "thực thi", "chốt", "ok bro", "được đấy"
         ];
 
         for kw in approval_keywords {
@@ -412,5 +416,18 @@ mod tests {
         assert_eq!(parse_file_uri("file:///C:/Users/test/project"), if cfg!(windows) { "C:\\Users\\test\\project" } else { "C:/Users/test/project" });
         assert_eq!(parse_file_uri("file:///e:/Github/Agent-Guidance-Rust"), if cfg!(windows) { "e:\\Github\\Agent-Guidance-Rust" } else { "e:/Github/Agent-Guidance-Rust" });
         assert_eq!(parse_file_uri("file:///home/user/project%20name"), if cfg!(windows) { "\\home\\user\\project name" } else { "/home/user/project name" });
+    }
+
+    #[test]
+    fn test_vietnamese_approval_keywords() {
+        let mut state = ServerState::new();
+        assert!(!state.plan_approved);
+
+        assert!(state.process_user_message("chốt triển khai đi bro"));
+        assert!(state.plan_approved);
+
+        state.plan_approved = false;
+        assert!(state.process_user_message("đồng ý duyệt"));
+        assert!(state.plan_approved);
     }
 }

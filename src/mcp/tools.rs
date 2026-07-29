@@ -168,7 +168,7 @@ pub fn handle_tool_call(
                     format!("# Pre-Code Verification Checklist\n\n1. Enforce 300 LOC cap per file\n2. Verify symbols via project_context search\n3. Use explicit non-null checks\n4. Check error propagation")
                 },
                 "verify" => {
-                    format!("# Post-Code Verification\n\n1. Run build/test commands\n2. Inspect error logs\n3. Verify test coverage\n4. Ensure no regression")
+                    format!("# Anti-Hallucination Post-Code Verification Checklist\n\n1. **User Requirement Alignment**: Re-read the original user prompt and verify all explicitly requested features exist.\n2. **Empirical Command Verification**: Run build/test commands and inspect real terminal/log outputs.\n3. **Zero Unverified Assumptions**: Base success strictly on empirical evidence, not speculative assumptions.\n4. **Regression Safety**: Verify existing function signatures, API contracts, and tests remain unbroken.")
                 },
                 _ => format!("Guidance operation '{}' completed successfully.", op),
             }
@@ -291,18 +291,27 @@ pub fn handle_tool_call(
                         state.process_user_message(user_msg);
                     }
                     let status_str = if state.workflow_stage == "Build" && !state.plan_approved { "BLOCKED" } else { "PASSED" };
-                    format!("# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}", status_str, state.plan_approved, state.workflow_stage, state.fix_attempts)
+                    let mut resp = format!("# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}", status_str, state.plan_approved, state.workflow_stage, state.fix_attempts);
+                    if state.workflow_stage == "Test_Recheck" {
+                        resp.push_str("\n\n⚠ **ANTI-HALLUCINATION ENFORCER ACTIVE**: Re-read the original user prompt & verify all requested features against real build/test outputs before declaring task complete.");
+                    }
+                    resp
                 }
             }
         },
         "require_edit_approval" => {
+            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let proj_path = detect_project_path(proj_path_arg, state);
             state.record_call(200, 50);
             if state.workflow_stage == "Build" && state.plan_approved {
-                "# Edit Approval Gate\n\nStatus: PASSED | Edits Authorized for Build stage.".to_string()
+                format!(
+                    "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized.",
+                    proj_path.display(), state.workflow_stage
+                )
             } else {
                 format!(
-                    "# Edit Approval Gate\n\nStatus: BLOCKED | Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Active stage is '{}', plan_approved={}.",
-                    state.workflow_stage, state.plan_approved
+                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. To proceed, present an implementation plan and invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")` after user approval.",
+                    proj_path.display(), state.workflow_stage, state.plan_approved
                 )
             }
         },
@@ -395,5 +404,32 @@ mod tests {
         let state3 = ServerState::new();
         let res3 = detect_project_path(".", &state3);
         assert_eq!(res3, explicit);
+    }
+
+    #[test]
+    fn test_anti_hallucination_verification() {
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Test_Recheck").unwrap();
+
+        let res = handle_tool_call(
+            "guidance",
+            json!({ "operation": "verify" }),
+            &mut state,
+        );
+
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Anti-Hallucination Post-Code Verification Checklist"));
+        assert!(text.contains("User Requirement Alignment"));
+
+        let check_res = handle_tool_call(
+            "workflow_gate",
+            json!({ "action": "check" }),
+            &mut state,
+        );
+        assert!(check_res.is_ok());
+        let check_text = check_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(check_text.contains("ANTI-HALLUCINATION ENFORCER ACTIVE"));
     }
 }
