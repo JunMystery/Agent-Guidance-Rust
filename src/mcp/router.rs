@@ -177,15 +177,16 @@ pub fn handle_request(
             "tools": [
                 {
                     "name": "task_pipeline",
-                    "description": "CALL FIRST before any coding task. Prepares recommendations, project tree, code search, and optional UI guidance in ONE optimized call. You MUST pass project_path.",
+                    "description": "CALL FIRST before any coding task. Prepares recommendations, project tree, code search, and optional UI guidance in ONE optimized call. You MUST pass project_path and phase.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "task": { "type": "string", "description": "The task description or goal" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
+                            "phase": { "type": "string", "enum": ["plan", "implement", "test", "debug", "review", "refactor"], "description": "Active development phase for per-phase context reset" },
                             "focus": { "type": "string", "default": "general" }
                         },
-                        "required": ["task", "project_path"]
+                        "required": ["task", "project_path", "phase"]
                     }
                 },
                 {
@@ -196,7 +197,9 @@ pub fn handle_request(
                         "properties": {
                             "operation": { "type": "string" },
                             "query": { "type": "string" },
-                            "identifier": { "type": "string" }
+                            "identifier": { "type": "string" },
+                            "verification_command": { "type": "string", "description": "Required for 'verify' operation: Lệnh shell kiểm thử thực tế (ví dụ: 'cargo test')" },
+                            "expected_output_keyword": { "type": "string", "description": "Required for 'verify' operation: Từ khóa kết quả kỳ vọng (ví dụ: 'PASSED')" }
                         },
                         "required": ["operation"]
                     }
@@ -209,7 +212,10 @@ pub fn handle_request(
                         "properties": {
                             "operation": { "type": "string" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
-                            "query": { "type": "string" }
+                            "query": { "type": "string" },
+                            "relative_path": { "type": "string" },
+                            "target_symbol": { "type": "string", "description": "Target function/class/struct symbol to extract precisely for token-saving read" },
+                            "layer": { "type": "string", "enum": ["ui", "domain", "data", "infrastructure"], "description": "Architecture domain layer of the target file" }
                         },
                         "required": ["operation", "project_path"]
                     }
@@ -252,12 +258,15 @@ pub fn handle_request(
                 },
                 {
                     "name": "require_edit_approval",
-                    "description": "Final gate check to verify if the active workflow stage permits code editing.",
+                    "description": "Final gate check to verify if the active workflow stage permits code editing. Must declare risk_level and justification.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "project_path": { "type": "string", "default": "." }
-                        }
+                            "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
+                            "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level of proposed edits" },
+                            "justification": { "type": "string", "description": "Reason and rationale for code edits" }
+                        },
+                        "required": ["project_path", "risk_level", "justification"]
                     }
                 },
                 {

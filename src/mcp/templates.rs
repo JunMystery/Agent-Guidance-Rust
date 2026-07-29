@@ -8,34 +8,29 @@ pub const AGENT_GUIDANCE_SKILL_TAG_END: &str = "<!-- agent-guidance-skill:end --
 
 pub const AGENT_RULES_BLOCK: &str = r#"
 <!-- agent-guidance:start -->
-## Agent Guidance MCP — Tool Selection Priority
+## Agent Guidance MCP — Tool Selection Priority & Contract Protocol
 
-| You need to... | Use THIS tool first | Why |
+| You need to... | Use THIS tool first | Contract Required Arguments |
 |---|---|---|
-| Start any task or phase | `task_pipeline(task="...", project_path="<path>")` | Recommendations + tree + code search + UI in ONE call |
-| Check coding standards / skills | `guidance(operation="search", query="...")` | No other tool provides standards or skill lookup |
-| Read a file | `project_context(operation="read", relative_path="...", project_path="<path>")` | Token-capped at 300 lines — prevents context blowout |
-| Search codebase text | `project_context(operation="search", query="...", project_path="<path>")` | Ranked, bounded results. Fallback when codegraph unavailable |
-| Understand code structure | `project_context(operation="structure", relative_path="...")` | Hierarchical view of classes, methods, functions in a file |
-| Extract symbols | `project_context(operation="symbols", relative_path="...")` | Flat list of classes, functions, methods with signatures |
-| Find symbol references | `project_context(operation="references", query="...")` | Locate all usages of a symbol across the codebase |
-| Get UI/design guidance | `ui_ux(operation="search", query="...")` | Style, colors, typography, charts, slides |
-| Persist/recover session | `session_continuity(operation="save"/"load"/"clear")` | State recovery / task checklist continuity |
-| Browse project tree | `project_context(operation="tree", project_path="<path>")` | Optimized directory tree view |
+| Start any task or phase | `task_pipeline(task="...", project_path="<path>", phase="plan")` | `project_path`, `task`, `phase` |
+| Check edit authorization | `require_edit_approval(project_path="...", risk_level="LOW", justification="...")` | `project_path`, `risk_level`, `justification` |
+| Read file / extract symbol | `project_context(operation="read", relative_path="...", target_symbol="...")` | `operation`, `project_path`, `target_symbol` (optional) |
+| Empirical post-code test | `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` | `verification_command`, `expected_output_keyword` |
+| Check coding standards | `guidance(operation="search", query="...")` | `operation`, `query` |
 
-### Nine Mandatory Rules
+### Nine Mandatory Contract Rules
 
-1. **Context First**: Call `task_pipeline(task="...", project_path="<active_repo_path>")` BEFORE any file read or code change. You MUST pass your working project directory path.
-2. **Standards Check**: Use `guidance(operation="search")` BEFORE implementing or answering any prompt.
-3. **Token Budget**: Prefer MCP tools over raw file reads — built-in limits prevent context blowout.
-4. **No Direct FS**: Never manually read/search files when MCP tools do it with optimization.
+1. **Context & Phase First**: Call `task_pipeline(task="...", project_path="<path>", phase="<phase>")` BEFORE any file read or code change. You MUST pass `project_path` and `phase`.
+2. **Edit Approval Contract**: Call `require_edit_approval(project_path="...", risk_level="LOW", justification="...")` before modifying files. Declare `risk_level` (`LOW`/`MEDIUM`/`HIGH`).
+3. **Symbol-Targeted Reading**: Use `project_context(operation="read", relative_path="...", target_symbol="...")` to read exact symbols and prevent token blowout.
+4. **Empirical Test Verification**: Use `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` to prove feature correctness with real test output.
 5. **Ground & Plan**: Verify files/functions/symbols via search BEFORE proposing changes. Never guess.
 6. **300 LOC Cap**: Split files exceeding 300 lines of code. No monolithic files.
-7. **Intent Gate**: Classify request type (trivial/explicit/exploratory/open-ended/ambiguous) before acting. If ambiguous, clarify first.
-8. **Delegation Before Action**: Decompose multi-step tasks and delegate to specialized subagents. Never implement directly when delegation is possible.
-9. **Per-Phase Reset**: For EACH new work phase (plan → implement → test → debug → review → refactor), re-call `task_pipeline` with that phase's goal. Do NOT carry old context across phases. A new phase is a new task.
+7. **Intent Gate**: Classify request type before acting. If ambiguous, clarify first.
+8. **Delegation Before Action**: Decompose multi-step tasks and delegate to subagents when appropriate.
+9. **Per-Phase Reset**: For EACH new work phase (plan → implement → test → debug → review → refactor), re-call `task_pipeline` with that phase's goal.
 
-**CRITICAL: All 9 rules apply to EVERY action without exception — planning, implementation, testing, debugging, reviewing, refactoring, or any other work. There is no action type exempt from these rules.**
+**CRITICAL: All 9 contract rules apply to EVERY action without exception.**
 <!-- agent-guidance:end -->
 "#;
 

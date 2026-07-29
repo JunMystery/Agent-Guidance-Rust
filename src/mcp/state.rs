@@ -39,6 +39,11 @@ pub struct ServerState {
     pub workspace_roots: Vec<String>,
     pub last_session_start: Option<u64>,
     pub user_intent_summary: Option<String>,
+    pub verification_command: Option<String>,
+    pub expected_output_keyword: Option<String>,
+    pub verification_passed: bool,
+    pub last_risk_level: Option<String>,
+    pub active_phase: Option<String>,
 }
 
 impl Default for ServerState {
@@ -56,6 +61,11 @@ impl Default for ServerState {
             workspace_roots: Vec::new(),
             last_session_start: None,
             user_intent_summary: None,
+            verification_command: None,
+            expected_output_keyword: None,
+            verification_passed: false,
+            last_risk_level: None,
+            active_phase: None,
         }
     }
 }
@@ -78,6 +88,11 @@ impl ServerState {
             workspace_roots: Vec::new(),
             last_session_start: None,
             user_intent_summary: None,
+            verification_command: None,
+            expected_output_keyword: None,
+            verification_passed: false,
+            last_risk_level: None,
+            active_phase: None,
             agent_client_name: client_name,
         }
     }
