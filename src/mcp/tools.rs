@@ -39,33 +39,25 @@ pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String
     }
 }
 
-fn detect_project_path(arg_path: &str, state: &mut ServerState) -> PathBuf {
+fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
+    // 1. Explicit path parameter provided in tool call (e.g., CLI agents or explicit IDE calls)
     if !arg_path.is_empty() && arg_path != "." {
         let p = PathBuf::from(arg_path);
         if p.is_dir() {
-            state.project_path = Some(p.to_string_lossy().to_string());
             return p;
         }
     }
 
-    if let Some(ref cached) = state.project_path {
-        let p = PathBuf::from(cached);
-        if p.is_dir() {
-            return p;
-        }
-    }
-
+    // 2. Active workspace roots set during MCP initialize or connection setup
     if !state.workspace_roots.is_empty() {
         let p = PathBuf::from(&state.workspace_roots[0]);
         if p.is_dir() {
-            state.project_path = Some(p.to_string_lossy().to_string());
             return p;
         }
     }
 
-    let fallback = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    state.project_path = Some(fallback.to_string_lossy().to_string());
-    fallback
+    // 3. Fallback to process current working directory
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 pub fn handle_tool_call(
@@ -387,28 +379,21 @@ mod tests {
 
     #[test]
     fn test_detect_project_path() {
-        let mut state = ServerState::new();
+        let state = ServerState::new();
         // 1. Check explicit path
         let explicit = std::env::current_dir().unwrap();
-        let res = detect_project_path(&explicit.to_string_lossy(), &mut state);
+        let res = detect_project_path(&explicit.to_string_lossy(), &state);
         assert_eq!(res, explicit);
-        assert_eq!(state.project_path, Some(explicit.to_string_lossy().to_string()));
 
-        // 2. Check fallback to cached path
-        let res2 = detect_project_path(".", &mut state);
+        // 2. Check workspace roots
+        let mut state2 = ServerState::new();
+        state2.workspace_roots = vec![explicit.to_string_lossy().to_string()];
+        let res2 = detect_project_path(".", &state2);
         assert_eq!(res2, explicit);
 
-        // 3. Check workspace roots
-        let mut state3 = ServerState::new();
-        state3.workspace_roots = vec![explicit.to_string_lossy().to_string()];
-        let res3 = detect_project_path(".", &mut state3);
+        // 3. Check fallback to current_dir when no other source
+        let state3 = ServerState::new();
+        let res3 = detect_project_path(".", &state3);
         assert_eq!(res3, explicit);
-        assert_eq!(state3.project_path, Some(explicit.to_string_lossy().to_string()));
-
-        // 4. Check fallback to current_dir when no other source
-        let mut state4 = ServerState::new();
-        let res4 = detect_project_path(".", &mut state4);
-        assert_eq!(res4, explicit);
-        assert_eq!(state4.project_path, Some(explicit.to_string_lossy().to_string()));
     }
 }

@@ -7,6 +7,24 @@ use tracing::info;
 
 const SESSION_STALE_TIMEOUT_SECS: u64 = 300;
 
+/// Parse cross-platform file:// URIs safely into native OS path strings.
+pub fn parse_file_uri(uri: &str) -> String {
+    let mut decoded = uri.replace("%20", " ");
+    if decoded.starts_with("file://") {
+        decoded = decoded.trim_start_matches("file://").to_string();
+    }
+
+    if cfg!(windows) {
+        // Handle Windows leading slash e.g. /C:/path or /e:/path -> C:\path or E:\path
+        if decoded.starts_with('/') && decoded.chars().nth(2) == Some(':') {
+            decoded = decoded.trim_start_matches('/').to_string();
+        }
+        decoded = decoded.replace('/', "\\");
+    }
+
+    decoded
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerState {
     pub priority_gate_passed: bool,
@@ -67,16 +85,10 @@ impl ServerState {
             let mut parsed_roots = Vec::new();
             for r in roots {
                 if let Some(uri) = r.get("uri").and_then(|u| u.as_str()) {
-                    let mut path_str = uri.to_string();
-                    if path_str.starts_with("file://") {
-                        path_str = path_str.trim_start_matches("file://").to_string();
+                    let path_str = parse_file_uri(uri);
+                    if !path_str.is_empty() {
+                        parsed_roots.push(path_str);
                     }
-                    // Handle Windows file:///C:/path
-                    #[cfg(windows)]
-                    if path_str.starts_with('/') && path_str.chars().nth(2) == Some(':') {
-                        path_str = path_str.trim_start_matches('/').to_string();
-                    }
-                    parsed_roots.push(path_str);
                 }
             }
             if !parsed_roots.is_empty() {
@@ -393,5 +405,12 @@ mod tests {
         if path.exists() {
             let _ = fs::remove_file(&path);
         }
+    }
+
+    #[test]
+    fn test_parse_file_uri_cross_platform() {
+        assert_eq!(parse_file_uri("file:///C:/Users/test/project"), if cfg!(windows) { "C:\\Users\\test\\project" } else { "C:/Users/test/project" });
+        assert_eq!(parse_file_uri("file:///e:/Github/Agent-Guidance-Rust"), if cfg!(windows) { "e:\\Github\\Agent-Guidance-Rust" } else { "e:/Github/Agent-Guidance-Rust" });
+        assert_eq!(parse_file_uri("file:///home/user/project%20name"), if cfg!(windows) { "\\home\\user\\project name" } else { "/home/user/project name" });
     }
 }
