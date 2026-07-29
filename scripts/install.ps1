@@ -105,6 +105,8 @@ if ($buildDir) {
         Remove-Job $job -Force
 
         if (Test-Path "target\release\agent-guidance.exe") {
+            Get-Process -Name "agent-guidance*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300
             Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
             Write-Host -NoNewline "`r  ✓ Compilation & build finished successfully!            `n" -ForegroundColor Green
         } else {
@@ -154,6 +156,8 @@ if ($buildDir) {
         Remove-Job $job -Force
 
         if (Test-Path "target\release\agent-guidance.exe") {
+            Get-Process -Name "agent-guidance*" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300
             Copy-Item "target\release\agent-guidance.exe" "$localBin\agent-guidance.exe" -Force
             Write-Host -NoNewline "`r  ✓ Compilation & build finished successfully!            `n" -ForegroundColor Green
         } else {

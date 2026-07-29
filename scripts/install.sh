@@ -126,6 +126,7 @@ if [ -n "$BUILD_DIR" ]; then
     echo -e ""
     echo -e "${CYAN}⚙️  Building release binary from local source...${NC}"
     run_with_spinner "cd '$BUILD_DIR' && RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
+    killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
     cp "$BUILD_DIR/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
 else
     echo -e ""
@@ -138,6 +139,7 @@ else
         git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC" &>/dev/null
     fi
     run_with_spinner "cd '$GLOBAL_SRC' && RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
+    killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
     cp "$GLOBAL_SRC/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
 fi
 
