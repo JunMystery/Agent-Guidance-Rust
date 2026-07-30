@@ -19,10 +19,12 @@ echo -e "  ${GREEN}[1]${NC} Install Rust Edition (removes Python edition & build
 echo -e "  ${RED}[2]${NC} Uninstall — remove entire Agent Guidance directory & toolchains"
 echo -e ""
 
-if [ -t 0 ]; then
+if [ -c /dev/tty ]; then
+    read -p "Choice [1]: " ACTION < /dev/tty || ACTION=""
+elif [ -t 0 ]; then
     read -p "Choice [1]: " ACTION || ACTION=""
 else
-    # Piped input (e.g., curl | bash) — default to action 1 unless explicit
+    # Non-interactive fallback — default to action 1
     ACTION="1"
 fi
 ACTION="${ACTION:-1}"
