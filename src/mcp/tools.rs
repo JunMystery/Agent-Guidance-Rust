@@ -153,11 +153,12 @@ pub fn handle_tool_call(
 
             let files = scan_project(&proj_path, 2);
             let file_count = files.len();
+            let profile = crate::catalog::language_detector::detect_language_profile(&files, task);
 
             let all_skills = load_all_skills(&proj_path);
             let stage1_results = hybrid_vector_search(task, &all_skills, 8);
             let selector = LLMSelector::new();
-            let final_results = selector.rerank(task, stage1_results, 8);
+            let final_results = selector.rerank(task, stage1_results, &profile, 8);
 
             let rec_skills: Vec<String> = final_results
                 .into_iter()
@@ -218,6 +219,8 @@ pub fn handle_tool_call(
                 },
                 "search" => {
                     let proj_path = detect_project_path(".", state);
+                    let files = scan_project(&proj_path, 2);
+                    let profile = crate::catalog::language_detector::detect_language_profile(&files, &query);
                     let all_skills = load_all_skills(&proj_path);
 
                     // Stage 1: 1st Stage Candidate Selection
@@ -225,7 +228,7 @@ pub fn handle_tool_call(
 
                     // Stage 2: 2nd Stage Context & Intent Re-ranking
                     let selector = LLMSelector::new();
-                    let final_results = selector.rerank(&query, stage1_results, 15);
+                    let final_results = selector.rerank(&query, stage1_results, &profile, 15);
 
                     let formatted_results: Vec<String> = final_results
                         .into_iter()
