@@ -102,7 +102,7 @@ run_with_spinner() {
     local msg="$2"
     local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     
-    eval "$cmd" &>/dev/null &
+    eval "$cmd" < /dev/null &>/dev/null &
     local pid=$!
     
     local i=0
