@@ -59,6 +59,15 @@ fn detect_parent_process_cwd() -> Option<PathBuf> {
     None
 }
 
+fn is_generic_home_dir(p: &Path) -> bool {
+    if let Ok(home) = std::env::var("HOME") {
+        if p == Path::new(&home) {
+            return true;
+        }
+    }
+    false
+}
+
 fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
     // 1. Explicit path parameter provided in tool call (Agent declared working dir)
     if !arg_path.is_empty() && arg_path != "." {
@@ -71,7 +80,7 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
     // 2. Previously recorded active project path in ServerState memory
     if let Some(ref recorded) = state.project_path {
         let p = PathBuf::from(recorded);
-        if p.is_dir() {
+        if p.is_dir() && !is_generic_home_dir(&p) {
             return p;
         }
     }
@@ -79,39 +88,46 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
     // 3. Active workspace roots set during MCP initialize
     if !state.workspace_roots.is_empty() {
         let p = PathBuf::from(&state.workspace_roots[0]);
-        if p.is_dir() {
+        if p.is_dir() && !is_generic_home_dir(&p) {
             return p;
         }
     }
 
-    // 4. Parent Process PID CWD Inspection (IDE/Terminal parent directory)
-    if let Some(parent_cwd) = detect_parent_process_cwd() {
-        return parent_cwd;
-    }
-
-    // 5. Environment Variables injected by IDEs (INIT_CWD, WORKSPACE_FOLDER, PROJECT_DIR, PWD)
-    for env_var in ["INIT_CWD", "WORKSPACE_FOLDER", "PROJECT_DIR", "PWD"] {
+    // 4. Environment Variables injected by IDEs (INIT_CWD, WORKSPACE_FOLDER, PROJECT_DIR)
+    for env_var in ["INIT_CWD", "WORKSPACE_FOLDER", "PROJECT_DIR"] {
         if let Ok(val) = std::env::var(env_var) {
             let p = PathBuf::from(val);
-            if p.is_dir() && !p.to_string_lossy().to_lowercase().contains("antigravity") {
+            if p.is_dir() && !p.to_string_lossy().to_lowercase().contains("antigravity") && !is_generic_home_dir(&p) {
                 return p;
             }
+        }
+    }
+
+    // 5. Parent Process PID CWD Inspection (IDE/Terminal parent directory)
+    if let Some(parent_cwd) = detect_parent_process_cwd() {
+        if !is_generic_home_dir(&parent_cwd) {
+            return parent_cwd;
         }
     }
 
     // 6. Global persistent project path from prior agent session
     if let Some(global_path) = ServerState::read_global_project_path() {
         let p = PathBuf::from(global_path);
-        if p.is_dir() {
+        if p.is_dir() && !is_generic_home_dir(&p) {
             return p;
         }
     }
 
     // 7. Fallback to process current working directory (if not Antigravity installation root)
     if let Ok(cwd) = std::env::current_dir() {
-        if !cwd.to_string_lossy().to_lowercase().contains("antigravity") {
+        if !cwd.to_string_lossy().to_lowercase().contains("antigravity") && !is_generic_home_dir(&cwd) {
             return cwd;
         }
+    }
+
+    // 8. If recorded path exists even if home dir, use it
+    if let Some(ref recorded) = state.project_path {
+        return PathBuf::from(recorded);
     }
 
     PathBuf::from(".")
