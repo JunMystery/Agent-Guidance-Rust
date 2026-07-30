@@ -68,7 +68,15 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
         }
     }
 
-    // 2. Active workspace roots set during MCP initialize
+    // 2. Previously recorded active project path in ServerState memory
+    if let Some(ref recorded) = state.project_path {
+        let p = PathBuf::from(recorded);
+        if p.is_dir() {
+            return p;
+        }
+    }
+
+    // 3. Active workspace roots set during MCP initialize
     if !state.workspace_roots.is_empty() {
         let p = PathBuf::from(&state.workspace_roots[0]);
         if p.is_dir() {
@@ -76,12 +84,12 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
         }
     }
 
-    // 3. Parent Process PID CWD Inspection (IDE/Terminal parent directory)
+    // 4. Parent Process PID CWD Inspection (IDE/Terminal parent directory)
     if let Some(parent_cwd) = detect_parent_process_cwd() {
         return parent_cwd;
     }
 
-    // 4. Environment Variables injected by IDEs (INIT_CWD, WORKSPACE_FOLDER, PROJECT_DIR, PWD)
+    // 5. Environment Variables injected by IDEs (INIT_CWD, WORKSPACE_FOLDER, PROJECT_DIR, PWD)
     for env_var in ["INIT_CWD", "WORKSPACE_FOLDER", "PROJECT_DIR", "PWD"] {
         if let Ok(val) = std::env::var(env_var) {
             let p = PathBuf::from(val);
@@ -91,8 +99,22 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
         }
     }
 
-    // 5. Fallback to process current working directory
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    // 6. Global persistent project path from prior agent session
+    if let Some(global_path) = ServerState::read_global_project_path() {
+        let p = PathBuf::from(global_path);
+        if p.is_dir() {
+            return p;
+        }
+    }
+
+    // 7. Fallback to process current working directory (if not Antigravity installation root)
+    if let Ok(cwd) = std::env::current_dir() {
+        if !cwd.to_string_lossy().to_lowercase().contains("antigravity") {
+            return cwd;
+        }
+    }
+
+    PathBuf::from(".")
 }
 
 pub fn handle_tool_call(
@@ -107,6 +129,7 @@ pub fn handle_tool_call(
             let task = arguments.get("task").and_then(|t| t.as_str()).unwrap_or("general task");
             let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
+            state.update_project_path(&proj_path);
             let phase = arguments.get("phase").and_then(|p| p.as_str()).unwrap_or("plan");
             
             // Record active phase for per-phase reset
@@ -237,6 +260,7 @@ pub fn handle_tool_call(
             let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("tree");
             let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
+            state.update_project_path(&proj_path);
             let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("");
             let rel_path = arguments.get("relative_path").and_then(|r| r.as_str()).unwrap_or("");
 
@@ -401,6 +425,7 @@ pub fn handle_tool_call(
         "require_edit_approval" => {
             let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
+            state.update_project_path(&proj_path);
             let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
             let justification = arguments.get("justification").and_then(|j| j.as_str()).unwrap_or("No justification provided");
             
@@ -503,16 +528,25 @@ mod tests {
         let res = detect_project_path(&explicit.to_string_lossy(), &state);
         assert_eq!(res, explicit);
 
-        // 2. Check workspace roots
+        // 2. Check recorded state.project_path memory
+        let mut state_recorded = ServerState::new();
+        state_recorded.project_path = Some(explicit.to_string_lossy().to_string());
+        let res_recorded = detect_project_path(".", &state_recorded);
+        assert_eq!(res_recorded, explicit);
+
+        // 3. Check workspace roots
         let mut state2 = ServerState::new();
         state2.workspace_roots = vec![explicit.to_string_lossy().to_string()];
         let res2 = detect_project_path(".", &state2);
         assert_eq!(res2, explicit);
 
-        // 3. Check fallback to current_dir when no other source
-        let state3 = ServerState::new();
-        let res3 = detect_project_path(".", &state3);
-        assert_eq!(res3, explicit);
+        // 4. Check global project path memory file
+        let global_path_file = ServerState::global_project_path_file();
+        let _ = std::fs::write(&global_path_file, explicit.to_string_lossy().as_bytes());
+        let state_global = ServerState::new();
+        let res_global = detect_project_path(".", &state_global);
+        assert_eq!(res_global, explicit);
+        let _ = std::fs::remove_file(&global_path_file);
     }
 
     #[test]
