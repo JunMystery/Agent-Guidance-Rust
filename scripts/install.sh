@@ -130,22 +130,32 @@ run_with_spinner() {
 
 if [ -n "$BUILD_DIR" ]; then
     echo -e ""
-    echo -e "${CYAN}⚙️  Building release binary from local source...${NC}"
-    run_with_spinner "cd '$BUILD_DIR' && RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
+    echo -e "${CYAN}⚙️  Building release binary from local source (${BUILD_DIR})...${NC}"
+    # Use /tmp target dir if on non-POSIX/fuseblk filesystem (e.g. exFAT/NTFS)
+    DEV="$(df -P "$BUILD_DIR" | tail -1 | awk '{print $1}')"
+    if mount | grep "^$DEV " | grep -qiE 'exfat|fuseblk|ntfs|ntfs3'; then
+        CARGO_TARGET="CARGO_TARGET_DIR=/tmp/agent-guidance-target"
+    fi
+    run_with_spinner "cd '$BUILD_DIR' && $CARGO_TARGET RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
     killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
-    cp "$BUILD_DIR/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
+    TARGET_BIN="$BUILD_DIR/target/release/agent-guidance"
+    [ -f "/tmp/agent-guidance-target/release/agent-guidance" ] && TARGET_BIN="/tmp/agent-guidance-target/release/agent-guidance"
+    rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
+    cp "$TARGET_BIN" "$LOCAL_BIN/agent-guidance"
 else
     echo -e ""
     echo -e "${CYAN}📦 Fetching source repository & building Rust server...${NC}"
     GLOBAL_SRC="$HOME/.agent-guidance/src"
-    if [ -f "$GLOBAL_SRC/Cargo.toml" ]; then
+    if [ -f "$GLOBAL_SRC/Cargo.toml" ] && grep -q 'name = "agent-guidance"' "$GLOBAL_SRC/Cargo.toml" 2>/dev/null; then
         (cd "$GLOBAL_SRC" && git fetch --depth 1 origin main &>/dev/null && git reset --hard origin/main &>/dev/null) || true
     else
+        rm -rf "$GLOBAL_SRC"
         mkdir -p "$GLOBAL_SRC"
         git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC" &>/dev/null
     fi
     run_with_spinner "cd '$GLOBAL_SRC' && RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling dependencies & Rust server... "
     killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
+    rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
     cp "$GLOBAL_SRC/target/release/agent-guidance" "$LOCAL_BIN/agent-guidance"
 fi
 
@@ -162,6 +172,4 @@ echo -e "${GREEN}${BOLD}╔═════════════════�
 echo -e "${GREEN}${BOLD}║         ✓  Rust Edition Installed Successfully!              ║${NC}"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo -e ""
-echo -e "  ${BOLD}Installed Executable Binary:${NC}"
-echo -e "    ${CYAN}$HOME/.local/bin/agent-guidance${NC}"
-echo -e ""
+echo -
