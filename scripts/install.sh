@@ -20,9 +20,10 @@ echo -e "  ${RED}[2]${NC} Uninstall — remove entire Agent Guidance directory &
 echo -e ""
 
 if [ -t 0 ]; then
-    read -p "Choice [1]: " ACTION
+    read -p "Choice [1]: " ACTION || ACTION=""
 else
-    read -p "Choice [1]: " ACTION < /dev/tty 2>/dev/null || ACTION=""
+    # Piped input (e.g., curl | bash) — default to action 1 unless explicit
+    ACTION="1"
 fi
 ACTION="${ACTION:-1}"
 
@@ -90,9 +91,9 @@ mkdir -p "$HOME/.local/bin"
 LOCAL_BIN="$HOME/.local/bin"
 
 BUILD_DIR=""
-if [ -f "./Cargo.toml" ]; then
+if [ -f "./Cargo.toml" ] && grep -q 'name = "agent-guidance"' ./Cargo.toml 2>/dev/null; then
     BUILD_DIR="$(pwd)"
-elif [ -f "$(dirname "$0")/../Cargo.toml" ]; then
+elif [ -f "$(dirname "$0")/../Cargo.toml" ] && grep -q 'name = "agent-guidance"' "$(dirname "$0")/../Cargo.toml" 2>/dev/null; then
     BUILD_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 fi
 
@@ -101,8 +102,9 @@ run_with_spinner() {
     local cmd="$1"
     local msg="$2"
     local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local log_file="$(mktemp 2>/dev/null || echo "/tmp/agent-guidance-build.log")"
     
-    eval "$cmd" < /dev/null &>/dev/null &
+    eval "$cmd" < /dev/null &>"$log_file" &
     local pid=$!
     
     local i=0
@@ -116,8 +118,12 @@ run_with_spinner() {
     local exit_code=$?
     if [ $exit_code -eq 0 ]; then
         printf "\r  ${GREEN}✓${NC} %sFinished successfully!            \n" "$msg"
+        rm -f "$log_file" 2>/dev/null || true
     else
         printf "\r  ${RED}❌${NC} %sFailed with exit code %d.        \n" "$msg" $exit_code
+        echo -e "${RED}Build error log:${NC}"
+        cat "$log_file"
+        rm -f "$log_file" 2>/dev/null || true
         exit 1
     fi
 }
