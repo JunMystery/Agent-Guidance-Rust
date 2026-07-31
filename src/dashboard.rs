@@ -163,8 +163,14 @@ fn get_iso_date(now_secs: i64) -> String {
 fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Value> {
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_FULL_MUTEX,
     )?;
+
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS tool_calls (id INTEGER PRIMARY KEY AUTOINCREMENT, tool_name TEXT NOT NULL, operation TEXT, started_at INTEGER NOT NULL, duration_ms INTEGER, tokens_original INTEGER DEFAULT 0, tokens_optimized INTEGER DEFAULT 0, error_message TEXT)", []);
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS skill_loads (id INTEGER PRIMARY KEY AUTOINCREMENT, skill_id TEXT NOT NULL, loaded_at INTEGER NOT NULL)", []);
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS embed_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, created_at INTEGER NOT NULL)", []);
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS llm_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT NOT NULL, created_at INTEGER NOT NULL)", []);
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS daily_summaries (day TEXT PRIMARY KEY, tool_calls INTEGER DEFAULT 0, skills_loaded INTEGER DEFAULT 0, embed_queries INTEGER DEFAULT 0, llm_queries INTEGER DEFAULT 0, tokens_original INTEGER DEFAULT 0, tokens_optimized INTEGER DEFAULT 0)", []);
 
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
     let cutoff_24h = now - 86400;
