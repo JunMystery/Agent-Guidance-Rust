@@ -30,7 +30,7 @@
 ### The 7-Stage Workflow Gate
 `Agent Guidance` governs the AI agent lifecycle through strict stage transitions:
 
-$$\text{Context} \longrightarrow \text{Plan} \longrightarrow \text{Ask\_Revise} \longrightarrow \text{Build} \longrightarrow \text{Test\_Recheck} \longrightarrow \text{Fix} \longrightarrow \text{Proposal}$$
+`Context` $\longrightarrow$ `Plan` $\longrightarrow$ `Ask_Revise` $\longrightarrow$ `Build` $\longrightarrow$ `Test_Recheck` $\longrightarrow$ `Fix` $\longrightarrow$ `Proposal`
 
 - **Hard Edit Gate (`require_edit_approval`)**: Code modification is BLOCKED until `plan_approved = true` and the agent explicitly declares a valid `architecture_pattern`:
   - `Clean_Architecture`
