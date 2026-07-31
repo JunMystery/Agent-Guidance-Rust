@@ -16,22 +16,22 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
         let app_path = PathBuf::from(appdata);
         (
             app_path.join("Claude").join("claude_desktop_config.json"),
-            app_path.join("Code").join("User").join("globalStorage"),
-            app_path.join("Cursor").join("User").join("globalStorage"),
+            app_path.join("Code").join("User"),
+            app_path.join("Cursor").join("User"),
             app_path.join("Devin").join("Cascade").join("mcp_config.json"),
         )
     } else if cfg!(target_os = "macos") {
         (
             home.join("Library").join("Application Support").join("Claude").join("claude_desktop_config.json"),
-            home.join("Library").join("Application Support").join("Code").join("User").join("globalStorage"),
-            home.join("Library").join("Application Support").join("Cursor").join("User").join("globalStorage"),
+            home.join("Library").join("Application Support").join("Code").join("User"),
+            home.join("Library").join("Application Support").join("Cursor").join("User"),
             home.join("Library").join("Application Support").join("Devin").join("Cascade").join("mcp_config.json"),
         )
     } else {
         (
             home.join(".config").join("Claude").join("claude_desktop_config.json"),
-            home.join(".config").join("Code").join("User").join("globalStorage"),
-            home.join(".config").join("Cursor").join("User").join("globalStorage"),
+            home.join(".config").join("Code").join("User"),
+            home.join(".config").join("Cursor").join("User"),
             home.join(".config").join("Devin").join("Cascade").join("mcp_config.json"),
         )
     };
@@ -43,7 +43,7 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
         ("Antigravity Config mcp.json", home.join(".config").join("antigravity").join("mcp.json"), true, "mcpServers"),
         ("Antigravity Home mcp.json", home.join(".antigravity").join("mcp.json"), true, "mcpServers"),
         ("Cursor Native", home.join(".cursor").join("mcp.json"), true, "mcpServers"),
-        ("VS Code Native", code_path.parent().unwrap_or(&code_path).join("mcp.json"), true, "servers"),
+        ("VS Code Native", code_path.join("mcp.json"), true, "servers"),
         ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), true, "mcpServers"),
         ("Devin/Cascade", devin_path, true, "mcpServers"),
         ("Claude Code", home.join(".claude").join("mcp.json"), true, "mcpServers"),
@@ -58,10 +58,10 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     }
 
     let extensions = vec![
-        ("VS Code Cline", code_path.join("saoudrizwan.claude-dev").join("settings").join("cline_mcp_settings.json")),
-        ("VS Code Roo-Code", code_path.join("roovet.roo-cline").join("settings").join("cline_mcp_settings.json")),
-        ("Cursor Cline", cursor_path.join("saoudrizwan.claude-dev").join("settings").join("cline_mcp_settings.json")),
-        ("Cursor Roo-Code", cursor_path.join("roovet.roo-cline").join("settings").join("cline_mcp_settings.json")),
+        ("VS Code Cline", code_path.join("globalStorage").join("saoudrizwan.claude-dev").join("settings").join("cline_mcp_settings.json")),
+        ("VS Code Roo-Code", code_path.join("globalStorage").join("roovet.roo-cline").join("settings").join("cline_mcp_settings.json")),
+        ("Cursor Cline", cursor_path.join("globalStorage").join("saoudrizwan.claude-dev").join("settings").join("cline_mcp_settings.json")),
+        ("Cursor Roo-Code", cursor_path.join("globalStorage").join("roovet.roo-cline").join("settings").join("cline_mcp_settings.json")),
     ];
 
     for (name, path) in extensions {
@@ -109,7 +109,7 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
         ("Gemini CLI", home.join(".gemini").join("config").join("mcp_config.json"), "mcpServers"),
         ("Antigravity CLI", home.join(".gemini").join("antigravity").join("mcp_config.json"), "mcpServers"),
         ("Cursor", home.join(".cursor").join("mcp.json"), "mcpServers"),
-        ("VS Code", home.join(".config").join("Code").join("User").join("globalStorage").join("mcp.json"), "servers"),
+        ("VS Code", home.join(".config").join("Code").join("User").join("mcp.json"), "servers"),
         ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), "mcpServers"),
         ("Devin/Cascade", home.join(".config").join("Devin").join("Cascade").join("mcp_config.json"), "mcpServers"),
         ("Claude Code", home.join(".claude").join("mcp.json"), "mcpServers"),
