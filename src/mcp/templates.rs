@@ -21,15 +21,15 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 
 ### Nine Mandatory Contract Rules
 
-1. **Context & Phase First**: Call `task_pipeline(task="...", project_path="<path>", phase="<phase>")` BEFORE any file read or code change. You MUST pass `project_path` and `phase`. If skills are proposed, call `select_skills(skills=[...])` to load chosen skills (or `skills=[]` to skip).
-2. **Edit Approval Contract**: Call `require_edit_approval(project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` before modifying files. You MUST include a valid `architecture_pattern`.
+1. **Context & Phase First**: Call `task_pipeline(task="...", project_path="<path>", phase="<phase>")` BEFORE any file read or code change. You MUST pass `project_path` and `phase`. If skills are proposed, trigger the IDE/CLI `ask_question` tool to let the user interactively choose skills, then call `select_skills(skills=[...])` to load chosen skills (or `skills=[]` to skip).
+2. **Edit Approval Contract**: Call `require_edit_approval(project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` before modifying files. You MUST include a valid `architecture_pattern`. If architecture pattern or edit approval is missing/blocked, trigger the IDE/CLI `ask_question` tool to ask the user.
 3. **Symbol-Targeted Reading**: Use `project_context(operation="read", relative_path="...", target_symbol="...")` to read exact symbols and prevent token blowout.
 4. **Empirical Test Verification**: Use `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` to prove feature correctness with real test output.
 5. **Ground & Plan**: Verify files/functions/symbols via search BEFORE proposing changes. Never guess.
 6. **Upfront Orchestrator Architecture**: Do NOT wait for files to reach 300 LOC to refactor. Create new features directly using an Orchestrator (main dispatcher) + sub-function modules upfront to prevent token waste.
-7. **Intent Gate**: Classify request type before acting. If ambiguous, clarify first.
+7. **Intent Gate**: Classify request type before acting. If ambiguous or underspecified, trigger the IDE/CLI `ask_question` tool to clarify user intent first.
 8. **Delegation Before Action**: Decompose multi-step tasks and delegate to subagents when appropriate.
-9. **Per-Phase Reset**: For EACH new work phase (plan → implement → test → debug → review → refactor), re-call `task_pipeline` with that phase's goal.
+9. **Per-Phase Reset**: For EACH new work phase (plan → implement → test → debug → review → refactor), re-call `task_pipeline` with that phase's goal and trigger `ask_question` to request user confirmation for stage transitions.
 
 **CRITICAL: All 9 contract rules apply to EVERY action without exception.**
 <!-- agent-guidance:end -->

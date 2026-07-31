@@ -221,7 +221,7 @@ fn handle_tool_call_internal(
             let next_step_prompt = if rec_skills.is_empty() {
                 "-> Task requires no specific technical skills. Proceed directly with implementation."
             } else {
-                "-> SKILL_PROPOSAL: Call `select_skills(skills=[...])` with skill names you want to load, or `select_skills(skills=[])` to skip all."
+                "-> SKILL_PROPOSAL: Trigger IDE/CLI `ask_question` tool to present recommended skills interactively to user, then call `select_skills(skills=[...])` with chosen skills (or `select_skills(skills=[])` if skipped)."
             };
 
             state.record_call(1500, 450);
@@ -362,7 +362,7 @@ fn handle_tool_call_internal(
                     let next_step_prompt = if formatted_results.is_empty() {
                         "-> No matching skills found."
                     } else {
-                        "-> SKILL_PROPOSAL: Call `select_skills(skills=[...])` to confirm and fetch inline content for chosen skills, or `select_skills(skills=[])` to skip all."
+                        "-> SKILL_PROPOSAL: Trigger IDE/CLI `ask_question` tool to present recommended skills interactively to user, then call `select_skills(skills=[...])` with chosen skills (or `select_skills(skills=[])` if skipped)."
                     };
 
                     format!(
@@ -394,7 +394,7 @@ fn handle_tool_call_internal(
                         state.verification_passed = true;
                         format!("# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED & PASSED\n\n✓ Post-code verification requirements satisfied.", cmd, kw)
                     } else {
-                        format!("# Anti-Hallucination Post-Code Verification Checklist\n\n1. **Empirical Verification Required**: You MUST pass `verification_command` (e.g. 'cargo test') and `expected_output_keyword` (e.g. 'PASSED').\n2. **User Requirement Alignment**: Re-read the original user prompt and verify all explicitly requested features exist.\n3. **Zero Unverified Assumptions**: Base success strictly on empirical evidence, not speculative assumptions.")
+                        format!("# Anti-Hallucination Post-Code Verification Checklist\n\n1. **Empirical Verification Required**: Trigger IDE/CLI `ask_question` tool to let user select verification test command (or confirm manual testing), then pass `verification_command` (e.g. 'cargo test') and `expected_output_keyword` (e.g. 'PASSED').\n2. **User Requirement Alignment**: Re-read the original user prompt and verify all explicitly requested features exist.\n3. **Zero Unverified Assumptions**: Base success strictly on empirical evidence, not speculative assumptions.")
                     }
                 },
                 _ => format!("Guidance operation '{}' completed successfully.", op),
@@ -542,10 +542,10 @@ fn handle_tool_call_internal(
                     if let Some(target) = stage_target {
                         match state.set_stage(target) {
                             Ok(new_stage) => format!("# Workflow Gate: [set_stage]\n\nStatus: PASSED | Stage Changed To: {} | Plan Approved: {} | Fix Attempts: {}", new_stage, state.plan_approved, state.fix_attempts),
-                            Err(err_msg) => format!("# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}", err_msg),
+                            Err(err_msg) => format!("# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}. Trigger IDE/CLI `ask_question` tool to request user approval for stage transition.", err_msg),
                         }
                     } else {
-                        "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: target_stage argument is required for set_stage action.".to_string()
+                        "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: target_stage argument is required for set_stage action. Trigger IDE/CLI `ask_question` tool to clarify desired stage.".to_string()
                     }
                 },
                 "status" => {
@@ -562,6 +562,9 @@ fn handle_tool_call_internal(
                     }
                     let status_str = if state.workflow_stage == "Build" && !state.plan_approved { "BLOCKED" } else { "PASSED" };
                     let mut resp = format!("# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}", status_str, state.plan_approved, state.workflow_stage, state.fix_attempts);
+                    if state.workflow_stage == "Build" && !state.plan_approved {
+                        resp.push_str("\n\n⚠️ Trigger IDE/CLI `ask_question` tool to request explicit user plan approval before editing code.");
+                    }
                     if state.workflow_stage == "Test_Recheck" {
                         resp.push_str("\n\n⚠ **ANTI-HALLUCINATION ENFORCER ACTIVE**: Re-read the original user prompt & verify all requested features against real build/test outputs before declaring task complete.");
                     }
@@ -582,12 +585,12 @@ fn handle_tool_call_internal(
 
             if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
                 format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: You must set a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `require_edit_approval` to confirm upfront modular decomposition.",
+                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator'), then re-invoke `require_edit_approval`.",
                     proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { arch_pattern }
                 )
             } else if risk_level == "HIGH" && !state.plan_approved {
                 format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval plan. Invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")` and present plan first.",
+                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
                     proj_path.display(), justification
                 )
             } else if state.workflow_stage == "Build" && state.plan_approved {
@@ -597,7 +600,7 @@ fn handle_tool_call_internal(
                 )
             } else {
                 format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. To proceed, present an implementation plan and invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")` after user approval.",
+                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
                     proj_path.display(), state.workflow_stage, state.plan_approved
                 )
             }
