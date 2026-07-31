@@ -1,0 +1,19 @@
+{
+  "priority_gate_passed": true,
+  "workflow_stage": "Build",
+  "plan_approved": true,
+  "fix_attempts": 0,
+  "tool_calls": 28,
+  "tokens_original": 50450,
+  "tokens_optimized": 12992,
+  "project_path": "/run/media/jun/01DD1492DE1790D0/Git/agent-guidance",
+  "agent_client_name": null,
+  "workspace_roots": [],
+  "last_session_start": 1785480003,
+  "user_intent_summary": null,
+  "verification_command": null,
+  "expected_output_keyword": null,
+  "verification_passed": false,
+  "last_risk_level": "LOW",
+  "active_phase": "implement"
+}
