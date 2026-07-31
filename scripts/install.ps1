@@ -148,27 +148,36 @@ function Ensure-BuildToolchain {
         $gccPath = "$mingwDir\bin\gcc.exe"
 
         if (-not (Test-Path $gccPath)) {
-            Write-Host "  [2/2] Downloading portable MinGW GCC linker..." -ForegroundColor Gray
-            $zipPath = "$env:TEMP\mingw64.zip"
-            $mingwUrl = "https://github.com/brechtsanders/winlibs_mingw-w64/releases/download/13.2.0posix-17.0.6-11.0.1-ucrt-r5/winlibs-x86_64-posix-seh-gcc-13.2.0-llvm-17.0.6-mingw-w64ucrt-r5.zip"
+            Write-Host "  [2/2] Downloading portable MinGW GCC & Linker tools..." -ForegroundColor Gray
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $zipPath = "$env:TEMP\w64devkit.zip"
+            $mingwUrl = "https://github.com/skeeto/w64devkit/releases/download/v2.0.0/w64devkit-2.0.0.zip"
 
             try {
-                Invoke-WebRequest -Uri $mingwUrl -OutFile $zipPath -UseBasicParsing
-                Write-Host "  Extracting MinGW GCC linker..." -ForegroundColor Gray
-                Expand-Archive -Path $zipPath -DestinationPath "$HOME\.agent-guidance" -Force
-                if (Test-Path "$HOME\.agent-guidance\mingw64") {
-                    if (Test-Path $mingwDir) { Remove-Item -Recurse -Force $mingwDir }
-                    Rename-Item "$HOME\.agent-guidance\mingw64" "mingw"
+                Invoke-WebRequest -Uri $mingwUrl -OutFile $zipPath -UserAgent "Mozilla/5.0" -UseBasicParsing
+                Write-Host "  Extracting MinGW GCC & Linker tools..." -ForegroundColor Gray
+                $extractTmp = "$env:TEMP\w64devkit_tmp"
+                if (Test-Path $extractTmp) { Remove-Item -Recurse -Force $extractTmp -ErrorAction SilentlyContinue }
+                Expand-Archive -Path $zipPath -DestinationPath $extractTmp -Force
+                
+                if (-not (Test-Path "$HOME\.agent-guidance")) {
+                    New-Item -ItemType Directory -Path "$HOME\.agent-guidance" -Force | Out-Null
                 }
+                if (Test-Path $mingwDir) { Remove-Item -Recurse -Force $mingwDir -ErrorAction SilentlyContinue }
+                
+                if (Test-Path "$extractTmp\w64devkit") {
+                    Move-Item -Path "$extractTmp\w64devkit" -Destination $mingwDir -Force
+                }
+                Remove-Item -Recurse -Force $extractTmp -ErrorAction SilentlyContinue
                 Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
             } catch {
-                Write-Host "  Warning: Could not download standalone MinGW Zip automatically. Will attempt cargo build using rustup gnu target." -ForegroundColor Yellow
+                Write-Host "  Warning: Could not download MinGW automatically ($($_.Exception.Message))." -ForegroundColor Yellow
             }
         }
 
         if (Test-Path "$mingwDir\bin") {
             $env:Path = "$mingwDir\bin;" + $env:Path
-            Write-Host "  OK Standalone GCC Linker configured ($mingwDir\bin)" -ForegroundColor Green
+            Write-Host "  OK Standalone GCC Linker & dlltool configured ($mingwDir\bin)" -ForegroundColor Green
         }
     }
 }
