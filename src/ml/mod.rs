@@ -1,6 +1,22 @@
 pub mod embeddings;
 pub mod llm_selector;
 
+use rayon::ThreadPool;
+use std::sync::OnceLock;
+
+const ML_WORKER_THREADS: usize = 2;
+
+pub fn inference_pool() -> &'static ThreadPool {
+    static POOL: OnceLock<ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(ML_WORKER_THREADS)
+            .thread_name(|index| format!("agent-guidance-ml-{index}"))
+            .build()
+            .expect("failed to create ML worker pool")
+    })
+}
+
 pub fn download_models() -> anyhow::Result<()> {
     use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
 

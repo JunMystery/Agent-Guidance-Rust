@@ -1,13 +1,24 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use tracing::info;
 
-use crate::catalog::store::{get_embedded_skill, list_embedded_skills, load_all_skills, SkillSource};
+use crate::catalog::store::{
+    SkillSource, get_embedded_skill, list_embedded_skills, load_all_skills,
+};
+use crate::context::cache::project_snapshot;
 use crate::context::scanner::scan_project;
 use crate::mcp::state::ServerState;
 use crate::ml::embeddings::hybrid_vector_search;
 use crate::ml::llm_selector::LLMSelector;
 use crate::optimizer::compressor::{compress_markdown, estimate_tokens};
+
+fn ensure_not_cancelled(state: &ServerState) -> Result<(), (i32, String)> {
+    if state.is_cancelled() {
+        Err((-32000, "Request cancelled after timeout".to_string()))
+    } else {
+        Ok(())
+    }
+}
 
 /// Validate that a relative path stays within the base directory root
 pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String> {
@@ -49,7 +60,8 @@ fn detect_parent_process_cwd() -> Option<PathBuf> {
         if let Some(parent_pid) = proc_.parent() {
             if let Some(parent_proc) = sys.process(parent_pid) {
                 if let Some(cwd) = parent_proc.cwd() {
-                    if cwd.is_dir() && !cwd.to_string_lossy().to_lowercase().contains("antigravity") {
+                    if cwd.is_dir() && !cwd.to_string_lossy().to_lowercase().contains("antigravity")
+                    {
                         return Some(cwd.to_path_buf());
                     }
                 }
@@ -97,7 +109,10 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
     for env_var in ["INIT_CWD", "WORKSPACE_FOLDER", "PROJECT_DIR"] {
         if let Ok(val) = std::env::var(env_var) {
             let p = PathBuf::from(val);
-            if p.is_dir() && !p.to_string_lossy().to_lowercase().contains("antigravity") && !is_generic_home_dir(&p) {
+            if p.is_dir()
+                && !p.to_string_lossy().to_lowercase().contains("antigravity")
+                && !is_generic_home_dir(&p)
+            {
                 return p;
             }
         }
@@ -120,7 +135,9 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
 
     // 7. Fallback to process current working directory (if not Antigravity installation root)
     if let Ok(cwd) = std::env::current_dir() {
-        if !cwd.to_string_lossy().to_lowercase().contains("antigravity") && !is_generic_home_dir(&cwd) {
+        if !cwd.to_string_lossy().to_lowercase().contains("antigravity")
+            && !is_generic_home_dir(&cwd)
+        {
             return cwd;
         }
     }
@@ -139,6 +156,7 @@ pub fn handle_tool_call(
     state: &mut ServerState,
 ) -> Result<Value, (i32, String)> {
     info!("Handling tool call: {}", name);
+    ensure_not_cancelled(state)?;
 
     let response_text = match name {
         "task_pipeline" => {
@@ -151,14 +169,16 @@ pub fn handle_tool_call(
             // Record active phase for per-phase reset
             state.active_phase = Some(phase.to_string());
 
-            let files = scan_project(&proj_path, 2);
-            let file_count = files.len();
-            let profile = crate::catalog::language_detector::detect_language_profile(&files, task);
+            let snapshot = project_snapshot(&proj_path);
+            ensure_not_cancelled(state)?;
+            let file_count = snapshot.files.len();
+            let profile = crate::catalog::language_detector::detect_language_profile(snapshot.files.as_ref(), task);
 
-            let all_skills = load_all_skills(&proj_path);
-            let stage1_results = hybrid_vector_search(task, &all_skills, 8);
+            let stage1_results = hybrid_vector_search(task, snapshot.skills.as_ref(), 8);
+            ensure_not_cancelled(state)?;
             let selector = LLMSelector::new();
             let final_results = selector.rerank(task, stage1_results, &profile, 8);
+            ensure_not_cancelled(state)?;
 
             let rec_skills: Vec<String> = final_results
                 .into_iter()
@@ -166,7 +186,7 @@ pub fn handle_tool_call(
                 .collect();
 
             let execution_seq = "- Step 1: Context & Specification\n- Step 2: Architecture & Implementation Plan\n- Step 3: Code Implementation (Build stage)\n- Step 4: Verification & Testing\n- Step 5: Post-Code Review & Documentation";
-            let tree_preview: Vec<String> = files.iter().take(15).map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
+            let tree_preview: Vec<String> = snapshot.files.iter().take(15).map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
 
             let next_step_prompt = if rec_skills.is_empty() {
                 "-> Task requires no specific technical skills. Proceed directly with implementation."
@@ -195,8 +215,8 @@ pub fn handle_tool_call(
             match op {
                 "list" => {
                     let proj_path = detect_project_path(".", state);
-                    let all_skills = load_all_skills(&proj_path);
-                    let names: Vec<String> = all_skills.into_iter().map(|s| format!("- {} ({})", s.name, s.relative_path)).collect();
+                    let snapshot = project_snapshot(&proj_path);
+                    let names: Vec<String> = snapshot.skills.iter().map(|s| format!("- {} ({})", s.name, s.relative_path)).collect();
                     format!("# Registered Skills Catalog ({})\n\n{}", names.len(), names.join("\n"))
                 },
                 "get" => {
@@ -219,16 +239,19 @@ pub fn handle_tool_call(
                 },
                 "search" => {
                     let proj_path = detect_project_path(".", state);
-                    let files = scan_project(&proj_path, 2);
-                    let profile = crate::catalog::language_detector::detect_language_profile(&files, &query);
-                    let all_skills = load_all_skills(&proj_path);
+                    let snapshot = project_snapshot(&proj_path);
+                    ensure_not_cancelled(state)?;
+                    let profile = crate::catalog::language_detector::detect_language_profile(snapshot.files.as_ref(), &query);
+                    let all_skills = snapshot.skills.as_ref();
 
                     // Stage 1: 1st Stage Candidate Selection
-                    let stage1_results = hybrid_vector_search(&query, &all_skills, 20);
+                    let stage1_results = hybrid_vector_search(&query, all_skills, 20);
+                    ensure_not_cancelled(state)?;
 
                     // Stage 2: 2nd Stage Context & Intent Re-ranking
                     let selector = LLMSelector::new();
                     let final_results = selector.rerank(&query, stage1_results, &profile, 15);
+                    ensure_not_cancelled(state)?;
 
                     let formatted_results: Vec<String> = final_results
                         .into_iter()
@@ -356,6 +379,9 @@ pub fn handle_tool_call(
                     let mut results = Vec::new();
                     if !query.is_empty() {
                         for file in files.iter().filter(|f| f.file_type == "file").take(50) {
+                            if state.is_cancelled() {
+                                return Err((-32000, "Operation cancelled by client or timeout.".to_string()));
+                            }
                             if let Ok(path) = validate_path(&proj_path, &file.path) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if content.contains(query) {
@@ -527,7 +553,11 @@ mod tests {
         let skill_dir = tmp_dir.join(".agents").join("skills").join("custom");
         let _ = std::fs::create_dir_all(&skill_dir);
         let skill_file = skill_dir.join("SKILL.md");
-        std::fs::write(&skill_file, "---\nname: custom\n---\n# Custom Skill Content").unwrap();
+        std::fs::write(
+            &skill_file,
+            "---\nname: custom\n---\n# Custom Skill Content",
+        )
+        .unwrap();
 
         let res = handle_tool_call(
             "guidance",
@@ -539,7 +569,10 @@ mod tests {
         );
 
         assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("Custom Skill Content"));
 
         let _ = std::fs::remove_dir_all(tmp_dir);
@@ -580,24 +613,22 @@ mod tests {
         state.plan_approved = true;
         state.set_stage("Test_Recheck").unwrap();
 
-        let res = handle_tool_call(
-            "guidance",
-            json!({ "operation": "verify" }),
-            &mut state,
-        );
+        let res = handle_tool_call("guidance", json!({ "operation": "verify" }), &mut state);
 
         assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("Anti-Hallucination Post-Code Verification Checklist"));
         assert!(text.contains("User Requirement Alignment"));
 
-        let check_res = handle_tool_call(
-            "workflow_gate",
-            json!({ "action": "check" }),
-            &mut state,
-        );
+        let check_res = handle_tool_call("workflow_gate", json!({ "action": "check" }), &mut state);
         assert!(check_res.is_ok());
-        let check_text = check_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let check_text = check_res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(check_text.contains("ANTI-HALLUCINATION ENFORCER ACTIVE"));
     }
 }

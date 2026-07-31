@@ -2,7 +2,7 @@ use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
     pub path: String,
     pub file_type: String,
@@ -33,7 +33,11 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             let relative = path.strip_prefix(&target_root).unwrap_or(path);
             let rel_str = relative.to_string_lossy().to_string();
 
-            if rel_str == ".git" || rel_str.starts_with(".git/") || rel_str == ".agent-context" || rel_str.starts_with(".agent-context/") {
+            if rel_str == ".git"
+                || rel_str.starts_with(".git/")
+                || rel_str == ".agent-context"
+                || rel_str.starts_with(".agent-context/")
+            {
                 continue;
             }
 

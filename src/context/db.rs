@@ -77,6 +77,9 @@ impl CodeGraphDb {
             [],
         )?;
 
+        tx.execute("CREATE INDEX IF NOT EXISTS idx_symbols_file_path ON symbols(file_path);", [])?;
+        tx.execute("CREATE INDEX IF NOT EXISTS idx_files_modified_at ON files(modified_at);", [])?;
+
         tx.commit()?;
         Ok(())
     }

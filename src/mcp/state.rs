@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
 
@@ -44,6 +46,8 @@ pub struct ServerState {
     pub verification_passed: bool,
     pub last_risk_level: Option<String>,
     pub active_phase: Option<String>,
+    #[serde(skip, default)]
+    pub cancellation: Option<Arc<AtomicBool>>,
 }
 
 impl Default for ServerState {
@@ -66,6 +70,7 @@ impl Default for ServerState {
             verification_passed: false,
             last_risk_level: None,
             active_phase: None,
+            cancellation: None,
         }
     }
 }
@@ -93,10 +98,10 @@ impl ServerState {
             verification_passed: false,
             last_risk_level: None,
             active_phase: None,
+            cancellation: None,
             agent_client_name: client_name,
         }
     }
-
 
     pub fn set_roots_from_initialize(&mut self, params: &Value) {
         if let Some(roots) = params.get("roots").and_then(|r| r.as_array()) {
@@ -110,7 +115,10 @@ impl ServerState {
                 }
             }
             if !parsed_roots.is_empty() {
-                info!("Captured workspace roots from initialize: {:?}", parsed_roots);
+                info!(
+                    "Captured workspace roots from initialize: {:?}",
+                    parsed_roots
+                );
                 self.workspace_roots = parsed_roots;
             }
         }
@@ -144,6 +152,9 @@ impl ServerState {
         if path_str.is_empty() || path_str == "." {
             return;
         }
+        if self.project_path.as_deref() == Some(path_str.as_str()) {
+            return;
+        }
         self.project_path = Some(path_str.clone());
 
         // Write to global persistent memory for cross-session AI agent inheritance
@@ -167,7 +178,10 @@ impl ServerState {
     pub fn priority_gate_pass(&mut self) {
         self.priority_gate_passed = true;
         self.last_session_start = Some(
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
         );
         let path = Self::priority_gate_path();
         if let Some(parent) = path.parent() {
@@ -183,10 +197,16 @@ impl ServerState {
     pub fn priority_gate_check(&mut self) -> Result<(), String> {
         if self.priority_gate_passed {
             if let Some(ts) = self.last_session_start {
-                let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
                 if now > ts && now - ts > SESSION_STALE_TIMEOUT_SECS {
                     let mins = (now - ts) / 60;
-                    info!("Session is stale ({}m since last task_pipeline). Agent should re-call task_pipeline.", mins);
+                    info!(
+                        "Session is stale ({}m since last task_pipeline). Agent should re-call task_pipeline.",
+                        mins
+                    );
                 }
             }
             return Ok(());
@@ -208,7 +228,10 @@ impl ServerState {
 
     pub fn session_freshness_note(&self) -> Option<String> {
         let ts = self.last_session_start?;
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         if now > ts && now - ts > SESSION_STALE_TIMEOUT_SECS {
             let mins = (now - ts) / 60;
             Some(format!(
@@ -226,6 +249,21 @@ impl ServerState {
         self.tokens_optimized += opt_tokens;
     }
 
+    pub fn set_cancellation(&mut self, cancellation: Arc<AtomicBool>) {
+        self.cancellation = Some(cancellation);
+    }
+
+    pub fn clear_cancellation(&mut self) {
+        self.cancellation = None;
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancellation
+            .as_ref()
+            .map(|flag| flag.load(Ordering::Relaxed))
+            .unwrap_or(false)
+    }
+
     pub fn set_stage(&mut self, target: &str) -> Result<String, String> {
         let normalized = match target.trim().to_lowercase().as_str() {
             "context" => "Context",
@@ -235,7 +273,12 @@ impl ServerState {
             "test_recheck" | "test" | "recheck" | "test/recheck" => "Test_Recheck",
             "fix" => "Fix",
             "proposal" | "document" => "Proposal",
-            _ => return Err(format!("Invalid workflow stage '{}'. Allowed stages: Context, Plan, Ask_Revise, Build, Test_Recheck, Fix, Proposal.", target)),
+            _ => {
+                return Err(format!(
+                    "Invalid workflow stage '{}'. Allowed stages: Context, Plan, Ask_Revise, Build, Test_Recheck, Fix, Proposal.",
+                    target
+                ));
+            }
         };
 
         if normalized == "Plan" {
@@ -254,7 +297,10 @@ impl ServerState {
                 self.fix_attempts = 0;
                 return Err("WORKFLOW_STAGE_BLOCKED: Circuit breaker triggered after 3 consecutive failed fix attempts. Workflow stage automatically reset to 'Ask_Revise' with plan_approved=false. Please request user guidance.".to_string());
             }
-        } else if normalized == "Test_Recheck" || normalized == "Proposal" || normalized == "Context" {
+        } else if normalized == "Test_Recheck"
+            || normalized == "Proposal"
+            || normalized == "Context"
+        {
             self.fix_attempts = 0;
         }
 
@@ -269,10 +315,31 @@ impl ServerState {
         }
 
         let approval_keywords = [
-            "ok", "proceed", "approved", "approve", "start", "go ahead",
-            "do it", "làm đi", "đồng ý", "chấp nhận", "yes", "yep", "lgtm",
-            "looks good", "agree", "let's do it", "make the change", "exec",
-            "triển khai", "tiến hành", "duyệt", "thực thi", "chốt", "ok bro", "được đấy"
+            "ok",
+            "proceed",
+            "approved",
+            "approve",
+            "start",
+            "go ahead",
+            "do it",
+            "làm đi",
+            "đồng ý",
+            "chấp nhận",
+            "yes",
+            "yep",
+            "lgtm",
+            "looks good",
+            "agree",
+            "let's do it",
+            "make the change",
+            "exec",
+            "triển khai",
+            "tiến hành",
+            "duyệt",
+            "thực thi",
+            "chốt",
+            "ok bro",
+            "được đấy",
         ];
 
         for kw in approval_keywords {
@@ -295,8 +362,13 @@ impl ServerState {
         // 2. Whitelisted & Not Gated tools bypass priority gate check
         let is_whitelisted_or_ungated = matches!(
             tool_name,
-            "health_check" | "diagnose" | "token_stats" | "require_edit_approval" | "usage_report"
-            | "workflow_gate" | "session_continuity"
+            "health_check"
+                | "diagnose"
+                | "token_stats"
+                | "require_edit_approval"
+                | "usage_report"
+                | "workflow_gate"
+                | "session_continuity"
         );
 
         if !is_whitelisted_or_ungated {
@@ -307,43 +379,74 @@ impl ServerState {
         // 3. Perform Stage Checks
         match self.workflow_stage.as_str() {
             "Context" => {
-                if !is_whitelisted_or_ungated && tool_name != "workflow_gate" && tool_name != "session_continuity" {
+                if !is_whitelisted_or_ungated
+                    && tool_name != "workflow_gate"
+                    && tool_name != "session_continuity"
+                {
                     return Err(format!(
                         "WORKFLOW_STAGE_BLOCKED: Tool '{}' is blocked in 'Context' stage. Call task_pipeline and workflow_gate(action=\"set_stage\", target_stage=\"Plan\") first.",
                         tool_name
                     ));
                 }
                 Ok(())
-            },
+            }
             "Plan" => {
                 if tool_name == "project_context" {
                     let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
                     if op == "diff" || op == "architecture" {
-                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Operation '{}' on project_context is blocked in 'Plan' stage.", op));
+                        return Err(format!(
+                            "WORKFLOW_STAGE_BLOCKED: Operation '{}' on project_context is blocked in 'Plan' stage.",
+                            op
+                        ));
                     }
                 }
                 Ok(())
-            },
+            }
             "Ask_Revise" => {
                 if tool_name == "project_context" {
                     let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
-                    if matches!(op, "read" | "search" | "symbols" | "references" | "structure" | "callers" | "callees" | "diff") {
-                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Code reading operation '{}' is blocked in 'Ask_Revise' stage.", op));
+                    if matches!(
+                        op,
+                        "read"
+                            | "search"
+                            | "symbols"
+                            | "references"
+                            | "structure"
+                            | "callers"
+                            | "callees"
+                            | "diff"
+                    ) {
+                        return Err(format!(
+                            "WORKFLOW_STAGE_BLOCKED: Code reading operation '{}' is blocked in 'Ask_Revise' stage.",
+                            op
+                        ));
                     }
                 } else if tool_name == "guidance" {
                     let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
                     if op == "precode" || op == "verify" {
-                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Guidance operation '{}' is blocked in 'Ask_Revise' stage.", op));
+                        return Err(format!(
+                            "WORKFLOW_STAGE_BLOCKED: Guidance operation '{}' is blocked in 'Ask_Revise' stage.",
+                            op
+                        ));
                     }
                 }
                 Ok(())
-            },
+            }
             "Build" => {
                 if !self.plan_approved {
                     Err("WORKFLOW_STAGE_BLOCKED: Tool execution in 'Build' stage is blocked because plan_approved is false. Obtain user approval first.".to_string())
                 } else if tool_name == "require_edit_approval" {
-                    let arch_pattern = args.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
-                    if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
+                    let arch_pattern = args
+                        .get("architecture_pattern")
+                        .and_then(|a| a.as_str())
+                        .unwrap_or("");
+                    if !matches!(
+                        arch_pattern,
+                        "Clean_Architecture"
+                            | "Layered_Architecture"
+                            | "Package_By_Feature"
+                            | "Orchestrator"
+                    ) {
                         Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `require_edit_approval`.".to_string())
                     } else {
                         Ok(())
@@ -351,7 +454,7 @@ impl ServerState {
                 } else {
                     Ok(())
                 }
-            },
+            }
             "Test_Recheck" => {
                 if tool_name == "guidance" {
                     let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
@@ -360,17 +463,20 @@ impl ServerState {
                     }
                 }
                 Ok(())
-            },
+            }
             "Fix" => Ok(()),
             "Proposal" => {
                 if tool_name == "project_context" {
                     let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
                     if matches!(op, "diff" | "structure" | "symbols") {
-                        return Err(format!("WORKFLOW_STAGE_BLOCKED: Operation '{}' is blocked in 'Proposal' stage.", op));
+                        return Err(format!(
+                            "WORKFLOW_STAGE_BLOCKED: Operation '{}' is blocked in 'Proposal' stage.",
+                            op
+                        ));
                     }
                 }
                 Ok(())
-            },
+            }
             _ => Ok(()),
         }
     }
@@ -398,6 +504,18 @@ impl ServerState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cancellation_flag_lifecycle() {
+        let mut state = ServerState::new();
+        let flag = Arc::new(AtomicBool::new(false));
+        state.set_cancellation(flag.clone());
+        assert!(!state.is_cancelled());
+        flag.store(true, Ordering::Relaxed);
+        assert!(state.is_cancelled());
+        state.clear_cancellation();
+        assert!(!state.is_cancelled());
+    }
 
     #[test]
     fn test_stage_transitions_and_circuit_breaker() {
@@ -446,24 +564,65 @@ mod tests {
         let mut state = ServerState::new();
 
         // 1. Gated tool fails initially with PRIORITY_REQUIRED
-        let err = state.can_call_tool("guidance", &serde_json::json!({})).unwrap_err();
+        let err = state
+            .can_call_tool("guidance", &serde_json::json!({}))
+            .unwrap_err();
         assert!(err.contains("PRIORITY_REQUIRED"));
 
         // 2. Whitelisted & Not Gated tools succeed without priority gate unlock
-        assert!(state.can_call_tool("health_check", &serde_json::json!({})).is_ok());
-        assert!(state.can_call_tool("diagnose", &serde_json::json!({})).is_ok());
-        assert!(state.can_call_tool("token_stats", &serde_json::json!({})).is_ok());
-        assert!(state.can_call_tool("require_edit_approval", &serde_json::json!({})).is_ok());
-        assert!(state.can_call_tool("usage_report", &serde_json::json!({})).is_ok());
-        assert!(state.can_call_tool("workflow_gate", &serde_json::json!({})).is_ok());
-        assert!(state.can_call_tool("session_continuity", &serde_json::json!({"operation": "load"})).is_ok());
+        assert!(
+            state
+                .can_call_tool("health_check", &serde_json::json!({}))
+                .is_ok()
+        );
+        assert!(
+            state
+                .can_call_tool("diagnose", &serde_json::json!({}))
+                .is_ok()
+        );
+        assert!(
+            state
+                .can_call_tool("token_stats", &serde_json::json!({}))
+                .is_ok()
+        );
+        assert!(
+            state
+                .can_call_tool("require_edit_approval", &serde_json::json!({}))
+                .is_ok()
+        );
+        assert!(
+            state
+                .can_call_tool("usage_report", &serde_json::json!({}))
+                .is_ok()
+        );
+        assert!(
+            state
+                .can_call_tool("workflow_gate", &serde_json::json!({}))
+                .is_ok()
+        );
+        assert!(
+            state
+                .can_call_tool(
+                    "session_continuity",
+                    &serde_json::json!({"operation": "load"})
+                )
+                .is_ok()
+        );
 
         // 3. Calling task_pipeline unlocks priority gate
-        assert!(state.can_call_tool("task_pipeline", &serde_json::json!({})).is_ok());
+        assert!(
+            state
+                .can_call_tool("task_pipeline", &serde_json::json!({}))
+                .is_ok()
+        );
         assert!(state.priority_gate_passed);
 
         // 4. Now gated tool passes priority check (and workflow_gate passes in Context stage)
-        assert!(state.can_call_tool("workflow_gate", &serde_json::json!({})).is_ok());
+        assert!(
+            state
+                .can_call_tool("workflow_gate", &serde_json::json!({}))
+                .is_ok()
+        );
 
         // Clean up sentinel file created by task_pipeline
         if path.exists() {
@@ -473,9 +632,30 @@ mod tests {
 
     #[test]
     fn test_parse_file_uri_cross_platform() {
-        assert_eq!(parse_file_uri("file:///C:/Users/test/project"), if cfg!(windows) { "C:\\Users\\test\\project" } else { "/C:/Users/test/project" });
-        assert_eq!(parse_file_uri("file:///e:/Github/Agent-Guidance-Rust"), if cfg!(windows) { "e:\\Github\\Agent-Guidance-Rust" } else { "/e:/Github/Agent-Guidance-Rust" });
-        assert_eq!(parse_file_uri("file:///home/user/project%20name"), if cfg!(windows) { "\\home\\user\\project name" } else { "/home/user/project name" });
+        assert_eq!(
+            parse_file_uri("file:///C:/Users/test/project"),
+            if cfg!(windows) {
+                "C:\\Users\\test\\project"
+            } else {
+                "/C:/Users/test/project"
+            }
+        );
+        assert_eq!(
+            parse_file_uri("file:///e:/Github/Agent-Guidance-Rust"),
+            if cfg!(windows) {
+                "e:\\Github\\Agent-Guidance-Rust"
+            } else {
+                "/e:/Github/Agent-Guidance-Rust"
+            }
+        );
+        assert_eq!(
+            parse_file_uri("file:///home/user/project%20name"),
+            if cfg!(windows) {
+                "\\home\\user\\project name"
+            } else {
+                "/home/user/project name"
+            }
+        );
     }
 
     #[test]

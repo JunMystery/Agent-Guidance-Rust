@@ -9,6 +9,8 @@ use tokenizers::Tokenizer;
 use crate::catalog::store::SkillItem;
 use rayon::prelude::*;
 
+const MAX_CROSS_ENCODER_CANDIDATES: usize = 8;
+
 pub(crate) struct CrossEncoder {
     model: BertModel,
     classifier: candle_nn::Linear,
@@ -76,13 +78,11 @@ impl CrossEncoder {
 }
 
 pub fn cached_cross_encoder() -> Result<std::sync::RwLockReadGuard<'static, CrossEncoder>, String> {
-    static CE: OnceLock<RwLock<CrossEncoder>> = OnceLock::new();
-    let ce = CE.get_or_init(|| {
-        CrossEncoder::load()
-            .map(RwLock::new)
-            .expect("Failed to load cross-encoder model. Reranking will use keyword fallback.")
-    });
-    ce.read().map_err(|_| "RwLock poisoned".to_string())
+    static CE: OnceLock<Result<RwLock<CrossEncoder>, String>> = OnceLock::new();
+    match CE.get_or_init(|| CrossEncoder::load().map(RwLock::new).map_err(|error| error.to_string())) {
+        Ok(encoder) => encoder.read().map_err(|_| "RwLock poisoned".to_string()),
+        Err(error) => Err(error.clone()),
+    }
 }
 
 pub struct LLMSelector;
@@ -163,27 +163,34 @@ impl LLMSelector {
             .cloned()
             .collect();
 
-        let mut scored: Vec<(f32, SkillItem)> = filtered_candidates
-            .par_iter()
-            .filter_map(|(_score, skill)| {
-                let text = format!(
-                    "{} {}",
-                    skill.name,
-                    skill.content.chars().take(200).collect::<String>()
-                );
-                cached_cross_encoder().ok().and_then(|ce| {
-                    ce.score(task, &text).ok().map(|logit| {
-                        // Apply Sigmoid probability normalization: 1 / (1 + e^-logit)
-                        let mut prob = 1.0 / (1.0 + (-logit).exp());
-                        let name_lower = skill.name.to_lowercase();
-                        if task_lower.contains(&name_lower) {
-                            prob += 0.5; // Direct prompt mention boost
-                        }
-                        (prob, skill.clone())
+        let bounded_candidates: Vec<(f32, SkillItem)> = filtered_candidates
+            .iter()
+            .take(MAX_CROSS_ENCODER_CANDIDATES)
+            .cloned()
+            .collect();
+        let cross_encoder = cached_cross_encoder().ok();
+        let mut scored: Vec<(f32, SkillItem)> = crate::ml::inference_pool().install(|| {
+            bounded_candidates
+                .par_iter()
+                .filter_map(|(_score, skill)| {
+                    let text = format!(
+                        "{} {}",
+                        skill.name,
+                        skill.content.chars().take(200).collect::<String>()
+                    );
+                    cross_encoder.as_ref().and_then(|ce| {
+                        ce.score(task, &text).ok().map(|logit| {
+                            let mut prob = 1.0 / (1.0 + (-logit).exp());
+                            let name_lower = skill.name.to_lowercase();
+                            if task_lower.contains(&name_lower) {
+                                prob += 0.5;
+                            }
+                            (prob, skill.clone())
+                        })
                     })
                 })
-            })
-            .collect();
+                .collect()
+        });
         if !scored.is_empty() {
             tracing::info!("[ML Pipeline] Cross-Encoder reranked {} candidate skills successfully.", scored.len());
             scored.par_sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -213,11 +220,12 @@ impl LLMSelector {
             return candidates.into_iter().take(limit).collect();
         }
 
-        let mut scored: Vec<(f32, SkillItem)> = candidates
-            .into_iter()
-            .map(|(base_score, skill)| {
+        let mut scored: Vec<(f32, usize)> = candidates
+            .iter()
+            .enumerate()
+            .map(|(i, (base_score, skill))| {
                 let name_lower = skill.name.to_lowercase();
-                let content_lower = skill.content.to_lowercase();
+                let content_snippet_lower: String = skill.content.chars().take(300).collect::<String>().to_lowercase();
                 let mut bonus = 0.0f32;
 
                 for kw in &task_keywords {
@@ -226,17 +234,27 @@ impl LLMSelector {
                     } else if name_lower.contains(kw) {
                         bonus += 0.15;
                     }
-                    if content_lower.contains(kw) {
+                    if content_snippet_lower.contains(kw) {
                         bonus += 0.05;
                     }
                 }
 
-                (base_score + bonus, skill)
+                (*base_score + bonus, i)
             })
             .collect();
 
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().take(limit).collect()
+        let mut candidates_vec = candidates;
+        let mut results = Vec::new();
+        for (_, i) in scored.into_iter().take(limit) {
+            results.push(std::mem::replace(&mut candidates_vec[i], (0.0, SkillItem {
+                name: String::new(),
+                relative_path: String::new(),
+                source: crate::catalog::store::SkillSource::Embedded,
+                content: String::new(),
+            })));
+        }
+        results
     }
 }
 
@@ -295,4 +313,3 @@ mod tests {
         assert_eq!(results[0].1.name, "rust-best-practices");
     }
 }
-

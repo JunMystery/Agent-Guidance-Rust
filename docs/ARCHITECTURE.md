@@ -101,15 +101,15 @@ IDE 1 → stdin/stdout → agent-guidance (DAEMON)
 
 ## Model Architecture
 
-### Synchronous Warm on Initialize
+### Background Model Warmup
 
-Both models load **synchronously** during the first `initialize` handshake:
+The daemon accepts connections immediately and warms both models in a bounded blocking worker:
 
 ```
-initialize
+daemon start
   ├─ warmup_cache()
   │   ├─ cached_model() → BERT OnceLock init (~0.6s disk load)
-  │   └─ embed all 276 skills as passage vectors (~19s)
+  │   └─ embed all catalog skills as passage vectors (cache miss only)
   └─ cached_cross_encoder() → CrossEncoder OnceLock init (~0.07s)
 ```
 
@@ -117,17 +117,17 @@ initialize
 |---|---|---|---|
 | Embedding | `intfloat/multilingual-e5-small` (384-dim) | 118MB | ~560ms |
 | Cross-encoder | `cross-encoder/ms-marco-MiniLM-L-6-v2` | 80MB | ~70ms |
-| Passage cache (276 skills) | — | ~424KB (276 × 384 × f32) | ~19s |
+| Passage cache | — | 384-dimension f32 vectors, sized by catalog | cache-miss dependent |
 
 ### Cached Passage Embeddings (`PASSAGE_CACHE`)
 
 ```rust
-static PASSAGE_CACHE: OnceLock<Mutex<Vec<Vec<f32>>>> = OnceLock::new();
+static PASSAGE_CACHE: OnceLock<RwLock<Vec<PassageCache>>> = OnceLock::new();
 ```
 
-- All 276 skill passage vectors computed once during `warmup_cache()`
+- Embedded and workspace-local skill passage vectors are cached by catalog fingerprint during `warmup_cache()`
 - Shared across all daemon connections via module-level `OnceLock`
-- Subsequent `task_pipeline` calls: 1 query embed + 276 cosine dot products → **~200ms**
+- Subsequent `task_pipeline` calls: 1 query embed plus cached vector scoring
 - Skill content truncated to 300 chars for embedding
 
 ### Hybrid Vector Search
@@ -135,7 +135,7 @@ static PASSAGE_CACHE: OnceLock<Mutex<Vec<Vec<f32>>>> = OnceLock::new();
 ```
 task_pipeline(query)
   ├─ embed query: "query: ..." → q_vec (384-dim)
-  ├─ for each skill: cosine_similarity(q_vec, cached_passage[i])
+  ├─ for each skill: normalized dot product with cached_passage[i]
   ├─ keyword boost:
   │   ├─ name exact match:  +0.5
   │   ├─ name contains:     +0.3

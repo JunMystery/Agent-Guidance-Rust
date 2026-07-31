@@ -43,9 +43,21 @@ pub const INTEGRATED_REPOS: &[RepoUpdateSpec] = &[
 ];
 
 pub fn get_update_dir() -> PathBuf {
+    if cfg!(test) {
+        return std::env::temp_dir().join(format!("agent-guidance-skills-test-{}", std::process::id()));
+    }
     dirs::home_dir()
         .map(|h| h.join(".agent-guidance").join("skills"))
         .unwrap_or_else(|| PathBuf::from(".agent-guidance-skills"))
+}
+
+fn update_state_path() -> PathBuf {
+    if cfg!(test) {
+        return std::env::temp_dir().join(format!("agent-guidance-update-state-test-{}.json", std::process::id()));
+    }
+    dirs::home_dir()
+        .map(|h| h.join(".agent-guidance").join(".update-state.json"))
+        .unwrap_or_else(|| PathBuf::from(".update-state.json"))
 }
 
 pub fn run_update() -> Result<()> {
@@ -55,13 +67,14 @@ pub fn run_update() -> Result<()> {
     println!("Checking and updating integrated skill repositories...");
 
     for repo in INTEGRATED_REPOS {
-        println!("  ✓ Synced catalog entry: {} ({})", repo.name, repo.repo_url);
+        println!(
+            "  ✓ Synced catalog entry: {} ({})",
+            repo.name, repo.repo_url
+        );
         info!("Updated integrated repository: {}", repo.key);
     }
 
-    let state_file = dirs::home_dir()
-        .map(|h| h.join(".agent-guidance").join(".update-state.json"))
-        .unwrap_or_else(|| PathBuf::from(".update-state.json"));
+    let state_file = update_state_path();
 
     let state_json = serde_json::json!({
         "last_update": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs(),

@@ -1,6 +1,6 @@
 [package]
 name = "agent-guidance"
-version = "1.2.2"
+version = "1.2.3"
 edition = "2024"
 
 [dependencies]
@@ -27,3 +27,6 @@ toml = "0.8"
 fs2 = "0.4"
 sysinfo = "0.30"
 
+[[bench]]
+name = "performance"
+harness = false
