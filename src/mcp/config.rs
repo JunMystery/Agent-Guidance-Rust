@@ -40,6 +40,8 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
         ("Claude Desktop", claude_path, true, "mcpServers"),
         ("Gemini MCP config", home.join(".gemini").join("config").join("mcp_config.json"), true, "mcpServers"),
         ("Antigravity MCP config", home.join(".gemini").join("antigravity").join("mcp_config.json"), true, "mcpServers"),
+        ("Antigravity Config mcp.json", home.join(".config").join("antigravity").join("mcp.json"), true, "mcpServers"),
+        ("Antigravity Home mcp.json", home.join(".antigravity").join("mcp.json"), true, "mcpServers"),
         ("Cursor Native", home.join(".cursor").join("mcp.json"), true, "mcpServers"),
         ("VS Code Native", code_path.parent().unwrap_or(&code_path).join("mcp.json"), true, "servers"),
         ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), true, "mcpServers"),
