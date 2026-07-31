@@ -25,6 +25,7 @@ src/
 ├── dashboard/         # Native HTTP usage dashboard server & embedded HTML frontend
 │   └── mod.rs
 ├── mcp/               # Model Context Protocol engine
+│   ├── db.rs          # SQLite usage metrics persistence, 24h pruning & daily aggregations
 │   ├── protocol.rs    # JSON-RPC request & response structs
 │   ├── router.rs      # Tool dispatcher & resource router
 │   ├── state.rs       # ServerState priority gate, stage matrix & circuit breaker
@@ -239,6 +240,33 @@ project_context(search, query)
   ├─ Structural + config files
   └─ General code files (capped)
 ```
+
+---
+
+## Database & Metrics Subsystem (`usage.db`)
+
+Every MCP tool invocation, skill activation, and ML vector search is logged to `~/.agent-guidance/usage.db` via `src/mcp/db.rs` using a process & thread mutex guard (`DB_MUTEX`).
+
+### Database Schema
+
+| Table | Purpose | Retention |
+|---|---|---|
+| `tool_calls` | Logs individual tool invocations (`tool_name`, `operation`, `started_at`, `duration_ms`, `tokens_original`, `tokens_optimized`, `error_message`) | Pruned after 24h |
+| `skill_loads` | Logs skill views/reads (`skill_id`, `loaded_at`) | Pruned after 24h |
+| `embed_queries` | Logs text vector embeddings (`query`, `created_at`) | Pruned after 24h |
+| `llm_queries` | Logs LLM cross-encoder rerank queries | Pruned after 24h |
+| `daily_summaries` | Permanent ISO date (`YYYY-MM-DD`) aggregate totals (`tool_calls`, `skills_loaded`, `embed_queries`, `tokens_original`, `tokens_optimized`) | Permanent (Lifetime) |
+
+### 24-Hour Raw Log Auto-Pruning & 50-Item Capping
+- **Auto-Pruning**: On every database write cycle (`log_tool_call`, `log_skill_load`, `log_embed_query`), raw records older than **24 hours** (`started_at < now - 86400`) are automatically deleted.
+- **50-Item View Capping**: All list queries (`recent_actions`, `tool_breakdown`, `top_skills`, `embed_recent`) are hard-capped to `LIMIT 50`.
+
+### Multi-Timeframe Dashboard Aggregations
+The dashboard server (`src/dashboard.rs`) aggregates metrics dynamically across 4 standard timeframes:
+- **`past_24h`**: Sum of active 24-hour raw event logs (`WHERE started_at >= cutoff_24h`).
+- **`last_7d`**: Aggregated sum from `daily_summaries` (`WHERE day >= cutoff_7d`).
+- **`last_30d`**: Aggregated sum from `daily_summaries` (`WHERE day >= cutoff_30d`).
+- **`lifetime`**: Permanent sum of all records in `daily_summaries`.
 
 ---
 

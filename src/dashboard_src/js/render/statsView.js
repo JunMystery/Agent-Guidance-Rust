@@ -5,9 +5,11 @@ import { renderRecentCalls } from './recent.js';
 import { makeSortable, filterRows, bindFilter } from '../interactions.js';
 import { store } from '../state.js';
 
-export function renderDashboard(data) {
-  const t = data.totals || {};
+let activeTimeframe = 'past_24h';
 
+export function renderDashboard(data) {
+  store.dashboard_data = data;
+  
   setText('out-client-name', 'global');
   setText('out-session-label', 'per-call tracking');
 
@@ -15,22 +17,48 @@ export function renderDashboard(data) {
   const projEl = el('sidebar-proj');
   if (projEl) projEl.title = data.project_path || '';
   setText('sidebar-port', 'port: ' + (data.server_port || '--'));
+  setText('sidebar-version', 'version: v' + (data.version || '--'));
   setText('sys-project', data.project_path || '--');
-  setText('sys-version', data.version || '--');
+  setText('sys-version', 'v' + (data.version || '--'));
   setText('sys-db-status', data.db_status || '--');
 
-  setText('out-tool-calls', t.tool_calls || 0);
-  setText('out-skills-loaded', t.skills_loaded || 0);
-  setText('out-embed-queries', t.embed_queries || 0);
-
-  setText('out-original-tokens', fmtTokens(t.tokens_original));
-  setText('out-optimized-tokens', fmtTokens(t.tokens_optimized));
-  setText('out-token-savings', fmtTokens(t.token_savings) + ' (' + fmtPct(t.savings_pct) + ' savings)');
+  bindTimeframeTabs();
+  updateTimeframeSummary(activeTimeframe);
 
   renderSkillsTable(data.top_skills);
   renderActionsTable(data.tool_breakdown);
-  renderHourlyChart(data, t);
+  renderHourlyChart(data, data.totals || {});
   renderRecentCalls(data.recent_actions);
+}
+
+function bindTimeframeTabs() {
+  const container = el('timeframe-selector');
+  if (!container || container.dataset.bound) return;
+  container.dataset.bound = 'true';
+
+  const tabs = container.querySelectorAll('.timeframe-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeTimeframe = tab.dataset.timeframe;
+      updateTimeframeSummary(activeTimeframe);
+    });
+  });
+}
+
+function updateTimeframeSummary(tf) {
+  const data = store.dashboard_data;
+  if (!data) return;
+  const s = (data.summaries && data.summaries[tf]) || data.totals || {};
+
+  setText('out-tool-calls', s.tool_calls || 0);
+  setText('out-skills-loaded', s.skills_loaded || 0);
+  setText('out-embed-queries', s.embed_queries || 0);
+
+  setText('out-original-tokens', fmtTokens(s.tokens_original));
+  setText('out-optimized-tokens', fmtTokens(s.tokens_optimized));
+  setText('out-token-savings', fmtTokens(s.token_savings) + ' (' + fmtPct(s.savings_pct) + ' savings)');
 }
 
 function renderSkillsTable(topSkills) {

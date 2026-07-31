@@ -541,6 +541,8 @@ pub fn hybrid_vector_search(
         return Vec::new();
     }
 
+    crate::mcp::db::log_embed_query(query);
+
     let q_lower = query.to_lowercase();
     let words: Vec<&str> = q_lower.split_whitespace().collect();
 

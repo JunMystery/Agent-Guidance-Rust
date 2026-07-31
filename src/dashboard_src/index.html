@@ -23,6 +23,7 @@
   <div class="sidebar-footer">
     <div class="proj" id="sidebar-proj" onclick="changeProjectPath()" title="Click to change project path" style="cursor:pointer">project: --</div>
     <div id="sidebar-port">port: --</div>
+    <div id="sidebar-version">version: --</div>
   </div>
 </aside>
 
@@ -65,6 +66,12 @@
         <div class="terminal-title">Dashboard Session Overview</div>
       </div>
       <div class="terminal-body-raw">
+        <div class="timeframe-bar" id="timeframe-selector">
+          <button class="timeframe-tab active" data-timeframe="past_24h">Past 24H</button>
+          <button class="timeframe-tab" data-timeframe="last_7d">Last 7 Days</button>
+          <button class="timeframe-tab" data-timeframe="last_30d">Last 30 Days</button>
+          <button class="timeframe-tab" data-timeframe="lifetime">Lifetime</button>
+        </div>
         <div class="term-session">
           <!-- Left side: Command Output Cards -->
           <div class="term-commands">
@@ -274,7 +281,6 @@
                   <th data-sort="started_at">Time</th>
                   <th data-sort="tool_name">Tool</th>
                   <th data-sort="operation">Operation</th>
-                  <th data-sort="duration_ms">Duration</th>
                   <th data-sort="tokens_original">Orig Tokens</th>
                   <th data-sort="tokens_optimized">Opt Tokens</th>
                   <th data-sort="savings">Savings</th>

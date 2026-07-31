@@ -167,6 +167,43 @@ pub fn log_skill_load(skill_id: &str) {
     update_daily_summary(&conn, &day_str, 0, 1, 0, 0, 0, 0);
 }
 
+pub fn log_embed_query(query: &str) {
+    let _guard = DB_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let db_path = get_db_path();
+
+    if let Err(e) = init_db_internal(&db_path) {
+        warn!("Failed to initialize usage.db: {}", e);
+        return;
+    }
+
+    let conn = match Connection::open_with_flags(
+        &db_path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("Failed to open usage.db for logging embed query: {}", e);
+            return;
+        }
+    };
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    let cutoff_24h = now - 86400;
+    prune_old_records(&conn, cutoff_24h);
+
+    let _ = conn.execute(
+        "INSERT INTO embed_queries (query, created_at) VALUES (?, ?)",
+        params![query, now],
+    );
+
+    let day_str = get_today_string(now);
+    update_daily_summary(&conn, &day_str, 0, 0, 1, 0, 0, 0);
+}
+
 fn init_db_internal(db_path: &PathBuf) -> Result<()> {
     if let Some(parent) = db_path.parent() {
         let _ = std::fs::create_dir_all(parent);

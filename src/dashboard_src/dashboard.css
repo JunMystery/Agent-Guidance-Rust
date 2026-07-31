@@ -186,6 +186,43 @@ body::before {
     font-family: var(--font-mono);
 }
 
+/* Timeframe Selector Bar */
+.timeframe-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    background: var(--bg-primary);
+    padding: 6px;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--border-color);
+    width: fit-content;
+}
+
+.timeframe-tab {
+    padding: 6px 14px;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.timeframe-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.timeframe-tab.active {
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--accent-primary);
+    border-color: rgba(88, 166, 255, 0.35);
+    font-weight: 600;
+}
+
 /* Session bar controls */
 .session-bar {
     margin-bottom: 24px;
@@ -736,49 +773,102 @@ tr:hover td {
 .savings-kpi {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 14px;
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
 .kpi {
-    background: var(--bg-primary);
+    background: rgba(12, 16, 23, 0.65);
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
     border: 1px solid var(--border-color);
+    border-top: 2px solid var(--accent-primary);
     border-radius: var(--border-radius-md);
-    padding: 10px 12px;
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+}
+
+.kpi:hover {
+    transform: translateY(-2px);
+    border-color: rgba(88, 166, 255, 0.35);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 .kpi-label {
     font-size: 11px;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
+    font-weight: 600;
 }
 
 .kpi-val {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
+    font-family: var(--font-mono);
 }
 
-.kpi-saved { color: var(--chart-saved); }
+.kpi-saved {
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
 
-/* Chart card wrapper */
+/* Glassmorphic Chart Card Wrapper */
 .chart-card {
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-md);
-    padding: 16px;
-    margin: 20px 0 8px;
-    background: rgba(255,255,255,0.01);
+    border: 1px solid rgba(88, 166, 255, 0.15);
+    border-radius: var(--border-radius-lg);
+    padding: 20px 22px;
+    margin: 24px 0 12px;
+    background: rgba(12, 16, 23, 0.65);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(88, 166, 255, 0.4), rgba(188, 140, 255, 0.4), transparent);
+}
+
+.chart-card:hover {
+    border-color: rgba(88, 166, 255, 0.35);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px 0 rgba(88, 166, 255, 0.12), 0 8px 32px 0 rgba(0, 0, 0, 0.45);
 }
 
 .chart-card-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 10px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+}
+
+.chart-card-title::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    box-shadow: 0 0 10px var(--accent-primary);
 }
 
 /* Interactive chart tooltip */

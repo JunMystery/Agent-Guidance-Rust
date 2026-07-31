@@ -292,6 +292,16 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
     let last_30d_summary = get_summary(&format!("{} WHERE day >= ?", sql_sum), &[&day_30d_ago]);
     let lifetime_summary = get_summary(sql_sum, &[]);
 
+    let mut stmt = conn.prepare(
+        "SELECT query, created_at FROM embed_queries WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50"
+    )?;
+    let embed_recent: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
+        Ok(json!({
+            "query": row.get::<_, String>(0)?,
+            "created_at": row.get::<_, i64>(1)?,
+        }))
+    })?.filter_map(|r| r.ok()).collect();
+
     Ok(json!({
         "db_status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
@@ -308,6 +318,6 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         "top_skills": top_skills,
         "recent_actions": recent_actions,
         "hourly_savings": hourly_savings,
-        "embed_recent": []
+        "embed_recent": embed_recent
     }))
 }

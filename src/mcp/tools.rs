@@ -205,7 +205,10 @@ fn handle_tool_call_internal(
 
             let rec_skills: Vec<String> = final_results
                 .into_iter()
-                .map(|(score, item)| format!("- {} (Score: {:.2})", item.name, score))
+                .map(|(score, item)| {
+                    crate::mcp::db::log_skill_load(&item.name);
+                    format!("- {} (Score: {:.2})", item.name, score)
+                })
                 .collect();
 
             let execution_seq = "- Step 1: Context & Specification\n- Step 2: Architecture & Implementation Plan\n- Step 3: Code Implementation (Build stage)\n- Step 4: Verification & Testing\n- Step 5: Post-Code Review & Documentation";
@@ -246,6 +249,9 @@ fn handle_tool_call_internal(
                     let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("");
                     let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
                     let proj_path = detect_project_path(proj_path_arg, state);
+                    if !id.is_empty() {
+                        crate::mcp::db::log_skill_load(id);
+                    }
                     if let Some(content) = get_embedded_skill(id) {
                         compress_markdown(&content)
                     } else if let Ok(content) = std::fs::read_to_string(id) {
