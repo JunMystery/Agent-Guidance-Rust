@@ -13,7 +13,7 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 | You need to... | Use THIS tool first | Contract Required Arguments |
 |---|---|---|
 | Start any task or phase | `task_pipeline(task="...", project_path="<path>", phase="plan")` | `project_path`, `task`, `phase` |
-| Check edit authorization | `require_edit_approval(project_path="...", risk_level="LOW", justification="...")` | `project_path`, `risk_level`, `justification` |
+| Check edit authorization | `require_edit_approval(project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` | `project_path`, `risk_level`, `justification`, `architecture_pattern` |
 | Read file / extract symbol | `project_context(operation="read", relative_path="...", target_symbol="...")` | `operation`, `project_path`, `target_symbol` (optional) |
 | Empirical post-code test | `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` | `verification_command`, `expected_output_keyword` |
 | Check coding standards | `guidance(operation="search", query="...")` | `operation`, `query` |
@@ -21,11 +21,11 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 ### Nine Mandatory Contract Rules
 
 1. **Context & Phase First**: Call `task_pipeline(task="...", project_path="<path>", phase="<phase>")` BEFORE any file read or code change. You MUST pass `project_path` and `phase`.
-2. **Edit Approval Contract**: Call `require_edit_approval(project_path="...", risk_level="LOW", justification="...")` before modifying files. Declare `risk_level` (`LOW`/`MEDIUM`/`HIGH`).
+2. **Edit Approval Contract**: Call `require_edit_approval(project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` before modifying files. You MUST include a valid `architecture_pattern`.
 3. **Symbol-Targeted Reading**: Use `project_context(operation="read", relative_path="...", target_symbol="...")` to read exact symbols and prevent token blowout.
 4. **Empirical Test Verification**: Use `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` to prove feature correctness with real test output.
 5. **Ground & Plan**: Verify files/functions/symbols via search BEFORE proposing changes. Never guess.
-6. **300 LOC Cap**: Split files exceeding 300 lines of code. No monolithic files.
+6. **Upfront Orchestrator Architecture**: Do NOT wait for files to reach 300 LOC to refactor. Create new features directly using an Orchestrator (main dispatcher) + sub-function modules upfront to prevent token waste.
 7. **Intent Gate**: Classify request type before acting. If ambiguous, clarify first.
 8. **Delegation Before Action**: Decompose multi-step tasks and delegate to subagents when appropriate.
 9. **Per-Phase Reset**: For EACH new work phase (plan → implement → test → debug → review → refactor), re-call `task_pipeline` with that phase's goal.

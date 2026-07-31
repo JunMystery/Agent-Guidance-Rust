@@ -64,7 +64,7 @@ Call `workflow_gate(action="check", user_message="<latest_user_message>")` at th
 3. **Token Budget:** Always prioritize MCP tools over raw filesystem access.
 4. **No Direct FS:** Avoid direct file reads/searches when optimized MCP tools exist.
 5. **Ground & Plan:** Verify codebase facts via search before proposing changes.
-6. **300 LOC Cap:** Keep files under 300 lines; split if exceeded.
+6. **Upfront Architecture & 300 LOC Cap:** Design and write code using **Upfront Architecture (Clean Architecture, Layered Architecture, Package-by-Feature, or Orchestrator)** from line 1. Do NOT wait for files to reach 300 LOC to refactor. Split entry dispatchers from sub-module handlers upfront to prevent token waste.
 7. **Intent Gate:** Classify request type. Ask for clarification if ambiguous.
 8. **Delegation First:** Decompose and delegate multi-step tasks to subagents when applicable.
 9. **Per-Phase Reset:** Call `agent-guidance_task_pipeline` with the goal for EACH new phase (plan, code, test, debug, review, refactor). Treat new phases as new tasks.

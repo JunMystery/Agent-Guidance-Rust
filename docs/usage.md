@@ -18,16 +18,16 @@ Open the printed URL, usually `http://localhost:5173`, and inspect the registere
 
 At the start of a coding session:
 
-1. Call `agent-guidance-mcp_task_pipeline(task, project_path)` to load relevant standards, skill recommendations, and an initial project tree.
-2. For large refactors, upgrades, audits, or unfamiliar code, also use `agent-guidance-mcp_project_context(operation="search", project_path=..., query=...)` and `agent-guidance-mcp_project_context(operation="snapshot", project_path=...)` when a reusable overview is useful.
-3. Use `agent-guidance-mcp_guidance(operation="precode", query=task)` to get a structured pre-code checklist before editing.
-4. Before editing any file, verify the workflow stage allows edits: `agent-guidance-mcp_workflow_gate(action="status")` → if not `Build` with `plan_approved=true`, call `agent-guidance-mcp_workflow_gate(action="check", user_message=...)` then `agent-guidance-mcp_workflow_gate(action="set_stage", target_stage="Build")`.
-5. Call `agent-guidance-mcp_require_edit_approval(project_path=...)` immediately before any write/edit/bash to confirm the gate is open.
-6. Inspect the current target file with `agent-guidance-mcp_project_context(operation="read", project_path=..., relative_path=...)` or an equivalent file-read tool.
-7. Use `agent-guidance-mcp_ui_ux(operation=...)` for frontend, design-system, branding, landing page, dashboard, or slide guidance.
-8. Run the smallest relevant verification command after changes.
-9. Use `agent-guidance-mcp_session_continuity(operation="save", ...)` to persist task state across interruptions.
-10. Use `agent-guidance-mcp_guidance(operation="verify", query=changes)` for post-change verification steps.
+1. Call `task_pipeline(task, project_path, phase="plan")` to load relevant standards, skill recommendations, and an initial project tree.
+2. For large refactors, upgrades, audits, or unfamiliar code, use `project_context(operation="search", project_path=..., query=...)` and `project_context(operation="tree", project_path=...)` when a reusable overview is useful.
+3. Use `guidance(operation="precode", query=task)` to get a structured pre-code checklist before editing.
+4. Before editing any file, verify the workflow stage allows edits: `workflow_gate(action="check")` → if not `Build` with `plan_approved=true`, present implementation plan and call `workflow_gate(action="set_stage", target_stage="Build")`.
+5. Call `require_edit_approval(project_path=..., risk_level="LOW", justification=..., architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` immediately before any file edit to confirm architectural compliance gate is open.
+6. Inspect the current target file with `project_context(operation="read", relative_path=...)`.
+7. Use `ui_ux(operation=...)` for frontend, design-system, branding, landing page, dashboard, or slide guidance.
+8. Run smallest relevant verification command after changes (`cargo test`, `npm test`).
+9. Use `session_continuity(operation="save", ...)` to persist task state across interruptions.
+10. Use `guidance(operation="verify", verification_command=..., expected_output_keyword=...)` for post-change verification steps.
 
 Avoid repeated broad scans during the same session unless the project changed significantly.
 

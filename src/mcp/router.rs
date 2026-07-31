@@ -258,15 +258,16 @@ pub fn handle_request(
                 },
                 {
                     "name": "require_edit_approval",
-                    "description": "Final gate check to verify if the active workflow stage permits code editing. Must declare risk_level and justification.",
+                    "description": "Final gate check to verify if the active workflow stage permits code editing. Must declare risk_level, justification, and architecture_pattern ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
                             "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level of proposed edits" },
-                            "justification": { "type": "string", "description": "Reason and rationale for code edits" }
+                            "justification": { "type": "string", "description": "Reason and rationale for code edits" },
+                            "architecture_pattern": { "type": "string", "enum": ["Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Upfront architecture pattern declared for implementation" }
                         },
-                        "required": ["project_path", "risk_level", "justification"]
+                        "required": ["project_path", "risk_level", "justification", "architecture_pattern"]
                     }
                 },
                 {

@@ -341,6 +341,13 @@ impl ServerState {
             "Build" => {
                 if !self.plan_approved {
                     Err("WORKFLOW_STAGE_BLOCKED: Tool execution in 'Build' stage is blocked because plan_approved is false. Obtain user approval first.".to_string())
+                } else if tool_name == "require_edit_approval" {
+                    let arch_pattern = args.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
+                    if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
+                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `require_edit_approval`.".to_string())
+                    } else {
+                        Ok(())
+                    }
                 } else {
                     Ok(())
                 }

@@ -257,7 +257,7 @@ pub fn handle_tool_call(
                     format!("# Dev Workflow Guidance: [{}]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document", stage)
                 },
                 "precode" => {
-                    format!("# Pre-Code Verification Checklist\n\n1. Enforce 300 LOC cap per file\n2. Verify symbols via project_context search\n3. Use explicit non-null checks\n4. Check error propagation")
+                    format!("# Pre-Code Verification Checklist\n\n1. Enforce Upfront Orchestrator Architecture (create thin dispatcher main + sub-module files from line 1, do NOT wait for 300 LOC refactoring)\n2. Verify symbols via project_context search\n3. Use explicit non-null checks\n4. Check error propagation")
                 },
                 "verify" => {
                     let v_cmd = arguments.get("verification_command").and_then(|v| v.as_str());
@@ -447,19 +447,25 @@ pub fn handle_tool_call(
             state.update_project_path(&proj_path);
             let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
             let justification = arguments.get("justification").and_then(|j| j.as_str()).unwrap_or("No justification provided");
+            let arch_pattern = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
             
             state.last_risk_level = Some(risk_level.to_string());
             state.record_call(200, 50);
 
-            if risk_level == "HIGH" && !state.plan_approved {
+            if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
+                format!(
+                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: You must set a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `require_edit_approval` to confirm upfront modular decomposition.",
+                    proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { arch_pattern }
+                )
+            } else if risk_level == "HIGH" && !state.plan_approved {
                 format!(
                     "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval plan. Invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")` and present plan first.",
                     proj_path.display(), justification
                 )
             } else if state.workflow_stage == "Build" && state.plan_approved {
                 format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Declared Risk: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized.",
-                    proj_path.display(), risk_level, justification, state.workflow_stage
+                    "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Declared Risk: {}\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
+                    proj_path.display(), risk_level, arch_pattern, justification, state.workflow_stage, arch_pattern
                 )
             } else {
                 format!(

@@ -31,19 +31,19 @@ DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector target/release/ag
 Every session starts with a single call:
 
 ```
-agent-guidance-mcp_task_pipeline(task="Describe what you're building", focus="backend"|"frontend"|"general")
+task_pipeline(task="Describe what you're building", project_path=".", phase="plan")
 ```
 
 This returns skill recommendations, project tree, and code search — all in one optimized call.
 
 Then use the other tools as needed:
 
-| Tool | When to call |
-|---|---|
-| `agent-guidance-mcp_guidance(operation="search", query=...)` | Find relevant skills and standards |
-| `agent-guidance-mcp_project_context(operation="read", ...)` | Read a file before editing |
-| `agent-guidance-mcp_workflow_gate(action="set_stage", ...)` | Manage workflow stage lifecycle |
-| `agent-guidance-mcp_require_edit_approval(...)` | Verify stage permits edits before writing code |
+| Tool | When to call | Mandatory Parameters |
+|---|---|---|
+| `guidance(operation="search", query=...)` | Find relevant skills and standards | `operation`, `query` |
+| `project_context(operation="read", ...)` | Read exact symbols before editing | `operation`, `relative_path` |
+| `workflow_gate(action="set_stage", ...)` | Manage 7-stage workflow lifecycle | `action`, `target_stage` |
+| `require_edit_approval(...)` | Mandatory gate authorization before code edits | `project_path`, `risk_level`, `justification`, `architecture_pattern` |
 
 ## Key Concepts
 
