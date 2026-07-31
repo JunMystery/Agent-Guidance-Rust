@@ -1,7 +1,6 @@
 import { setText, setDisplay, setLoading, activeView, pollSpanFor } from './dom.js';
 import { renderDashboard } from './render/statsView.js';
 import { renderHealthPanel } from './render/health.js';
-import { renderEmbedRecentTable } from './render/recent.js';
 import { pollBackoff, setBackoff, resetBackoff } from './state.js';
 
 async function fetchStats() {
@@ -48,7 +47,6 @@ export async function fetchData() {
   } catch (e) {
     renderHealthPanel({ status: 'unknown' }, data?.totals?.embed_queries);
   }
-  renderEmbedRecentTable(data);
   setLoading(false);
 }
 
