@@ -38,10 +38,8 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
 
     let targets = vec![
         ("Claude Desktop", claude_path, true, "mcpServers"),
-        ("Gemini MCP config", home.join(".gemini").join("config").join("mcp_config.json"), true, "mcpServers"),
-        ("Antigravity MCP config", home.join(".gemini").join("antigravity").join("mcp_config.json"), true, "mcpServers"),
-        ("Antigravity Config mcp.json", home.join(".config").join("antigravity").join("mcp.json"), true, "mcpServers"),
-        ("Antigravity Home mcp.json", home.join(".antigravity").join("mcp.json"), true, "mcpServers"),
+        ("Antigravity / Gemini Global MCP config", home.join(".gemini").join("config").join("mcp_config.json"), true, "mcpServers"),
+        ("Antigravity Legacy MCP config", home.join(".gemini").join("antigravity").join("mcp_config.json"), true, "mcpServers"),
         ("Cursor Native", home.join(".cursor").join("mcp.json"), true, "mcpServers"),
         ("VS Code Native", code_path.join("mcp.json"), true, "servers"),
         ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), true, "mcpServers"),
@@ -106,8 +104,8 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
     // 2. Check MCP configs
     let mcp_targets: Vec<(&str, PathBuf, &str)> = vec![
         ("Claude Desktop", home.join(".config").join("Claude").join("claude_desktop_config.json"), "mcpServers"),
-        ("Gemini CLI", home.join(".gemini").join("config").join("mcp_config.json"), "mcpServers"),
-        ("Antigravity CLI", home.join(".gemini").join("antigravity").join("mcp_config.json"), "mcpServers"),
+        ("Antigravity / Gemini Global", home.join(".gemini").join("config").join("mcp_config.json"), "mcpServers"),
+        ("Antigravity Legacy", home.join(".gemini").join("antigravity").join("mcp_config.json"), "mcpServers"),
         ("Cursor", home.join(".cursor").join("mcp.json"), "mcpServers"),
         ("VS Code", home.join(".config").join("Code").join("User").join("mcp.json"), "servers"),
         ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), "mcpServers"),
