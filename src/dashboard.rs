@@ -168,8 +168,8 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
 
     let _ = conn.execute("CREATE TABLE IF NOT EXISTS tool_calls (id INTEGER PRIMARY KEY AUTOINCREMENT, tool_name TEXT NOT NULL, operation TEXT, started_at INTEGER NOT NULL, duration_ms INTEGER, tokens_original INTEGER DEFAULT 0, tokens_optimized INTEGER DEFAULT 0, error_message TEXT)", []);
     let _ = conn.execute("CREATE TABLE IF NOT EXISTS skill_loads (id INTEGER PRIMARY KEY AUTOINCREMENT, skill_id TEXT NOT NULL, loaded_at INTEGER NOT NULL)", []);
-    let _ = conn.execute("CREATE TABLE IF NOT EXISTS embed_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, created_at INTEGER NOT NULL)", []);
-    let _ = conn.execute("CREATE TABLE IF NOT EXISTS llm_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, task TEXT NOT NULL, created_at INTEGER NOT NULL)", []);
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS embed_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, query_text TEXT NOT NULL, queried_at INTEGER NOT NULL)", []);
+    let _ = conn.execute("CREATE TABLE IF NOT EXISTS llm_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, query_text TEXT NOT NULL, queried_at INTEGER NOT NULL)", []);
     let _ = conn.execute("CREATE TABLE IF NOT EXISTS daily_summaries (day TEXT PRIMARY KEY, tool_calls INTEGER DEFAULT 0, skills_loaded INTEGER DEFAULT 0, embed_queries INTEGER DEFAULT 0, llm_queries INTEGER DEFAULT 0, tokens_original INTEGER DEFAULT 0, tokens_optimized INTEGER DEFAULT 0)", []);
 
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
@@ -287,8 +287,8 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
 
     let p24_calls: i64 = conn.query_row("SELECT COUNT(*) FROM tool_calls WHERE started_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
     let p24_skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
-    let p24_embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE created_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
-    let p24_llm: i64 = conn.query_row("SELECT COUNT(*) FROM llm_queries WHERE created_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let p24_embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let p24_llm: i64 = conn.query_row("SELECT COUNT(*) FROM llm_queries WHERE queried_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
     let (p24_orig, p24_opt): (i64, i64) = conn.query_row("SELECT COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0) FROM tool_calls WHERE started_at >= ?", [cutoff_24h], |r| Ok((r.get(0)?, r.get(1)?))).unwrap_or((0, 0));
     let p24_saved = p24_orig - p24_opt;
     let p24_pct = if p24_orig > 0 { ((p24_saved as f64 / p24_orig as f64) * 100.0 * 10.0).round() / 10.0 } else { 0.0 };
@@ -311,7 +311,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
     let lifetime_summary = get_summary(sql_sum, &[]);
 
     let mut stmt = conn.prepare(
-        "SELECT query, created_at FROM embed_queries WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50"
+        "SELECT query_text, queried_at FROM embed_queries WHERE queried_at >= ? ORDER BY queried_at DESC LIMIT 50"
     )?;
     let embed_recent: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
         Ok(json!({

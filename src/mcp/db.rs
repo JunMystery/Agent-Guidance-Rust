@@ -196,7 +196,7 @@ pub fn log_embed_query(query: &str) {
     prune_old_records(&conn, cutoff_24h);
 
     let _ = conn.execute(
-        "INSERT INTO embed_queries (query, created_at) VALUES (?, ?)",
+        "INSERT INTO embed_queries (query_text, queried_at) VALUES (?, ?)",
         params![query, now],
     );
 
@@ -242,8 +242,8 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS embed_queries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query TEXT NOT NULL,
-            created_at INTEGER NOT NULL
+            query_text TEXT NOT NULL,
+            queried_at INTEGER NOT NULL
         )",
         [],
     )?;
@@ -251,8 +251,8 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS llm_queries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task TEXT NOT NULL,
-            created_at INTEGER NOT NULL
+            query_text TEXT NOT NULL,
+            queried_at INTEGER NOT NULL
         )",
         [],
     )?;
