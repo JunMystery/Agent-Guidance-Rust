@@ -61,6 +61,62 @@ echo -e ""
 echo -e "${YELLOW}⚡ Stopping any running agent-guidance processes...${NC}"
 killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
 
+# ── Ensure system build dependencies (C/C++ compiler, git, curl) ─────────────
+ensure_build_dependencies() {
+    echo -e "${BOLD}Checking build environment & C/C++ compiler...${NC}"
+    
+    local HAS_COMPILER=0
+    if command -v gcc &>/dev/null || command -v clang &>/dev/null || command -v cc &>/dev/null; then
+        HAS_COMPILER=1
+    fi
+
+    if [ "$HAS_COMPILER" -eq 1 ] && command -v git &>/dev/null && command -v curl &>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} Found C/C++ compiler, git, and curl"
+        return
+    fi
+
+    echo -e "  ${YELLOW}⚡ Missing build requirements. Attempting automatic package installation...${NC}"
+
+    OS_TYPE="$(uname -s)"
+    if [ "$OS_TYPE" = "Darwin" ]; then
+        if ! command -v gcc &>/dev/null && ! command -v clang &>/dev/null; then
+            echo -e "  ${CYAN}Installing macOS Command Line Tools...${NC}"
+            xcode-select --install 2>/dev/null || true
+        fi
+        if ! command -v git &>/dev/null || ! command -v curl &>/dev/null; then
+            if command -v brew &>/dev/null; then
+                brew install git curl 2>/dev/null || true
+            fi
+        fi
+    elif [ "$OS_TYPE" = "Linux" ]; then
+        SUDO_CMD=""
+        if [ "$EUID" -ne 0 ] && command -v sudo &>/dev/null; then
+            SUDO_CMD="sudo"
+        fi
+
+        if command -v apt-get &>/dev/null; then
+            echo -e "  ${CYAN}Installing build-essential, git, curl via apt...${NC}"
+            $SUDO_CMD apt-get update -qq &>/dev/null || true
+            $SUDO_CMD apt-get install -y -qq build-essential git curl &>/dev/null || true
+        elif command -v dnf &>/dev/null; then
+            echo -e "  ${CYAN}Installing gcc, git, curl via dnf...${NC}"
+            $SUDO_CMD dnf install -y -q gcc gcc-c++ make git curl &>/dev/null || true
+        elif command -v pacman &>/dev/null; then
+            echo -e "  ${CYAN}Installing base-devel, git, curl via pacman...${NC}"
+            $SUDO_CMD pacman -Sy --noconfirm base-devel git curl &>/dev/null || true
+        elif command -v zypper &>/dev/null; then
+            echo -e "  ${CYAN}Installing devel_basis, git, curl via zypper...${NC}"
+            $SUDO_CMD zypper install -y -t pattern devel_basis &>/dev/null || true
+            $SUDO_CMD zypper install -y git curl &>/dev/null || true
+        elif command -v apk &>/dev/null; then
+            echo -e "  ${CYAN}Installing build-base, git, curl via apk...${NC}"
+            $SUDO_CMD apk add --no-cache build-base git curl &>/dev/null || true
+        fi
+    fi
+}
+
+ensure_build_dependencies
+
 # ── Check Rust/Cargo ──────────────────────────────────────────────────────────
 echo -e "${BOLD}Checking Rust toolchain (cargo)...${NC}"
 if ! command -v cargo &>/dev/null && [ ! -f "$HOME/.cargo/bin/cargo" ]; then

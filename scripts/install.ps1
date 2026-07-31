@@ -114,6 +114,67 @@ if (Test-Path "Cargo.toml") {
     }
 }
 
+# ── Helper to ensure C/C++ Linker is ready ────────────────────────────────────
+function Ensure-BuildToolchain {
+    Write-Host "Checking C/C++ build linker..." -ForegroundColor White
+
+    # Check if MSVC linker (link.exe) or GCC is available in PATH
+    $hasMsvcLink = [bool](Get-Command "link.exe" -ErrorAction SilentlyContinue)
+    $hasGcc = [bool](Get-Command "gcc.exe" -ErrorAction SilentlyContinue)
+
+    if ($hasMsvcLink) {
+        Write-Host "  OK Found MSVC Linker (link.exe)" -ForegroundColor Green
+        return
+    }
+
+    if ($hasGcc) {
+        Write-Host "  OK Found GCC Linker (gcc.exe)" -ForegroundColor Green
+        # Ensure GNU toolchain or target is active
+        cmd /c "rustup target add x86_64-pc-windows-gnu >nul 2>&1"
+        return
+    }
+
+    Write-Host "  MSVC Linker (link.exe) not found. Setting up GNU toolchain & standalone linker automatically..." -ForegroundColor Yellow
+    
+    # 1. Install & configure Rust GNU toolchain/target
+    Write-Host "  [1/2] Installing Rust GNU target..." -ForegroundColor Gray
+    cmd /c "rustup toolchain install stable-x86_64-pc-windows-gnu >nul 2>&1"
+    cmd /c "rustup default stable-x86_64-pc-windows-gnu >nul 2>&1"
+    cmd /c "rustup target add x86_64-pc-windows-gnu >nul 2>&1"
+
+    # 2. Download lightweight portable MinGW GCC if still no gcc
+    if (-not (Get-Command "gcc.exe" -ErrorAction SilentlyContinue)) {
+        $mingwDir = "$HOME\.agent-guidance\mingw"
+        $gccPath = "$mingwDir\bin\gcc.exe"
+
+        if (-not (Test-Path $gccPath)) {
+            Write-Host "  [2/2] Downloading portable MinGW GCC linker..." -ForegroundColor Gray
+            $zipPath = "$env:TEMP\mingw64.zip"
+            $mingwUrl = "https://github.com/brechtsanders/winlibs_mingw-w64/releases/download/13.2.0posix-17.0.6-11.0.1-ucrt-r5/winlibs-x86_64-posix-seh-gcc-13.2.0-llvm-17.0.6-mingw-w64ucrt-r5.zip"
+
+            try {
+                Invoke-WebRequest -Uri $mingwUrl -OutFile $zipPath -UseBasicParsing
+                Write-Host "  Extracting MinGW GCC linker..." -ForegroundColor Gray
+                Expand-Archive -Path $zipPath -DestinationPath "$HOME\.agent-guidance" -Force
+                if (Test-Path "$HOME\.agent-guidance\mingw64") {
+                    if (Test-Path $mingwDir) { Remove-Item -Recurse -Force $mingwDir }
+                    Rename-Item "$HOME\.agent-guidance\mingw64" "mingw"
+                }
+                Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
+            } catch {
+                Write-Host "  Warning: Could not download standalone MinGW Zip automatically. Will attempt cargo build using rustup gnu target." -ForegroundColor Yellow
+            }
+        }
+
+        if (Test-Path "$mingwDir\bin") {
+            $env:Path = "$mingwDir\bin;" + $env:Path
+            Write-Host "  OK Standalone GCC Linker configured ($mingwDir\bin)" -ForegroundColor Green
+        }
+    }
+}
+
+Ensure-BuildToolchain
+
 # ── Build block helper ────────────────────────────────────────────────────────
 function Build-AndInstall {
     param([string]$SourceDir)
@@ -125,11 +186,14 @@ function Build-AndInstall {
     try {
         $env:RUSTFLAGS = "-A warnings"
         $job = Start-Job -ScriptBlock {
-            param($dir)
+            param($dir, $mingwBin)
+            if ($mingwBin -and (Test-Path $mingwBin)) {
+                $env:Path = "$mingwBin;" + $env:Path
+            }
             Set-Location $dir
             $env:RUSTFLAGS = "-A warnings"
             cargo build --release --quiet 2>&1
-        } -ArgumentList $SourceDir
+        } -ArgumentList $SourceDir, "$HOME\.agent-guidance\mingw\bin"
 
         $anim = @("⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏")
         $i = 0
