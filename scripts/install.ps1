@@ -114,76 +114,6 @@ if (Test-Path "Cargo.toml") {
     }
 }
 
-# ── Helper to ensure C/C++ Linker is ready ────────────────────────────────────
-function Ensure-BuildToolchain {
-    Write-Host "Checking C/C++ build linker..." -ForegroundColor White
-
-    # Check if MSVC linker (link.exe) or GCC is available in PATH
-    $hasMsvcLink = [bool](Get-Command "link.exe" -ErrorAction SilentlyContinue)
-    $hasGcc = [bool](Get-Command "gcc.exe" -ErrorAction SilentlyContinue)
-
-    if ($hasMsvcLink) {
-        Write-Host "  OK Found MSVC Linker (link.exe)" -ForegroundColor Green
-        return
-    }
-
-    if ($hasGcc) {
-        Write-Host "  OK Found GCC Linker (gcc.exe)" -ForegroundColor Green
-        # Ensure GNU toolchain or target is active
-        cmd /c "rustup target add x86_64-pc-windows-gnu >nul 2>&1"
-        return
-    }
-
-    Write-Host "  MSVC Linker (link.exe) not found. Setting up GNU toolchain & standalone linker automatically..." -ForegroundColor Yellow
-    
-    # 1. Install & configure Rust GNU toolchain/target
-    Write-Host "  [1/2] Installing Rust GNU target..." -ForegroundColor Gray
-    cmd /c "rustup toolchain install stable-x86_64-pc-windows-gnu >nul 2>&1"
-    cmd /c "rustup default stable-x86_64-pc-windows-gnu >nul 2>&1"
-    cmd /c "rustup target add x86_64-pc-windows-gnu >nul 2>&1"
-
-    # 2. Download lightweight portable MinGW GCC if still no gcc
-    if (-not (Get-Command "gcc.exe" -ErrorAction SilentlyContinue)) {
-        $mingwDir = "$HOME\.agent-guidance\mingw"
-        $gccPath = "$mingwDir\bin\gcc.exe"
-
-        if (-not (Test-Path $gccPath)) {
-            Write-Host "  [2/2] Downloading portable MinGW GCC & Linker tools..." -ForegroundColor Gray
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $zipPath = "$env:TEMP\w64devkit.zip"
-            $mingwUrl = "https://github.com/skeeto/w64devkit/releases/download/v2.0.0/w64devkit-2.0.0.zip"
-
-            try {
-                Invoke-WebRequest -Uri $mingwUrl -OutFile $zipPath -UserAgent "Mozilla/5.0" -UseBasicParsing
-                Write-Host "  Extracting MinGW GCC & Linker tools..." -ForegroundColor Gray
-                $extractTmp = "$env:TEMP\w64devkit_tmp"
-                if (Test-Path $extractTmp) { Remove-Item -Recurse -Force $extractTmp -ErrorAction SilentlyContinue }
-                Expand-Archive -Path $zipPath -DestinationPath $extractTmp -Force
-                
-                if (-not (Test-Path "$HOME\.agent-guidance")) {
-                    New-Item -ItemType Directory -Path "$HOME\.agent-guidance" -Force | Out-Null
-                }
-                if (Test-Path $mingwDir) { Remove-Item -Recurse -Force $mingwDir -ErrorAction SilentlyContinue }
-                
-                if (Test-Path "$extractTmp\w64devkit") {
-                    Move-Item -Path "$extractTmp\w64devkit" -Destination $mingwDir -Force
-                }
-                Remove-Item -Recurse -Force $extractTmp -ErrorAction SilentlyContinue
-                Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
-            } catch {
-                Write-Host "  Warning: Could not download MinGW automatically ($($_.Exception.Message))." -ForegroundColor Yellow
-            }
-        }
-
-        if (Test-Path "$mingwDir\bin") {
-            $env:Path = "$mingwDir\bin;" + $env:Path
-            Write-Host "  OK Standalone GCC Linker & dlltool configured ($mingwDir\bin)" -ForegroundColor Green
-        }
-    }
-}
-
-Ensure-BuildToolchain
-
 # ── Build block helper ────────────────────────────────────────────────────────
 function Build-AndInstall {
     param([string]$SourceDir)
@@ -195,14 +125,11 @@ function Build-AndInstall {
     try {
         $env:RUSTFLAGS = "-A warnings"
         $job = Start-Job -ScriptBlock {
-            param($dir, $mingwBin)
-            if ($mingwBin -and (Test-Path $mingwBin)) {
-                $env:Path = "$mingwBin;" + $env:Path
-            }
+            param($dir)
             Set-Location $dir
             $env:RUSTFLAGS = "-A warnings"
             cargo build --release --quiet 2>&1
-        } -ArgumentList $SourceDir, "$HOME\.agent-guidance\mingw\bin"
+        } -ArgumentList $SourceDir
 
         $anim = @("⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏")
         $i = 0
@@ -232,33 +159,74 @@ function Build-AndInstall {
     }
 }
 
-# ── Local build or remote clone ───────────────────────────────────────────────
-if ($buildDir) {
-    Write-Host ""
-    Write-Host "Building from local source: $buildDir" -ForegroundColor Cyan
-    Build-AndInstall -SourceDir $buildDir
-} else {
-    Write-Host ""
-    Write-Host "Fetching latest source from GitHub..." -ForegroundColor Cyan
-    $globalSrc = Join-Path $HOME ".agent-guidance\src"
+# ── Install / Update binary (Prebuilt download with fallback to build) ───────
+$repo = "JunMystery/Agent-Guidance-Rust"
+$version = "v1.2.6"
+$assetName = "agent-guidance-windows-x86_64.zip"
+$url = "https://github.com/$repo/releases/download/$version/$assetName"
 
-    if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
-        Write-Host "  Pulling latest changes from origin/main..." -ForegroundColor Gray
-        Push-Location $globalSrc
-        try {
-            cmd /c "git fetch --depth 1 origin main >nul 2>&1"
-            cmd /c "git reset --hard origin/main >nul 2>&1"
-        } finally {
-            Pop-Location
+function Try-DownloadPrebuilt {
+    Write-Host ""
+    Write-Host "Attempting prebuilt binary installation ($assetName)..." -ForegroundColor Cyan
+    $tmpDir = Join-Path $env:TEMP "ag-download-$(Get-Random)"
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+    $zipPath = Join-Path $tmpDir $assetName
+
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -ErrorAction Stop
+        if ((Test-Path $zipPath) -and ((Get-Item $zipPath).Length -gt 0)) {
+            Write-Host "  OK Extracting prebuilt release package..." -ForegroundColor Green
+            Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force -ErrorAction Stop
+            $extractedBin = Join-Path $tmpDir "agent-guidance.exe"
+            if (Test-Path $extractedBin) {
+                Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 300
+                Copy-Item $extractedBin "$localBin\agent-guidance.exe" -Force
+                Write-Host "  OK Installed prebuilt release binary!" -ForegroundColor Green
+                Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+                return $true
+            }
         }
-    } else {
-        if (-not (Test-Path $globalSrc)) {
-            New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null
-        }
-        cmd /c "git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git `"$globalSrc`" >nul 2>&1"
+    } catch {
+        Write-Host "  Prebuilt binary download not available or failed." -ForegroundColor Yellow
     }
+    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+    return $false
+}
 
-    Build-AndInstall -SourceDir $globalSrc
+$installedPrebuilt = $false
+if (-not $buildDir) {
+    $installedPrebuilt = Try-DownloadPrebuilt
+}
+
+if (-not $installedPrebuilt) {
+    if ($buildDir) {
+        Write-Host ""
+        Write-Host "Building from local source: $buildDir" -ForegroundColor Cyan
+        Build-AndInstall -SourceDir $buildDir
+    } else {
+        Write-Host ""
+        Write-Host "Fetching latest source from GitHub and building..." -ForegroundColor Cyan
+        $globalSrc = Join-Path $HOME ".agent-guidance\src"
+
+        if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
+            Write-Host "  Pulling latest changes from origin/main..." -ForegroundColor Gray
+            Push-Location $globalSrc
+            try {
+                cmd /c "git fetch --depth 1 origin main >nul 2>&1"
+                cmd /c "git reset --hard origin/main >nul 2>&1"
+            } finally {
+                Pop-Location
+            }
+        } else {
+            if (-not (Test-Path $globalSrc)) {
+                New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null
+            }
+            cmd /c "git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git `"$globalSrc`" >nul 2>&1"
+        }
+
+        Build-AndInstall -SourceDir $globalSrc
+    }
 }
 
 # ── Register with IDEs ────────────────────────────────────────────────────────

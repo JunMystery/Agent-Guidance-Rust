@@ -61,62 +61,6 @@ echo -e ""
 echo -e "${YELLOW}⚡ Stopping any running agent-guidance processes...${NC}"
 killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
 
-# ── Ensure system build dependencies (C/C++ compiler, git, curl) ─────────────
-ensure_build_dependencies() {
-    echo -e "${BOLD}Checking build environment & C/C++ compiler...${NC}"
-    
-    local HAS_COMPILER=0
-    if command -v gcc &>/dev/null || command -v clang &>/dev/null || command -v cc &>/dev/null; then
-        HAS_COMPILER=1
-    fi
-
-    if [ "$HAS_COMPILER" -eq 1 ] && command -v git &>/dev/null && command -v curl &>/dev/null; then
-        echo -e "  ${GREEN}✓${NC} Found C/C++ compiler, git, and curl"
-        return
-    fi
-
-    echo -e "  ${YELLOW}⚡ Missing build requirements. Attempting automatic package installation...${NC}"
-
-    OS_TYPE="$(uname -s)"
-    if [ "$OS_TYPE" = "Darwin" ]; then
-        if ! command -v gcc &>/dev/null && ! command -v clang &>/dev/null; then
-            echo -e "  ${CYAN}Installing macOS Command Line Tools...${NC}"
-            xcode-select --install 2>/dev/null || true
-        fi
-        if ! command -v git &>/dev/null || ! command -v curl &>/dev/null; then
-            if command -v brew &>/dev/null; then
-                brew install git curl 2>/dev/null || true
-            fi
-        fi
-    elif [ "$OS_TYPE" = "Linux" ]; then
-        SUDO_CMD=""
-        if [ "$EUID" -ne 0 ] && command -v sudo &>/dev/null; then
-            SUDO_CMD="sudo"
-        fi
-
-        if command -v apt-get &>/dev/null; then
-            echo -e "  ${CYAN}Installing build-essential, git, curl via apt...${NC}"
-            $SUDO_CMD apt-get update -qq &>/dev/null || true
-            $SUDO_CMD apt-get install -y -qq build-essential git curl &>/dev/null || true
-        elif command -v dnf &>/dev/null; then
-            echo -e "  ${CYAN}Installing gcc, git, curl via dnf...${NC}"
-            $SUDO_CMD dnf install -y -q gcc gcc-c++ make git curl &>/dev/null || true
-        elif command -v pacman &>/dev/null; then
-            echo -e "  ${CYAN}Installing base-devel, git, curl via pacman...${NC}"
-            $SUDO_CMD pacman -Sy --noconfirm base-devel git curl &>/dev/null || true
-        elif command -v zypper &>/dev/null; then
-            echo -e "  ${CYAN}Installing devel_basis, git, curl via zypper...${NC}"
-            $SUDO_CMD zypper install -y -t pattern devel_basis &>/dev/null || true
-            $SUDO_CMD zypper install -y git curl &>/dev/null || true
-        elif command -v apk &>/dev/null; then
-            echo -e "  ${CYAN}Installing build-base, git, curl via apk...${NC}"
-            $SUDO_CMD apk add --no-cache build-base git curl &>/dev/null || true
-        fi
-    fi
-}
-
-ensure_build_dependencies
-
 # ── Check Rust/Cargo ──────────────────────────────────────────────────────────
 echo -e "${BOLD}Checking Rust toolchain (cargo)...${NC}"
 if ! command -v cargo &>/dev/null && [ ! -f "$HOME/.cargo/bin/cargo" ]; then
@@ -181,34 +125,123 @@ detect_cargo_target() {
     fi
 }
 
-# ── Build ──────────────────────────────────────────────────────────────────────
-if [ -n "$BUILD_DIR" ]; then
-    echo -e ""
-    echo -e "${CYAN}⚙️  Building release binary from local source (${BUILD_DIR})...${NC}"
-    detect_cargo_target "$BUILD_DIR"
-    run_with_spinner "cd '$BUILD_DIR' && $CARGO_TARGET RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling Rust server + embedding dashboard assets... "
-    TARGET_BIN="$BUILD_DIR/target/release/agent-guidance"
-    [ -f "/tmp/agent-guidance-target/release/agent-guidance" ] && TARGET_BIN="/tmp/agent-guidance-target/release/agent-guidance"
-    rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
-    cp "$TARGET_BIN" "$LOCAL_BIN/agent-guidance"
-else
-    echo -e ""
-    echo -e "${CYAN}📦 Fetching latest source from GitHub \& building...${NC}"
-    GLOBAL_SRC="$HOME/.agent-guidance/src"
-    if [ -f "$GLOBAL_SRC/Cargo.toml" ] && grep -q 'name = "agent-guidance"' "$GLOBAL_SRC/Cargo.toml" 2>/dev/null; then
-        echo -e "  ${GRAY}Pulling latest changes from origin/main...${NC}"
-        (cd "$GLOBAL_SRC" && git fetch --depth 1 origin main &>/dev/null && git reset --hard origin/main &>/dev/null) || true
-    else
-        rm -rf "$GLOBAL_SRC"
-        mkdir -p "$GLOBAL_SRC"
-        git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC" &>/dev/null
+# ── Install / Update binary (Prebuilt download with fallback to build) ───────
+REPO="JunMystery/Agent-Guidance-Rust"
+VERSION="v1.2.6"
+
+detect_target_asset() {
+    local os arch
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "$os" in
+        Linux)
+            if [ "$arch" = "x86_64" ]; then
+                echo "agent-guidance-linux-x86_64.tar.gz"
+            fi
+            ;;
+        Darwin)
+            if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
+                echo "agent-guidance-macos-aarch64.tar.gz"
+            elif [ "$arch" = "x86_64" ]; then
+                echo "agent-guidance-macos-x86_64.tar.gz"
+            fi
+            ;;
+    esac
+}
+
+try_download_prebuilt() {
+    local asset_name
+    asset_name="$(detect_target_asset)"
+    if [ -z "$asset_name" ]; then
+        return 1
     fi
-    detect_cargo_target "$GLOBAL_SRC"
-    run_with_spinner "cd '$GLOBAL_SRC' && $CARGO_TARGET RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling Rust server + embedding dashboard assets... "
-    TARGET_BIN="$GLOBAL_SRC/target/release/agent-guidance"
-    [ -f "/tmp/agent-guidance-target/release/agent-guidance" ] && TARGET_BIN="/tmp/agent-guidance-target/release/agent-guidance"
-    rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
-    cp "$TARGET_BIN" "$LOCAL_BIN/agent-guidance"
+
+    local url="https://github.com/${REPO}/releases/download/${VERSION}/${asset_name}"
+    local tmp_dir
+    tmp_dir="$(mktemp -d 2>/dev/null || echo "/tmp/ag-download-$$")"
+    mkdir -p "$tmp_dir"
+
+    echo -e "  ${CYAN}📦 Downloading prebuilt binary (${asset_name}) from release ${VERSION}...${NC}"
+    if command -v curl &>/dev/null; then
+        if ! curl -sSL "$url" -o "$tmp_dir/$asset_name"; then
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+    elif command -v wget &>/dev/null; then
+        if ! wget -q "$url" -O "$tmp_dir/$asset_name"; then
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+    else
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [ ! -s "$tmp_dir/$asset_name" ]; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Extracting prebuilt release package..."
+    if ! tar -xzf "$tmp_dir/$asset_name" -C "$tmp_dir" 2>/dev/null; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [ -f "$tmp_dir/agent-guidance" ]; then
+        rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
+        mv "$tmp_dir/agent-guidance" "$LOCAL_BIN/agent-guidance"
+        chmod +x "$LOCAL_BIN/agent-guidance"
+        rm -rf "$tmp_dir"
+        return 0
+    fi
+
+    rm -rf "$tmp_dir"
+    return 1
+}
+
+INSTALLED_PREBUILT=false
+if [ -z "$BUILD_DIR" ]; then
+    echo -e ""
+    echo -e "${CYAN}⚡ Attempting prebuilt binary installation...${NC}"
+    if try_download_prebuilt; then
+        INSTALLED_PREBUILT=true
+        echo -e "  ${GREEN}✓ Installed prebuilt release binary!${NC}"
+    else
+        echo -e "  ${YELLOW}⚠️ Prebuilt binary not available or download failed. Falling back to building from source.${NC}"
+    fi
+fi
+
+if [ "$INSTALLED_PREBUILT" = false ]; then
+    if [ -n "$BUILD_DIR" ]; then
+        echo -e ""
+        echo -e "${CYAN}⚙️  Building release binary from local source (${BUILD_DIR})...${NC}"
+        detect_cargo_target "$BUILD_DIR"
+        run_with_spinner "cd '$BUILD_DIR' && $CARGO_TARGET RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling Rust server + embedding dashboard assets... "
+        TARGET_BIN="$BUILD_DIR/target/release/agent-guidance"
+        [ -f "/tmp/agent-guidance-target/release/agent-guidance" ] && TARGET_BIN="/tmp/agent-guidance-target/release/agent-guidance"
+        rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
+        cp "$TARGET_BIN" "$LOCAL_BIN/agent-guidance"
+    else
+        echo -e ""
+        echo -e "${CYAN}📦 Fetching latest source from GitHub \& building...${NC}"
+        GLOBAL_SRC="$HOME/.agent-guidance/src"
+        if [ -f "$GLOBAL_SRC/Cargo.toml" ] && grep -q 'name = "agent-guidance"' "$GLOBAL_SRC/Cargo.toml" 2>/dev/null; then
+            echo -e "  ${GRAY}Pulling latest changes from origin/main...${NC}"
+            (cd "$GLOBAL_SRC" && git fetch --depth 1 origin main &>/dev/null && git reset --hard origin/main &>/dev/null) || true
+        else
+            rm -rf "$GLOBAL_SRC"
+            mkdir -p "$GLOBAL_SRC"
+            git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$GLOBAL_SRC" &>/dev/null
+        fi
+        detect_cargo_target "$GLOBAL_SRC"
+        run_with_spinner "cd '$GLOBAL_SRC' && $CARGO_TARGET RUSTFLAGS='-A warnings' cargo build --release --quiet" "Compiling Rust server + embedding dashboard assets... "
+        TARGET_BIN="$GLOBAL_SRC/target/release/agent-guidance"
+        [ -f "/tmp/agent-guidance-target/release/agent-guidance" ] && TARGET_BIN="/tmp/agent-guidance-target/release/agent-guidance"
+        rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
+        cp "$TARGET_BIN" "$LOCAL_BIN/agent-guidance"
+    fi
 fi
 
 # ── Register with IDEs ────────────────────────────────────────────────────────
