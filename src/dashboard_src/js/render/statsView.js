@@ -1,5 +1,5 @@
 import { setText, el, emptyState } from '../dom.js';
-import { fmtTokens, fmtPct, savingsBadge } from '../format.js';
+import { fmtTokens, fmtPct, timeAgo, savingsBadge } from '../format.js';
 import { renderHourlyChart } from './chart/index.js';
 import { renderRecentCalls } from './recent.js';
 import { makeSortable, filterRows, bindFilter } from '../interactions.js';
@@ -26,6 +26,7 @@ export function renderDashboard(data) {
   updateTimeframeSummary(activeTimeframe);
 
   renderSkillsTable(data.top_skills);
+  renderRecentSkillCalls(data.recent_skill_calls);
   renderActionsTable(data.tool_breakdown);
   renderHourlyChart(data, data.totals || {});
   renderRecentCalls(data.recent_actions);
@@ -62,15 +63,45 @@ function updateTimeframeSummary(tf) {
 }
 
 function renderSkillsTable(topSkills) {
+  store.top_skills = topSkills || [];
+  bindFilter('skills-filter', () => drawSkillsTable());
+  makeSortable('dash-skills', store.top_skills);
+  drawSkillsTable();
+}
+
+function drawSkillsTable() {
   const body = el('dash-skills');
   if (!body) return;
+  const query = el('skills-filter')?.value || '';
+  const rows = filterRows(store.top_skills, query, ['skill_id']);
   body.innerHTML = '';
-  if (topSkills && topSkills.length) {
-    topSkills.slice(0, 10).forEach(sk => {
-      body.innerHTML += '<tr><td>' + sk.skill_id + '</td><td>' + sk.cnt + '</td></tr>';
+  if (rows.length) {
+    rows.forEach((sk, idx) => {
+      const rankBadge = idx < 3 ? 'badge green' : 'badge';
+      body.innerHTML += '<tr>' +
+        '<td><span class="' + rankBadge + '">#' + (idx + 1) + '</span></td>' +
+        '<td><strong>' + sk.skill_id + '</strong></td>' +
+        '<td>' + sk.cnt + '</td>' +
+        '</tr>';
     });
   } else {
-    emptyState('dash-skills', 2, 'No skills loaded yet.');
+    emptyState('dash-skills', 3, 'No matching skills loaded.');
+  }
+}
+
+function renderRecentSkillCalls(recentSkillCalls) {
+  const body = el('recent-skills-body');
+  if (!body) return;
+  body.innerHTML = '';
+  if (recentSkillCalls && recentSkillCalls.length) {
+    recentSkillCalls.slice(0, 10).forEach(sk => {
+      body.innerHTML += '<tr>' +
+        '<td>' + timeAgo(sk.loaded_at) + '</td>' +
+        '<td><strong>' + sk.skill_id + '</strong></td>' +
+        '</tr>';
+    });
+  } else {
+    emptyState('recent-skills-body', 2, 'No skill activations recorded yet.');
   }
 }
 

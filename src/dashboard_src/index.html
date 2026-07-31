@@ -16,6 +16,7 @@
   <h2>MCP Stats</h2>
   <nav role="tablist" aria-label="Dashboard views">
     <a class="active" role="tab" aria-selected="true" aria-controls="view-dashboard" id="tab-dashboard" data-view="dashboard"><span>Dashboard</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-top-skills" id="tab-top-skills" data-view="top-skills"><span>Top Skills</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-actions" id="tab-actions" data-view="actions"><span>Actions Log</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-recent-calls" id="tab-recent-calls" data-view="recent-calls"><span>Recent Calls</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-guides" id="tab-guides" data-view="guides"><span>Quick Guides</span></a>
@@ -125,18 +126,6 @@
             </div>
           </div>
         </div>
-        <div class="skills-section">
-          <h3>Top Skills</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Skill</th>
-                <th>Loads</th>
-              </tr>
-            </thead>
-            <tbody id="dash-skills"></tbody>
-          </table>
-        </div>
 
         <div class="terminal-window" style="margin-top:20px">
           <div class="terminal-header">
@@ -192,22 +181,58 @@
                 </div>
               </div>
             </div>
-            <div class="embed-recent-section">
-              <h3>Last 20 Embed Status</h3>
-              <table class="embed-recent-table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Status</th>
-                    <th>Dim</th>
-                    <th>Results</th>
-                  </tr>
-                </thead>
-                <tbody id="embed-recent-body"></tbody>
-              </table>
-            </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-top-skills" class="hidden" role="tabpanel" aria-labelledby="tab-top-skills">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="terminal-dot dot-red"></div>
+          <div class="terminal-dot dot-yellow"></div>
+          <div class="terminal-dot dot-green"></div>
+        </div>
+        <div class="terminal-title">Top Skills Analytics</div>
+      </div>
+      <div class="terminal-body-raw">
+        <div class="table-toolbar">
+          <input type="text" id="skills-filter" placeholder="Filter by skill name or ID…" aria-label="Filter top skills">
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" style="width:70px">Rank</th>
+              <th scope="col">Skill ID / Name</th>
+              <th scope="col" style="width:120px">Load Count</th>
+            </tr>
+          </thead>
+          <tbody id="dash-skills"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="terminal-window" style="margin-top:20px">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="terminal-dot dot-red"></div>
+          <div class="terminal-dot dot-yellow"></div>
+          <div class="terminal-dot dot-green"></div>
+        </div>
+        <div class="terminal-title">Last 10 Skill Call Logs</div>
+      </div>
+      <div class="terminal-body-raw">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" style="width:140px">Time</th>
+              <th scope="col">Skill ID / Name</th>
+            </tr>
+          </thead>
+          <tbody id="recent-skills-body"></tbody>
+        </table>
       </div>
     </div>
   </section>

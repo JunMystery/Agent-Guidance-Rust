@@ -70,7 +70,9 @@ fn handle_dashboard_request(request: tiny_http::Request, project_path: &str, cac
                 "server": "agent-guidance-dashboard",
                 "version": env!("CARGO_PKG_VERSION"),
                 "model_loaded": true,
-                "engine": "rust-candle"
+                "engine": "rust-candle",
+                "backend": "candle-bert",
+                "clients": crate::daemon::active_clients_count()
             });
             json_response(request, 200, &json_data);
         }
@@ -191,6 +193,16 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         Ok(json!({
             "skill_id": row.get::<_, String>(0)?,
             "cnt": row.get::<_, i64>(1)?,
+        }))
+    })?.filter_map(|r| r.ok()).collect();
+
+    let mut stmt = conn.prepare(
+        "SELECT skill_id, loaded_at FROM skill_loads ORDER BY loaded_at DESC LIMIT 10"
+    )?;
+    let recent_skill_calls: Vec<serde_json::Value> = stmt.query_map([], |row| {
+        Ok(json!({
+            "skill_id": row.get::<_, String>(0)?,
+            "loaded_at": row.get::<_, i64>(1)?,
         }))
     })?.filter_map(|r| r.ok()).collect();
 
@@ -316,6 +328,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         },
         "tool_breakdown": tool_breakdown,
         "top_skills": top_skills,
+        "recent_skill_calls": recent_skill_calls,
         "recent_actions": recent_actions,
         "hourly_savings": hourly_savings,
         "embed_recent": embed_recent

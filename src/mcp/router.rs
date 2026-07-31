@@ -190,6 +190,21 @@ pub fn handle_request(
                     }
                 },
                 {
+                    "name": "select_skills",
+                    "description": "Confirm which proposed skills to load. Returns compressed SKILL.md contents inline for all selected skills. Pass skill names from the proposed list, or pass an empty array to skip all.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "skills": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "Skill names to load (from proposed list). Empty array = skip all."
+                            }
+                        },
+                        "required": ["skills"]
+                    }
+                },
+                {
                     "name": "guidance",
                     "description": "Standards catalog and skill lookup. 168 skills available on-demand.",
                     "inputSchema": {

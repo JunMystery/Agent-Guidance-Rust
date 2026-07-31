@@ -15,6 +15,11 @@ use crate::mcp::state::ServerState;
 
 const MAX_REQUEST_WORKERS: usize = 4;
 static REQUEST_WORKERS: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
+pub static ACTIVE_CLIENTS: AtomicUsize = AtomicUsize::new(0);
+
+pub fn active_clients_count() -> usize {
+    ACTIVE_CLIENTS.load(Ordering::SeqCst)
+}
 
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
@@ -428,7 +433,9 @@ pub async fn daemon_main() {
     let sc = stdio_closed.clone();
     tokio::spawn(async move {
         info!("Handling initial stdio connection.");
+        ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
         handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+        ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
         sc.store(true, Ordering::SeqCst);
     });
 
@@ -438,10 +445,12 @@ pub async fn daemon_main() {
             match listener.accept().await {
                 Ok((stream, _)) => {
                     c_accept.fetch_add(1, Ordering::SeqCst);
+                    ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
                     let c_sock = c_accept.clone();
                     tokio::spawn(async move {
                         let (reader, writer) = stream.into_split();
                         handle_mcp_lines(reader, writer).await;
+                        ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
                         c_sock.fetch_sub(1, Ordering::SeqCst);
                     });
                 }

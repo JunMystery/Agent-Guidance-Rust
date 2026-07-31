@@ -1,16 +1,16 @@
 // Pure scale/axis math for the combo chart. No DOM, no side effects.
 
-export const CHART_W = 720;
-export const CHART_H = 210;
-export const PAD = { left: 38, right: 42, top: 16, bottom: 24 };
+export const CHART_W = 760;
+export const CHART_H = 232;
+export const PAD = { left: 38, right: 82, top: 16, bottom: 46 };
 
 export function plotBox() {
   return {
-    w: CHART_W - PAD.left - PAD.right,
-    h: CHART_H - PAD.top - PAD.bottom,
-    x0: PAD.left,
-    y0: PAD.top,
-    yMax: PAD.top + (CHART_H - PAD.top - PAD.bottom),
+    w: 640,
+    h: 170,
+    x0: 38,
+    y0: 16,
+    yMax: 186,
   };
 }
 

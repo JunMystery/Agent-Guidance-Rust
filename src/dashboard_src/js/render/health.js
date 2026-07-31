@@ -22,5 +22,5 @@ export function renderHealthPanel(h, embedQueries) {
   setText('sys-embed-model', modelStatus);
   setText('sys-embed-daemon', h.status === 'ok' ? 'running' : 'stopped');
   setText('sys-embed-clients', clients === null ? '0' : String(clients));
-  setText('sys-embed-backend', h.backend || 'unknown');
+  setText('sys-embed-backend', h.backend || h.engine || 'candle-bert');
 }

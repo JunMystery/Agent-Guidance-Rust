@@ -30,12 +30,17 @@ export function buildAxes(box, maxSaved, maxLine) {
   let axes = '';
   axes += '<line x1="' + box.x0 + '" y1="' + box.y0 + '" x2="' + box.x0 + '" y2="' + box.yMax + '" class="axis" />';
   axes += '<line x1="' + (CHART_W - PAD.right) + '" y1="' + box.y0 + '" x2="' + (CHART_W - PAD.right) + '" y2="' + box.yMax + '" class="axis" />';
-  axes += '<text x="' + (box.x0 - 5) + '" y="' + (box.y0 + 3) + '" class="axis-label axis-left">tokens</text>';
-  axes += '<text x="' + (box.x0 - 4) + '" y="' + (box.y0 + 12) + '" class="axis-label axis-left">' + fmtTokens(maxSaved) + '</text>';
-  axes += '<text x="' + (CHART_W - PAD.right + 5) + '" y="' + (box.y0 + 3) + '" class="axis-label axis-right">tokens</text>';
-  axes += '<text x="' + (CHART_W - PAD.right + 4) + '" y="' + (box.y0 + 12) + '" class="axis-label axis-right">' + fmtTokens(maxLine) + '</text>';
-  axes += '<text x="' + (box.x0 - 4) + '" y="' + box.yMax + '" class="axis-label axis-left">0</text>';
-  axes += '<text x="' + (CHART_W - PAD.right + 4) + '" y="' + box.yMax + '" class="axis-label axis-right">0</text>';
+  
+  axes += '<text x="' + (box.x0 - 6) + '" y="2" class="axis-title axis-title-left">Saved</text>';
+  axes += '<text x="' + (CHART_W - PAD.right + 6) + '" y="2" class="axis-title axis-title-right">Total</text>';
+
+  for (let step = 0; step <= 4; step++) {
+    const y = box.y0 + (box.h / 4) * step;
+    const sVal = maxSaved * (1 - step / 4);
+    const lVal = maxLine * (1 - step / 4);
+    axes += '<text x="' + (box.x0 - 6) + '" y="' + y.toFixed(1) + '" class="axis-label axis-left">' + fmtTokens(sVal) + '</text>';
+    axes += '<text x="' + (CHART_W - PAD.right + 6) + '" y="' + y.toFixed(1) + '" class="axis-label axis-right">' + fmtTokens(lVal) + '</text>';
+  }
   return axes;
 }
 
@@ -72,7 +77,7 @@ export function buildDots(hours, box, yLine) {
 export function buildXLabels(hours, box) {
   let xlabels = '';
   hours.forEach((h, i) => {
-    xlabels += '<text x="' + slotCenter(i, hours.length, box).toFixed(1) + '" y="' + (CHART_H - 7) + '" class="chart-xlabel">' + (h.is_current ? 'now' : h.hour) + '</text>';
+    xlabels += '<text x="' + slotCenter(i, hours.length, box).toFixed(1) + '" y="196" class="chart-xlabel">' + (h.is_current ? 'now' : h.hour) + '</text>';
   });
   return xlabels;
 }
@@ -80,7 +85,7 @@ export function buildXLabels(hours, box) {
 export function buildNowPill(hours, box) {
   let pill = '';
   hours.forEach((h, i) => {
-    if (h.is_current) pill = '<text x="' + slotCenter(i, hours.length, box).toFixed(1) + '" y="' + (box.y0 - 4) + '" class="now-pill">now</text>';
+    if (h.is_current) pill = '<text x="' + slotCenter(i, hours.length, box).toFixed(1) + '" y="2" class="now-pill">NOW</text>';
   });
   return pill;
 }

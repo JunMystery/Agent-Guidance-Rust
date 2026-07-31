@@ -203,10 +203,14 @@ fn handle_tool_call_internal(
             let final_results = selector.rerank(task, stage1_results, &profile, 8);
             ensure_not_cancelled(state)?;
 
+            state.pending_skill_proposals = final_results
+                .iter()
+                .map(|(score, item)| (item.name.clone(), item.relative_path.clone(), *score))
+                .collect();
+
             let rec_skills: Vec<String> = final_results
                 .into_iter()
                 .map(|(score, item)| {
-                    crate::mcp::db::log_skill_load(&item.name);
                     format!("- {} (Score: {:.2})", item.name, score)
                 })
                 .collect();
@@ -217,7 +221,7 @@ fn handle_tool_call_internal(
             let next_step_prompt = if rec_skills.is_empty() {
                 "-> Task requires no specific technical skills. Proceed directly with implementation."
             } else {
-                "-> Read the top 2 skills listed above before coding."
+                "-> SKILL_PROPOSAL: Call `select_skills(skills=[...])` with skill names you want to load, or `select_skills(skills=[])` to skip all."
             };
 
             state.record_call(1500, 450);
@@ -232,6 +236,63 @@ fn handle_tool_call_internal(
                 tree_preview.join("\n"),
                 next_step_prompt
             )
+        },
+        "select_skills" => {
+            let requested_skills: Vec<String> = arguments.get("skills")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+
+            let proposals = std::mem::take(&mut state.pending_skill_proposals);
+            let proj_path = detect_project_path(".", state);
+
+            if requested_skills.is_empty() {
+                state.record_call(100, 50);
+                "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.".to_string()
+            } else {
+                let mut loaded_sections = Vec::new();
+                let mut not_found = Vec::new();
+
+                for name in &requested_skills {
+                    if let Some((_, rel_path, _)) = proposals.iter().find(|(n, _, _)| n == name) {
+                        crate::mcp::db::log_skill_load(name);
+
+                        let raw_content = if let Some(c) = get_embedded_skill(name) {
+                            Some(c)
+                        } else if let Some(c) = get_embedded_skill(rel_path) {
+                            Some(c)
+                        } else if let Ok(c) = std::fs::read_to_string(name) {
+                            Some(c)
+                        } else if let Ok(c) = std::fs::read_to_string(rel_path) {
+                            Some(c)
+                        } else if let Ok(full_path) = validate_path(&proj_path, rel_path) {
+                            std::fs::read_to_string(&full_path).ok()
+                        } else {
+                            None
+                        };
+
+                        if let Some(content) = raw_content {
+                            let compressed = compress_markdown(&content);
+                            loaded_sections.push(format!("### Skill: {}\n```markdown\n{}\n```", name, compressed));
+                        } else {
+                            loaded_sections.push(format!("### Skill: {} (Loaded & Logged)\n*Content empty or unavailable*", name));
+                        }
+                    } else {
+                        not_found.push(name.clone());
+                    }
+                }
+
+                state.record_call(1500, 500);
+
+                let mut out = format!("# Skill Selection Confirmed\n\nLoaded & Logged {} skill(s):\n\n{}", loaded_sections.len(), loaded_sections.join("\n\n"));
+
+                if !not_found.is_empty() {
+                    out.push_str(&format!("\n\n⚠ Ignored skills (not in proposal list):\n{}", not_found.iter().map(|s| format!("- {}", s)).collect::<Vec<_>>().join("\n")));
+                }
+
+                out.push_str("\n\n-> Proceed with task using the loaded skill guidance above.");
+                out
+            }
         },
         "guidance" => {
             let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("list");
@@ -282,6 +343,11 @@ fn handle_tool_call_internal(
                     let final_results = selector.rerank(&query, stage1_results, &profile, 15);
                     ensure_not_cancelled(state)?;
 
+                    state.pending_skill_proposals = final_results
+                        .iter()
+                        .map(|(score, item)| (item.name.clone(), item.relative_path.clone(), *score))
+                        .collect();
+
                     let formatted_results: Vec<String> = final_results
                         .into_iter()
                         .map(|(score, item)| {
@@ -293,11 +359,18 @@ fn handle_tool_call_internal(
                         })
                         .collect();
 
+                    let next_step_prompt = if formatted_results.is_empty() {
+                        "-> No matching skills found."
+                    } else {
+                        "-> SKILL_PROPOSAL: Call `select_skills(skills=[...])` to confirm and fetch inline content for chosen skills, or `select_skills(skills=[])` to skip all."
+                    };
+
                     format!(
-                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n-> Next Step for Agent: Use `view_file` on the top 2 skills' SKILL.md files before proceeding with work.",
+                        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n{}",
                         query,
                         formatted_results.len(),
-                        if formatted_results.is_empty() { "No matching skills found.".to_string() } else { formatted_results.join("\n") }
+                        if formatted_results.is_empty() { "No matching skills found.".to_string() } else { formatted_results.join("\n") },
+                        next_step_prompt
                     )
                 },
                 "docs" => {
@@ -659,5 +732,33 @@ mod tests {
             .unwrap()
             .to_string();
         assert!(check_text.contains("ANTI-HALLUCINATION ENFORCER ACTIVE"));
+    }
+
+    #[test]
+    fn test_select_skills_flow() {
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        state.pending_skill_proposals = vec![
+            ("agent-guidance".to_string(), "skills/agent-guidance/SKILL.md".to_string(), 0.95),
+            ("test-skill".to_string(), "skills/test-skill/SKILL.md".to_string(), 0.80),
+        ];
+
+        // 1. Select valid skill
+        let res = handle_tool_call("select_skills", json!({ "skills": ["agent-guidance"] }), &mut state);
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("# Skill Selection Confirmed"));
+        assert!(text.contains("agent-guidance"));
+
+        // 2. State cleared after selection
+        assert!(state.pending_skill_proposals.is_empty());
+
+        // 3. Select with empty array when no proposals remain
+        let empty_res = handle_tool_call("select_skills", json!({ "skills": [] }), &mut state);
+        assert!(empty_res.is_ok());
+        let empty_text = empty_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(empty_text.contains("No skills selected"));
     }
 }

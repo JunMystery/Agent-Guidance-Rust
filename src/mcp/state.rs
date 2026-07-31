@@ -47,6 +47,8 @@ pub struct ServerState {
     pub last_risk_level: Option<String>,
     pub active_phase: Option<String>,
     #[serde(skip, default)]
+    pub pending_skill_proposals: Vec<(String, String, f32)>,
+    #[serde(skip, default)]
     pub cancellation: Option<Arc<AtomicBool>>,
 }
 
@@ -70,6 +72,7 @@ impl Default for ServerState {
             verification_passed: false,
             last_risk_level: None,
             active_phase: None,
+            pending_skill_proposals: Vec::new(),
             cancellation: None,
         }
     }
@@ -98,6 +101,7 @@ impl ServerState {
             verification_passed: false,
             last_risk_level: None,
             active_phase: None,
+            pending_skill_proposals: Vec::new(),
             cancellation: None,
             agent_client_name: client_name,
         }

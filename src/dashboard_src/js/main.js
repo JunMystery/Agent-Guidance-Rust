@@ -4,7 +4,7 @@ import { startPoll, stopPoll } from './poll.js';
 
 
 
-const VIEWS = ['dashboard', 'actions', 'recent-calls', 'guides'];
+const VIEWS = ['dashboard', 'top-skills', 'actions', 'recent-calls', 'guides'];
 
 function syncView(view, { push = true } = {}) {
   if (!VIEWS.includes(view)) view = 'dashboard';

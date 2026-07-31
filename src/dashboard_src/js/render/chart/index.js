@@ -40,7 +40,7 @@ function buildChartHtml(hours, maxSaved, maxLine, t) {
   const xlabels = buildXLabels(hours, box);
   const nowPill = buildNowPill(hours, box);
 
-  const svg = '<svg viewBox="0 0 ' + CHART_W + ' ' + CHART_H + '" class="combo-chart" preserveAspectRatio="none">' +
+  const svg = '<svg viewBox="-20 -12 760 232" class="combo-chart" preserveAspectRatio="xMidYMid meet">' +
     grid + axes + seps + cols + lines + dots + nowPill + xlabels + '</svg>';
 
   return buildKpi(t) + buildLegend() + '<div class="chart-wrap">' + svg + '<div class="chart-tip" id="chart-tip"></div></div>';

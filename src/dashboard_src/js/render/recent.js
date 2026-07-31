@@ -43,21 +43,4 @@ function drawRecentCalls() {
   }
 }
 
-export function renderEmbedRecentTable(data) {
-  const body = el('embed-recent-body');
-  if (!body) return;
-  const rows = (data && data.embed_recent) || [];
-  if (!rows.length) {
-    emptyState('embed-recent-body', 4, 'No embed queries yet.');
-    return;
-  }
-  body.innerHTML = rows.map(r => {
-    const status = r.status === 'fallback' ? 'fallback' : 'ok';
-    const badge = status === 'fallback' ? 'badge red' : 'badge green';
-    const dim = r.vector_dim || 0;
-    return '<tr><td>' + timeAgo(r.queried_at) + '</td>' +
-      '<td><span class="' + badge + '">' + status + '</span></td>' +
-      '<td>' + dim + '</td>' +
-      '<td>' + (r.result_count || 0) + '</td></tr>';
-  }).join('');
-}
+
