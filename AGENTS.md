@@ -59,14 +59,14 @@ Call `workflow_gate(action="check", user_message="<latest_user_message>")` at th
 
 ### 9 Core Rules (No Exceptions)
 
-1. **Context First:** Run `agent-guidance_task_pipeline` or `agent-guidance_project_context` before reading files or modifying code.
-2. **Standards Check:** Run `agent-guidance_guidance(operation="search")` before implementation/response.
+1. **Context First:** Run `agent-guidance_task_pipeline` or `agent-guidance_project_context` before reading files or modifying code. If skills are proposed, trigger the IDE/CLI `ask_question` tool to let the user interactively choose skills, then call `select_skills(skills=[...])`.
+2. **Standards Check & Edit Authorization:** Run `agent-guidance_guidance(operation="search")` before implementation. Call `require_edit_approval` before modifying files. If architecture pattern or edit approval is missing/blocked, trigger the IDE/CLI `ask_question` tool to prompt the user.
 3. **Token Budget:** Always prioritize MCP tools over raw filesystem access.
 4. **No Direct FS:** Avoid direct file reads/searches when optimized MCP tools exist.
 5. **Ground & Plan:** Verify codebase facts via search before proposing changes.
 6. **Upfront Architecture & 300 LOC Cap:** Design and write code using **Upfront Architecture (Clean Architecture, Layered Architecture, Package-by-Feature, or Orchestrator)** from line 1. Do NOT wait for files to reach 300 LOC to refactor. Split entry dispatchers from sub-module handlers upfront to prevent token waste.
-7. **Intent Gate:** Classify request type. Ask for clarification if ambiguous.
+7. **Intent Gate:** Classify request type before acting. If ambiguous or underspecified, trigger the IDE/CLI `ask_question` tool to clarify user intent first.
 8. **Delegation First:** Decompose and delegate multi-step tasks to subagents when applicable.
-9. **Per-Phase Reset:** Call `agent-guidance_task_pipeline` with the goal for EACH new phase (plan, code, test, debug, review, refactor). Treat new phases as new tasks.
+9. **Per-Phase Reset:** Call `agent-guidance_task_pipeline` with the goal for EACH new phase (plan, code, test, debug, review, refactor) and trigger `ask_question` to request user confirmation for stage transitions (`workflow_gate`).
 
 <!-- agent-guidance:end -->
