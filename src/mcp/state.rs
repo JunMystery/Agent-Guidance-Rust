@@ -46,6 +46,8 @@ pub struct ServerState {
     pub verification_passed: bool,
     pub last_risk_level: Option<String>,
     pub active_phase: Option<String>,
+    pub edit_authorized: bool,
+    pub active_architecture_pattern: Option<String>,
     #[serde(skip, default)]
     pub pending_skill_proposals: Vec<(String, String, f32)>,
     #[serde(skip, default)]
@@ -72,6 +74,8 @@ impl Default for ServerState {
             verification_passed: false,
             last_risk_level: None,
             active_phase: None,
+            edit_authorized: false,
+            active_architecture_pattern: None,
             pending_skill_proposals: Vec::new(),
             cancellation: None,
         }
@@ -101,6 +105,8 @@ impl ServerState {
             verification_passed: false,
             last_risk_level: None,
             active_phase: None,
+            edit_authorized: false,
+            active_architecture_pattern: None,
             pending_skill_proposals: Vec::new(),
             cancellation: None,
             agent_client_name: client_name,
@@ -286,8 +292,10 @@ impl ServerState {
             }
         };
 
-        if normalized == "Plan" {
+        if normalized == "Plan" || normalized == "Context" {
             self.plan_approved = false;
+            self.edit_authorized = false;
+            self.active_architecture_pattern = None;
         }
 
         if normalized == "Build" && !self.plan_approved {
@@ -358,22 +366,21 @@ impl ServerState {
     }
 
     pub fn can_call_tool(&mut self, tool_name: &str, args: &Value) -> Result<(), String> {
-        // 1. Unlocks gate tool
+        // 1. Unlocks gate tool and advances stage from Context to Plan
         if tool_name == "task_pipeline" {
             self.priority_gate_pass();
+            if self.workflow_stage == "Context" {
+                self.workflow_stage = "Plan".to_string();
+            }
             return Ok(());
         }
 
         // 2. Whitelisted & Not Gated tools bypass priority gate check
         let is_whitelisted_or_ungated = matches!(
             tool_name,
-            "health_check"
-                | "diagnose"
-                | "token_stats"
-                | "require_edit_approval"
-                | "usage_report"
-                | "workflow_gate"
+            "workflow_gate"
                 | "session_continuity"
+                | "select_skills"
         );
 
         if !is_whitelisted_or_ungated {
@@ -440,7 +447,7 @@ impl ServerState {
             "Build" => {
                 if !self.plan_approved {
                     Err("WORKFLOW_STAGE_BLOCKED: Tool execution in 'Build' stage is blocked because plan_approved is false. Obtain user approval first.".to_string())
-                } else if tool_name == "require_edit_approval" {
+                } else if tool_name == "workflow_gate" && args.get("action").and_then(|a| a.as_str()) == Some("authorize_edit") {
                     let arch_pattern = args
                         .get("architecture_pattern")
                         .and_then(|a| a.as_str())
@@ -452,7 +459,7 @@ impl ServerState {
                             | "Package_By_Feature"
                             | "Orchestrator"
                     ) {
-                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `require_edit_approval`.".to_string())
+                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `workflow_gate(action=\"authorize_edit\")`.".to_string())
                     } else {
                         Ok(())
                     }
@@ -531,6 +538,7 @@ mod tests {
 
         assert!(state.set_stage("Plan").is_ok());
         assert_eq!(state.workflow_stage, "Plan");
+        assert!(!state.edit_authorized);
 
         // Transitioning to Build should fail if not approved
         assert!(state.set_stage("Build").is_err());
@@ -577,31 +585,6 @@ mod tests {
         // 2. Whitelisted & Not Gated tools succeed without priority gate unlock
         assert!(
             state
-                .can_call_tool("health_check", &serde_json::json!({}))
-                .is_ok()
-        );
-        assert!(
-            state
-                .can_call_tool("diagnose", &serde_json::json!({}))
-                .is_ok()
-        );
-        assert!(
-            state
-                .can_call_tool("token_stats", &serde_json::json!({}))
-                .is_ok()
-        );
-        assert!(
-            state
-                .can_call_tool("require_edit_approval", &serde_json::json!({}))
-                .is_ok()
-        );
-        assert!(
-            state
-                .can_call_tool("usage_report", &serde_json::json!({}))
-                .is_ok()
-        );
-        assert!(
-            state
                 .can_call_tool("workflow_gate", &serde_json::json!({}))
                 .is_ok()
         );
@@ -614,15 +597,16 @@ mod tests {
                 .is_ok()
         );
 
-        // 3. Calling task_pipeline unlocks priority gate
+        // 3. Calling task_pipeline unlocks priority gate and advances stage to Plan
         assert!(
             state
                 .can_call_tool("task_pipeline", &serde_json::json!({}))
                 .is_ok()
         );
         assert!(state.priority_gate_passed);
+        assert_eq!(state.workflow_stage, "Plan");
 
-        // 4. Now gated tool passes priority check (and workflow_gate passes in Context stage)
+        // 4. Now gated tool passes priority check and stage check in Plan stage
         assert!(
             state
                 .can_call_tool("workflow_gate", &serde_json::json!({}))

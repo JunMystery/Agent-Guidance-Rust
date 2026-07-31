@@ -373,6 +373,10 @@ fn handle_tool_call_internal(
                         next_step_prompt
                     )
                 },
+                "ui_ux" => {
+                    let q = if query.is_empty() { "general" } else { &query };
+                    format!("# UI/UX Guidelines for '{}'\n\n- Styling: Modern CSS, Glassmorphism, Dynamic Animations\n- Color Palette: Dark mode default, curated HSL gradients\n- Typography: Inter/Outfit via Google Fonts\n- Accessibility: Semantic HTML5, unique IDs", q)
+                },
                 "docs" => {
                     let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("general");
                     format!("# Documentation Guidance for '{}' ({})\n\nOfficial patterns, signatures, and API usage guidelines loaded for query: '{}'.", id, query, query)
@@ -555,6 +559,40 @@ fn handle_tool_call_internal(
                         state.workflow_stage, state.plan_approved, state.fix_attempts, edit_allowed
                     )
                 },
+                "authorize_edit" => {
+                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
+                    state.update_project_path(&proj_path);
+                    let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
+                    let justification = arguments.get("justification").and_then(|j| j.as_str()).unwrap_or("No justification provided");
+                    let arch_pattern = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
+                    
+                    state.last_risk_level = Some(risk_level.to_string());
+
+                    if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
+                        format!(
+                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...)`.",
+                            proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { arch_pattern }
+                        )
+                    } else if risk_level == "HIGH" && !state.plan_approved {
+                        format!(
+                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
+                            proj_path.display(), justification
+                        )
+                    } else if state.workflow_stage == "Build" && state.plan_approved {
+                        state.edit_authorized = true;
+                        state.active_architecture_pattern = Some(arch_pattern.to_string());
+                        format!(
+                            "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Declared Risk: {}\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
+                            proj_path.display(), risk_level, arch_pattern, justification, state.workflow_stage, arch_pattern
+                        )
+                    } else {
+                        format!(
+                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
+                            proj_path.display(), state.workflow_stage, state.plan_approved
+                        )
+                    }
+                },
                 _ => {
                     // "check" action
                     if let Some(user_msg) = arguments.get("user_message").or_else(|| arguments.get("last_user_message")).and_then(|m| m.as_str()) {
@@ -571,58 +609,6 @@ fn handle_tool_call_internal(
                     resp
                 }
             }
-        },
-        "require_edit_approval" => {
-            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-            let proj_path = detect_project_path(proj_path_arg, state);
-            state.update_project_path(&proj_path);
-            let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
-            let justification = arguments.get("justification").and_then(|j| j.as_str()).unwrap_or("No justification provided");
-            let arch_pattern = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
-            
-            state.last_risk_level = Some(risk_level.to_string());
-            state.record_call(200, 50);
-
-            if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
-                format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator'), then re-invoke `require_edit_approval`.",
-                    proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { arch_pattern }
-                )
-            } else if risk_level == "HIGH" && !state.plan_approved {
-                format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
-                    proj_path.display(), justification
-                )
-            } else if state.workflow_stage == "Build" && state.plan_approved {
-                format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Declared Risk: {}\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
-                    proj_path.display(), risk_level, arch_pattern, justification, state.workflow_stage, arch_pattern
-                )
-            } else {
-                format!(
-                    "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
-                    proj_path.display(), state.workflow_stage, state.plan_approved
-                )
-            }
-        },
-        "token_stats" => {
-            let orig = if state.tokens_original == 0 { 45000 } else { state.tokens_original };
-            let opt = if state.tokens_optimized == 0 { 12000 } else { state.tokens_optimized };
-            let ratio = 100.0 - ((opt as f64 / orig as f64) * 100.0);
-
-            format!("# Token Optimization Stats\n\n- Original Tokens Processed: {}\n- Optimized Tokens Sent: {}\n- Savings Ratio: {:.1}%\n- Total Calls Recorded: {}", orig, opt, ratio, state.tool_calls)
-        },
-        "usage_report" => {
-            let scope = arguments.get("scope").and_then(|s| s.as_str()).unwrap_or("session");
-            format!("# Tool Usage Report ({})\n\n- Total Tool Calls: {}\n- Active Stage: {}\n- Engine: 100% Native Rust", scope, state.tool_calls, state.workflow_stage)
-        },
-        "health_check" => {
-            let text = "Server Health: OK | Runtime: Native Rust Executable | Sub-1ms Latency";
-            let est_tok = estimate_tokens(text, false);
-            format!("{}\n\nEstimated Tokens: {}", text, est_tok)
-        },
-        "diagnose" => {
-            "# Diagnostics Result\n\n- Engine: 100% Native Rust\n- Protocol: JSON-RPC 2.0 Stdio\n- Cold Startup: < 1ms\n- Memory: ~35MB RSS\n- Machine Learning: Feature Gated\n- Gate Matrix: Active".to_string()
         },
         _ => format!("Tool '{}' executed successfully.", name),
     };

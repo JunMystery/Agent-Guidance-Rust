@@ -236,15 +236,20 @@ pub fn handle_request(
                     }
                 },
                 {
-                    "name": "ui_ux",
-                    "description": "UI/UX design guidance.",
+                    "name": "workflow_gate",
+                    "description": "Manage active workflow stage ('check', 'status', 'set_stage') or authorize code edit permissions ('authorize_edit').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "operation": { "type": "string" },
-                            "query": { "type": "string" }
+                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "authorize_edit"], "description": "Action to perform: 'check', 'status', 'set_stage', or 'authorize_edit'" },
+                            "target_stage": { "type": "string" },
+                            "user_message": { "type": "string" },
+                            "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit)" },
+                            "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit)" },
+                            "justification": { "type": "string", "description": "Reason for edits (for authorize_edit)" },
+                            "architecture_pattern": { "type": "string", "enum": ["Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Declared architecture pattern (for authorize_edit)" }
                         },
-                        "required": ["operation", "query"]
+                        "required": ["action"]
                     }
                 },
                 {
@@ -257,58 +262,6 @@ pub fn handle_request(
                         },
                         "required": ["operation"]
                     }
-                },
-                {
-                    "name": "workflow_gate",
-                    "description": "Manage and validate the active workflow stage.",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "action": { "type": "string" },
-                            "target_stage": { "type": "string" },
-                            "user_message": { "type": "string" }
-                        },
-                        "required": ["action"]
-                    }
-                },
-                {
-                    "name": "require_edit_approval",
-                    "description": "Final gate check to verify if the active workflow stage permits code editing. Must declare risk_level, justification, and architecture_pattern ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator').",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
-                            "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level of proposed edits" },
-                            "justification": { "type": "string", "description": "Reason and rationale for code edits" },
-                            "architecture_pattern": { "type": "string", "enum": ["Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Upfront architecture pattern declared for implementation" }
-                        },
-                        "required": ["project_path", "risk_level", "justification", "architecture_pattern"]
-                    }
-                },
-                {
-                    "name": "token_stats",
-                    "description": "Return token optimization statistics for this session. No parameters.",
-                    "inputSchema": { "type": "object", "properties": {} }
-                },
-                {
-                    "name": "usage_report",
-                    "description": "Return recorded usage statistics for the current or all sessions.",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "scope": { "type": "string", "default": "session" }
-                        }
-                    }
-                },
-                {
-                    "name": "health_check",
-                    "description": "Return server health status and basic metadata. No parameters.",
-                    "inputSchema": { "type": "object", "properties": {} }
-                },
-                {
-                    "name": "diagnose",
-                    "description": "Perform comprehensive self-diagnostics on the server.",
-                    "inputSchema": { "type": "object", "properties": {} }
                 }
             ]
         })),

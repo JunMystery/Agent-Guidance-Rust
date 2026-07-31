@@ -14,7 +14,7 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 |---|---|---|
 | Start any task or phase | `task_pipeline(task="...", project_path="<path>", phase="plan")` | `project_path`, `task`, `phase` |
 | Confirm skill selection | `select_skills(skills=["skill-a", "skill-b"])` | `skills` (array) |
-| Check edit authorization | `require_edit_approval(project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` | `project_path`, `risk_level`, `justification`, `architecture_pattern` |
+| Check edit authorization | `workflow_gate(action="authorize_edit", project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` | `action`, `project_path`, `risk_level`, `justification`, `architecture_pattern` |
 | Read file / extract symbol | `project_context(operation="read", relative_path="...", target_symbol="...")` | `operation`, `project_path`, `target_symbol` (optional) |
 | Empirical post-code test | `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` | `verification_command`, `expected_output_keyword` |
 | Check coding standards | `guidance(operation="search", query="...")` | `operation`, `query` |
@@ -22,7 +22,7 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 ### Nine Mandatory Contract Rules
 
 1. **Context & Phase First**: Call `task_pipeline(task="...", project_path="<path>", phase="<phase>")` BEFORE any file read or code change. You MUST pass `project_path` and `phase`. If skills are proposed, trigger the IDE/CLI `ask_question` tool to let the user interactively choose skills, then call `select_skills(skills=[...])` to load chosen skills (or `skills=[]` to skip).
-2. **Edit Approval Contract**: Call `require_edit_approval(project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` before modifying files. You MUST include a valid `architecture_pattern`. If architecture pattern or edit approval is missing/blocked, trigger the IDE/CLI `ask_question` tool to ask the user.
+2. **Edit Approval Contract**: Call `workflow_gate(action="authorize_edit", project_path="...", risk_level="LOW", justification="...", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` before modifying files. You MUST include a valid `architecture_pattern`. If architecture pattern or edit approval is missing/blocked, trigger the IDE/CLI `ask_question` tool to ask the user.
 3. **Symbol-Targeted Reading**: Use `project_context(operation="read", relative_path="...", target_symbol="...")` to read exact symbols and prevent token blowout.
 4. **Empirical Test Verification**: Use `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` to prove feature correctness with real test output.
 5. **Ground & Plan**: Verify files/functions/symbols via search BEFORE proposing changes. Never guess.
