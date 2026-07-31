@@ -158,6 +158,29 @@ pub fn handle_tool_call(
     info!("Handling tool call: {}", name);
     ensure_not_cancelled(state)?;
 
+    let start_time = std::time::Instant::now();
+    let op = arguments.get("operation").or_else(|| arguments.get("action")).or_else(|| arguments.get("phase")).and_then(|v| v.as_str()).map(|s| s.to_string());
+
+    let res = match handle_tool_call_internal(name, arguments, state) {
+        Ok(val) => {
+            let duration = start_time.elapsed().as_millis() as u64;
+            crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, None);
+            Ok(val)
+        },
+        Err(err) => {
+            let duration = start_time.elapsed().as_millis() as u64;
+            crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, Some(&err.1));
+            Err(err)
+        }
+    };
+    res
+}
+
+fn handle_tool_call_internal(
+    name: &str,
+    arguments: Value,
+    state: &mut ServerState,
+) -> Result<Value, (i32, String)> {
     let response_text = match name {
         "task_pipeline" => {
             let task = arguments.get("task").and_then(|t| t.as_str()).unwrap_or("general task");

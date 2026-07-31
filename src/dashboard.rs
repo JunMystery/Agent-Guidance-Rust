@@ -143,6 +143,21 @@ fn handle_api_stats(request: tiny_http::Request, proj_dir: &str, cache: &Arc<Mut
     }
 }
 
+fn get_iso_date(now_secs: i64) -> String {
+    let days = now_secs / 86400;
+    let z = days + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = if m <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02}", year, m, d)
+}
+
 fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Value> {
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
@@ -157,7 +172,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
                 COALESCE(SUM(tokens_original), 0) AS tok_orig,
                 COALESCE(SUM(tokens_optimized), 0) AS tok_opt
          FROM tool_calls WHERE started_at >= ?
-         GROUP BY tool_name, operation ORDER BY cnt DESC"
+         GROUP BY tool_name, operation ORDER BY cnt DESC LIMIT 50"
     )?;
     let tool_breakdown: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
         Ok(json!({
@@ -170,9 +185,9 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
     })?.filter_map(|r| r.ok()).collect();
 
     let mut stmt = conn.prepare(
-        "SELECT skill_id, COUNT(*) AS cnt FROM skill_loads GROUP BY skill_id ORDER BY cnt DESC LIMIT 20"
+        "SELECT skill_id, COUNT(*) AS cnt FROM skill_loads WHERE loaded_at >= ? GROUP BY skill_id ORDER BY cnt DESC LIMIT 50"
     )?;
-    let top_skills: Vec<serde_json::Value> = stmt.query_map([], |row| {
+    let top_skills: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
         Ok(json!({
             "skill_id": row.get::<_, String>(0)?,
             "cnt": row.get::<_, i64>(1)?,
@@ -181,7 +196,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
 
     let mut stmt = conn.prepare(
         "SELECT tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, error_message
-         FROM tool_calls WHERE started_at >= ? ORDER BY started_at DESC LIMIT 20"
+         FROM tool_calls WHERE started_at >= ? ORDER BY started_at DESC LIMIT 50"
     )?;
     let recent_actions: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
         Ok(json!({
@@ -222,34 +237,72 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         }));
     }
 
-    let total_calls: i64 = conn.query_row("SELECT COUNT(*) FROM tool_calls", [], |r| r.get(0)).unwrap_or(0);
-    let total_skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads", [], |r| r.get(0)).unwrap_or(0);
-    let total_embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries", [], |r| r.get(0)).unwrap_or(0);
-    let total_llm: i64 = conn.query_row("SELECT COUNT(*) FROM llm_queries", [], |r| r.get(0)).unwrap_or(0);
+    // Timeframe Summaries: Past 24H, Last 7 Days, Last 30 Days, Lifetime
+    let day_7d_ago = get_iso_date(now - 7 * 86400);
+    let day_30d_ago = get_iso_date(now - 30 * 86400);
 
-    let tot_orig: i64 = tool_breakdown.iter().map(|r| r["tok_orig"].as_i64().unwrap_or(0)).sum();
-    let tot_opt: i64 = tool_breakdown.iter().map(|r| r["tok_opt"].as_i64().unwrap_or(0)).sum();
-    let token_savings = tot_orig - tot_opt;
-    let savings_pct = if tot_orig > 0 {
-        ((token_savings as f64 / tot_orig as f64) * 100.0 * 10.0).round() / 10.0
-    } else {
-        0.0
+    let get_summary = |query: &str, params: &[&dyn rusqlite::ToSql]| -> serde_json::Value {
+        let res: Result<(i64, i64, i64, i64, i64, i64), _> = conn.query_row(query, params, |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        });
+        let (calls, skills, embeds, llms, orig, opt) = res.unwrap_or((0, 0, 0, 0, 0, 0));
+        let saved = orig - opt;
+        let pct = if orig > 0 { ((saved as f64 / orig as f64) * 100.0 * 10.0).round() / 10.0 } else { 0.0 };
+        json!({
+            "tool_calls": calls,
+            "skills_loaded": skills,
+            "embed_queries": embeds,
+            "llm_queries": llms,
+            "tokens_original": orig,
+            "tokens_optimized": opt,
+            "token_savings": saved,
+            "savings_pct": pct
+        })
     };
+
+    let p24_calls: i64 = conn.query_row("SELECT COUNT(*) FROM tool_calls WHERE started_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let p24_skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let p24_embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE created_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let p24_llm: i64 = conn.query_row("SELECT COUNT(*) FROM llm_queries WHERE created_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let (p24_orig, p24_opt): (i64, i64) = conn.query_row("SELECT COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0) FROM tool_calls WHERE started_at >= ?", [cutoff_24h], |r| Ok((r.get(0)?, r.get(1)?))).unwrap_or((0, 0));
+    let p24_saved = p24_orig - p24_opt;
+    let p24_pct = if p24_orig > 0 { ((p24_saved as f64 / p24_orig as f64) * 100.0 * 10.0).round() / 10.0 } else { 0.0 };
+
+    let past_24h_summary = json!({
+        "tool_calls": p24_calls,
+        "skills_loaded": p24_skills,
+        "embed_queries": p24_embeds,
+        "llm_queries": p24_llm,
+        "tokens_original": p24_orig,
+        "tokens_optimized": p24_opt,
+        "token_savings": p24_saved,
+        "savings_pct": p24_pct
+    });
+
+    let sql_sum = "SELECT COALESCE(SUM(tool_calls),0), COALESCE(SUM(skills_loaded),0), COALESCE(SUM(embed_queries),0), COALESCE(SUM(llm_queries),0), COALESCE(SUM(tokens_original),0), COALESCE(SUM(tokens_optimized),0) FROM daily_summaries";
+
+    let last_7d_summary = get_summary(&format!("{} WHERE day >= ?", sql_sum), &[&day_7d_ago]);
+    let last_30d_summary = get_summary(&format!("{} WHERE day >= ?", sql_sum), &[&day_30d_ago]);
+    let lifetime_summary = get_summary(sql_sum, &[]);
 
     Ok(json!({
         "db_status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
         "project_path": proj_dir,
         "server_port": 3000,
-        "totals": {
-            "tool_calls": total_calls,
-            "skills_loaded": total_skills,
-            "embed_queries": total_embeds,
-            "llm_queries": total_llm,
-            "tokens_original": tot_orig,
-            "tokens_optimized": tot_opt,
-            "token_savings": token_savings,
-            "savings_pct": savings_pct,
+        "totals": past_24h_summary,
+        "summaries": {
+            "past_24h": past_24h_summary,
+            "last_7d": last_7d_summary,
+            "last_30d": last_30d_summary,
+            "lifetime": lifetime_summary
         },
         "tool_breakdown": tool_breakdown,
         "top_skills": top_skills,

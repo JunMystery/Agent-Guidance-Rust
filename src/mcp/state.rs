@@ -247,6 +247,7 @@ impl ServerState {
         self.tool_calls += 1;
         self.tokens_original += orig_tokens;
         self.tokens_optimized += opt_tokens;
+        crate::mcp::db::log_tool_call("mcp_tool", None, orig_tokens, opt_tokens, 0, None);
     }
 
     pub fn set_cancellation(&mut self, cancellation: Arc<AtomicBool>) {
