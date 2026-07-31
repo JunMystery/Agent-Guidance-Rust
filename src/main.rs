@@ -31,9 +31,15 @@ async fn main() -> Result<()> {
 
     if args.contains(&"--setup".to_string()) {
         let exe_path = env::current_exe()?;
-        let target_bin = dirs::home_dir()
-            .map(|h| h.join(".local").join("bin").join(if cfg!(windows) { "agent-guidance.exe" } else { "agent-guidance" }))
-            .unwrap_or(exe_path);
+        let target_bin = if cfg!(windows) {
+            dirs::data_local_dir()
+                .map(|d| d.join("Programs").join("agent-guidance").join("bin").join("agent-guidance.exe"))
+                .unwrap_or(exe_path)
+        } else {
+            dirs::home_dir()
+                .map(|h| h.join(".local").join("bin").join("agent-guidance"))
+                .unwrap_or(exe_path)
+        };
         run_setup(&target_bin)?;
         println!("Agent Guidance Rust MCP server configured in all IDE clients successfully!");
         return Ok(());

@@ -71,7 +71,8 @@ if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Pat
 }
 
 # ── Prepare binary output directory ──────────────────────────────────────────
-$localBin = "$HOME\.local\bin"
+# Use %LOCALAPPDATA%\Programs\agent-guidance\bin to satisfy Windows AppLocker / WDAC policies
+$localBin = Join-Path $env:LOCALAPPDATA "Programs\agent-guidance\bin"
 if (-not (Test-Path $localBin)) {
     New-Item -ItemType Directory -Path $localBin -Force | Out-Null
 }
