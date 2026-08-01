@@ -31,7 +31,7 @@ jobs:
             artifact_name: agent-guidance-macos-aarch64.tar.gz
             asset_path: agent-guidance-macos-aarch64.tar.gz
             binary_name: agent-guidance
-          - os: macos-14
+          - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: agent-guidance-macos-x86_64.tar.gz
             asset_path: agent-guidance-macos-x86_64.tar.gz
