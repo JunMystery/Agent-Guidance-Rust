@@ -125,7 +125,11 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
 
-        info!("Running in stdio mode (no daemon on this platform).");
+        info!("Running in stdio mode (Windows). Starting background ML model warmup...");
+        tokio::task::spawn_blocking(|| {
+            crate::ml::embeddings::warmup_cache();
+        });
+
         handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
     }
 

@@ -29,29 +29,52 @@ pub fn parse_file_uri(uri: &str) -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerState {
+    #[serde(default)]
     pub priority_gate_passed: bool,
+    #[serde(default = "default_workflow_stage")]
     pub workflow_stage: String,
+    #[serde(default)]
     pub plan_approved: bool,
+    #[serde(default)]
     pub fix_attempts: u32,
+    #[serde(default)]
     pub tool_calls: u32,
+    #[serde(default)]
     pub tokens_original: u64,
+    #[serde(default)]
     pub tokens_optimized: u64,
+    #[serde(default)]
     pub project_path: Option<String>,
+    #[serde(default)]
     pub agent_client_name: Option<String>,
+    #[serde(default)]
     pub workspace_roots: Vec<String>,
+    #[serde(default)]
     pub last_session_start: Option<u64>,
+    #[serde(default)]
     pub user_intent_summary: Option<String>,
+    #[serde(default)]
     pub verification_command: Option<String>,
+    #[serde(default)]
     pub expected_output_keyword: Option<String>,
+    #[serde(default)]
     pub verification_passed: bool,
+    #[serde(default)]
     pub last_risk_level: Option<String>,
+    #[serde(default)]
     pub active_phase: Option<String>,
+    #[serde(default)]
     pub edit_authorized: bool,
+    #[serde(default)]
     pub active_architecture_pattern: Option<String>,
     #[serde(skip, default)]
     pub pending_skill_proposals: Vec<(String, String, f32)>,
     #[serde(skip, default)]
     pub cancellation: Option<Arc<AtomicBool>>,
+}
+
+fn default_workflow_stage() -> String {
+    "Context".to_string()
 }
 
 impl Default for ServerState {

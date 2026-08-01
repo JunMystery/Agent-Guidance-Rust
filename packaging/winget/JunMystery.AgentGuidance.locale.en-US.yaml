@@ -1,0 +1,25 @@
+PackageIdentifier: JunMystery.AgentGuidance
+PackageVersion: 1.3.0
+PackageLocale: en-US
+Publisher: JunMystery
+PublisherUrl: https://github.com/JunMystery
+PublisherSupportUrl: https://github.com/JunMystery/Agent-Guidance-Rust/issues
+Author: JunMystery
+PackageName: Agent Guidance Rust MCP Server
+PackageUrl: https://github.com/JunMystery/Agent-Guidance-Rust
+License: MIT
+LicenseUrl: https://github.com/JunMystery/Agent-Guidance-Rust/blob/main/LICENSE
+Copyright: Copyright (c) 2026 JunMystery
+ShortDescription: Token-optimized Agent Guidance Rust MCP server for AI coding tools.
+Description: |
+  Agent Guidance Rust is a high-performance native Rust Model Context Protocol (MCP) server
+  that orchestrates AI agents, enforces clean architecture stage gates, and provides token-optimized
+  codebase context retrieval.
+Tags:
+  - mcp
+  - rust
+  - ai-agent
+  - dev-tools
+  - coding-assistant
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

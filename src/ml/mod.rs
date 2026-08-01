@@ -1,5 +1,6 @@
 pub mod embeddings;
 pub mod llm_selector;
+pub mod onnx_engine;
 
 use rayon::ThreadPool;
 use std::sync::OnceLock;

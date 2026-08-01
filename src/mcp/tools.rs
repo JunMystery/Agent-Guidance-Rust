@@ -559,6 +559,36 @@ fn handle_tool_call_internal(
                         state.workflow_stage, state.plan_approved, state.fix_attempts, edit_allowed
                     )
                 },
+                "advance" => {
+                    // Composite action: process user message -> set target stage -> authorize edit in 1 call
+                    if let Some(user_msg) = arguments.get("user_message").or_else(|| arguments.get("last_user_message")).and_then(|m| m.as_str()) {
+                        state.process_user_message(user_msg);
+                    }
+                    let target_stage = arguments.get("target_stage").and_then(|t| t.as_str()).unwrap_or("Build");
+                    let stage_res = state.set_stage(target_stage);
+
+                    let arch_pattern = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
+                    if !arch_pattern.is_empty() {
+                        let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                        let proj_path = detect_project_path(proj_path_arg, state);
+                        state.update_project_path(&proj_path);
+                        let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
+                        state.last_risk_level = Some(risk_level.to_string());
+
+                        if matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") && state.workflow_stage == "Build" && state.plan_approved {
+                            state.edit_authorized = true;
+                            state.active_architecture_pattern = Some(arch_pattern.to_string());
+                        }
+                    }
+
+                    match stage_res {
+                        Ok(msg) => format!(
+                            "# Workflow Gate: [advance]\n\n{}\n- Edit Authorized: {}\n- Architecture Pattern: {}",
+                            msg, state.edit_authorized, state.active_architecture_pattern.as_deref().unwrap_or("NONE")
+                        ),
+                        Err(err) => format!("# Workflow Gate: [advance]\n\n⚠️ Error: {}", err),
+                    }
+                },
                 "authorize_edit" => {
                     let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
                     let proj_path = detect_project_path(proj_path_arg, state);

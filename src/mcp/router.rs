@@ -237,17 +237,17 @@ pub fn handle_request(
                 },
                 {
                     "name": "workflow_gate",
-                    "description": "Manage active workflow stage ('check', 'status', 'set_stage') or authorize code edit permissions ('authorize_edit').",
+                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'advance') or authorize code edit permissions ('authorize_edit').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "authorize_edit"], "description": "Action to perform: 'check', 'status', 'set_stage', or 'authorize_edit'" },
+                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "authorize_edit", "advance"], "description": "Action to perform: 'check', 'status', 'set_stage', 'authorize_edit', or 'advance' (composite check + transition + authorize)" },
                             "target_stage": { "type": "string" },
                             "user_message": { "type": "string" },
-                            "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit)" },
-                            "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit)" },
-                            "justification": { "type": "string", "description": "Reason for edits (for authorize_edit)" },
-                            "architecture_pattern": { "type": "string", "enum": ["Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Declared architecture pattern (for authorize_edit)" }
+                            "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance)" },
+                            "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit / advance)" },
+                            "justification": { "type": "string", "description": "Reason for edits (for authorize_edit / advance)" },
+                            "architecture_pattern": { "type": "string", "enum": ["Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Declared architecture pattern (for authorize_edit / advance)" }
                         },
                         "required": ["action"]
                     }
@@ -277,6 +277,34 @@ pub fn handle_request(
             handle_tool_call(name, arguments, state)
         },
         _ => Err((-32601, format!("Method not found: {}", method))),
+    }
+}
+
+pub fn is_read_only_request(method: &str, params: &Option<Value>) -> bool {
+    match method {
+        "initialize" | "notifications/initialized" | "ping" | "resources/list" | "resources/read" | "tools/list" => true,
+        "client/connect" => false,
+        "tools/call" => {
+            if let Some(p) = params {
+                let name = p.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                let args = p.get("arguments");
+                match name {
+                    "project_context" | "guidance" => true,
+                    "workflow_gate" => {
+                        let action = args.and_then(|a| a.get("action")).and_then(|act| act.as_str()).unwrap_or("check");
+                        matches!(action, "check" | "status")
+                    },
+                    "session_continuity" => {
+                        let op = args.and_then(|a| a.get("operation")).and_then(|o| o.as_str()).unwrap_or("load");
+                        op == "load"
+                    },
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        },
+        _ => false,
     }
 }
 

@@ -297,14 +297,34 @@ pub fn generate_precomputed_cache() -> Result<()> {
     let ml_dir = crate_root.join("src").join("ml");
     if ml_dir.exists() {
         let _ = std::fs::write(ml_dir.join("precomputed_vectors.bin"), &buf);
+
+        // Pre-tokenize all skills and write precomputed_tokens.bin
+        let mut token_buf = Vec::new();
+        token_buf.extend_from_slice(&count.to_le_bytes());
+        for c in &candidates {
+            let prompt = format!("passage: {} {}", c.name, c.content.chars().take(300).collect::<String>());
+            if let Ok(encoding) = model_guard.tokenizer.encode(prompt, true) {
+                let ids = encoding.get_ids();
+                let len = ids.len() as u32;
+                token_buf.extend_from_slice(&len.to_le_bytes());
+                for &id in ids {
+                    token_buf.extend_from_slice(&(id as u64).to_le_bytes());
+                }
+            } else {
+                token_buf.extend_from_slice(&0u32.to_le_bytes());
+            }
+        }
+        let _ = std::fs::write(ml_dir.join("precomputed_tokens.bin"), &token_buf);
+
         let _ = std::fs::write(
             ml_dir.join("precomputed_manifest.json"),
             serde_json::to_string_pretty(&manifest)?,
         );
         info!(
-            "Precomputed cache written to src/ml/ ({} skills, {} bytes).",
+            "Precomputed cache written to src/ml/ ({} skills, {} bytes vectors, {} bytes tokens).",
             count,
-            buf.len()
+            buf.len(),
+            token_buf.len()
         );
     }
 
@@ -492,9 +512,10 @@ pub fn warmup_cache() {
     eager_load_embedding_model();
 }
 
-/// Eagerly initialize only the embedding model; reranking remains lazy.
+/// Eagerly initialize both the embedding model and the cross-encoder reranker.
 fn eager_load_embedding_model() {
     drop(cached_model());
+    drop(crate::ml::llm_selector::cached_cross_encoder());
 }
 
 fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Arc<Vec<Vec<f32>>> {

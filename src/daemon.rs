@@ -272,17 +272,33 @@ where
             }
         };
 
+        let is_read = crate::mcp::router::is_read_only_request(&request_method, &request_params);
+
         let result = match timeout(
             Duration::from_secs(REQUEST_TIMEOUT_SECS),
             tokio::task::spawn_blocking(move || {
                 let _permit = permit;
                 let started = Instant::now();
-                let mut state = request_state
-                    .lock()
-                    .map_err(|_| (-32000, "Server state lock poisoned".to_string()))?;
-                state.set_cancellation(worker_cancellation);
-                let result = handle_request(&request_method, request_params, &mut state);
-                state.clear_cancellation();
+                let result = if is_read {
+                    let mut state_clone = {
+                        let state_guard = request_state
+                            .lock()
+                            .map_err(|_| (-32000, "Server state lock poisoned".to_string()))?;
+                        state_guard.clone()
+                    };
+                    state_clone.set_cancellation(worker_cancellation);
+                    let res = handle_request(&request_method, request_params, &mut state_clone);
+                    state_clone.clear_cancellation();
+                    res
+                } else {
+                    let mut state_guard = request_state
+                        .lock()
+                        .map_err(|_| (-32000, "Server state lock poisoned".to_string()))?;
+                    state_guard.set_cancellation(worker_cancellation);
+                    let res = handle_request(&request_method, request_params, &mut *state_guard);
+                    state_guard.clear_cancellation();
+                    res
+                };
                 info!(
                     method = %request_method,
                     elapsed_ms = started.elapsed().as_millis() as u64,
@@ -462,12 +478,17 @@ pub async fn daemon_main() {
         }
     });
 
+    let idle_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(600); // 10 minutes default
+
     loop {
         tokio::time::sleep(Duration::from_millis(200)).await;
         if stdio_closed.load(Ordering::SeqCst) && socket_connections.load(Ordering::SeqCst) == 0 {
-            info!("No active connections — daemon will shut down in 30s.");
-            for remaining in (1..=30).rev() {
-                if remaining % 10 == 0 {
+            info!("No active connections — daemon will shut down in {}s.", idle_timeout_secs);
+            for remaining in (1..=idle_timeout_secs).rev() {
+                if remaining % 60 == 0 || (remaining <= 10 && remaining % 2 == 0) {
                     info!("Shutdown in {}s...", remaining);
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
