@@ -8,14 +8,9 @@ This project runs as a high-performance **100% Native Rust 2024 Edition** MCP se
 
 Use the one-line installer script:
 
-**Windows (CMD Prompt):**
-```cmd
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
-```
-
-**Windows (PowerShell):**
+**Windows (PowerShell / CMD):**
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
+powershell -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
 ```
 
 **Linux / macOS:**

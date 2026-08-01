@@ -59,14 +59,9 @@ The built-in ML catalog engine leverages local Rust bindings for Hugging Face `c
 
 Run the one-liner setup script for your operating system to compile the release binary and auto-register `agent-guidance` across installed IDEs:
 
-**Windows (PowerShell):**
+**Windows (PowerShell / CMD):**
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
-```
-
-**Windows (CMD Prompt):**
-```cmd
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
+powershell -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
 ```
 
 **Linux / macOS:**

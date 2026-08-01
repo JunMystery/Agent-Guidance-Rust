@@ -1,8 +1,16 @@
-# PowerShell Installer for Agent Guidance Rust (Windows)
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Installer for Agent Guidance Rust (Windows).
+.DESCRIPTION
+    Downloads or builds the agent-guidance binary and registers it with IDE clients.
+    Source: https://github.com/JunMystery/Agent-Guidance-Rust
+#>
+
 [CmdletBinding()]
 param()
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 
 # Protection against CWD falling into System32 when invoked via CMD
 if ((Get-Location).Path -like "*\system32*") {
@@ -28,7 +36,7 @@ if ($action -eq "2") {
     Write-Host "Uninstalling Agent Guidance..." -ForegroundColor Red
 
     # Stop any running processes
-    cmd /c "taskkill /F /IM agent-guidance.exe >nul 2>&1"
+    Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 400
 
     # Remove data directory
@@ -38,7 +46,7 @@ if ($action -eq "2") {
     }
 
     # Remove binaries
-    foreach ($bin in @("$HOME\.local\bin\agent-guidance.exe", "$HOME\.cargo\bin\agent-guidance.exe")) {
+    foreach ($bin in @("$HOME\.local\bin\agent-guidance.exe", "$HOME\.cargo\bin\agent-guidance.exe", "$env:LOCALAPPDATA\Programs\agent-guidance\bin\agent-guidance.exe")) {
         if (Test-Path $bin) {
             Remove-Item -Force $bin -ErrorAction SilentlyContinue
         }
@@ -55,7 +63,7 @@ if ($action -eq "2") {
 # ── Install / Update path ─────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Stopping any running agent-guidance processes..." -ForegroundColor Yellow
-cmd /c "taskkill /F /IM agent-guidance.exe >nul 2>&1"
+Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
 # ── Ensure Rust/Cargo is available ───────────────────────────────────────────
@@ -214,8 +222,8 @@ if (-not $installedPrebuilt) {
             Write-Host "  Pulling latest changes from origin/main..." -ForegroundColor Gray
             Push-Location $globalSrc
             try {
-                cmd /c "git fetch --depth 1 origin main >nul 2>&1"
-                cmd /c "git reset --hard origin/main >nul 2>&1"
+                git fetch --depth 1 origin main 2>&1 | Out-Null
+                git reset --hard origin/main 2>&1 | Out-Null
             } finally {
                 Pop-Location
             }
@@ -223,7 +231,7 @@ if (-not $installedPrebuilt) {
             if (-not (Test-Path $globalSrc)) {
                 New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null
             }
-            cmd /c "git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git `"$globalSrc`" >nul 2>&1"
+            git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$globalSrc" 2>&1 | Out-Null
         }
 
         Build-AndInstall -SourceDir $globalSrc
