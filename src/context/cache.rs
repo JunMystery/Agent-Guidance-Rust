@@ -81,8 +81,13 @@ mod tests {
 
     #[test]
     fn reuses_snapshot_within_ttl() {
-        let first = project_snapshot(Path::new("."));
-        let second = project_snapshot(Path::new("."));
+        let temp_dir = std::env::temp_dir().join(format!("cache_ttl_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let first = project_snapshot(&temp_dir);
+        let second = project_snapshot(&temp_dir);
         assert!(Arc::ptr_eq(&first, &second));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

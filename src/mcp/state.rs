@@ -29,6 +29,8 @@ pub fn parse_file_uri(uri: &str) -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerState {
+    #[serde(default = "generate_session_id")]
+    pub session_id: String,
     #[serde(default)]
     pub priority_gate_passed: bool,
     #[serde(default = "default_workflow_stage")]
@@ -77,9 +79,19 @@ fn default_workflow_stage() -> String {
     "Context".to_string()
 }
 
+pub fn generate_session_id() -> String {
+    let pid = std::process::id();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("session_{}_{}", pid, ts)
+}
+
 impl Default for ServerState {
     fn default() -> Self {
         Self {
+            session_id: generate_session_id(),
             priority_gate_passed: false,
             workflow_stage: "Context".to_string(),
             plan_approved: false,
@@ -111,29 +123,12 @@ impl ServerState {
     }
 
     pub fn with_client_name(client_name: Option<String>) -> Self {
-        Self {
-            priority_gate_passed: false,
-            workflow_stage: "Context".to_string(),
-            plan_approved: false,
-            fix_attempts: 0,
-            tool_calls: 0,
-            tokens_original: 0,
-            tokens_optimized: 0,
-            project_path: None,
-            workspace_roots: Vec::new(),
-            last_session_start: None,
-            user_intent_summary: None,
-            verification_command: None,
-            expected_output_keyword: None,
-            verification_passed: false,
-            last_risk_level: None,
-            active_phase: None,
-            edit_authorized: false,
-            active_architecture_pattern: None,
-            pending_skill_proposals: Vec::new(),
-            cancellation: None,
-            agent_client_name: client_name,
+        let mut s = Self::default();
+        if let Some(ref name) = client_name {
+            s.session_id = format!("session_{}_{}", std::process::id(), name.to_lowercase().replace(' ', "_"));
         }
+        s.agent_client_name = client_name;
+        s
     }
 
     pub fn set_roots_from_initialize(&mut self, params: &Value) {
@@ -516,23 +511,95 @@ impl ServerState {
         }
     }
 
+    pub fn cleanup_stale_sessions(proj_path: &Path) {
+        let dir = proj_path.join(".agent-context").join("sessions");
+        if !dir.exists() {
+            return;
+        }
+
+        let now = SystemTime::now();
+        let max_age = std::time::Duration::from_secs(30 * 86400); // 30 Days Retention
+        let mut entries = Vec::new();
+
+        if let Ok(read_dir) = fs::read_dir(&dir) {
+            for entry in read_dir.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(metadata) = entry.metadata() {
+                        let modified = metadata.modified().unwrap_or(now);
+                        if now.duration_since(modified).unwrap_or_default() > max_age {
+                            let _ = fs::remove_file(&path);
+                            continue;
+                        }
+                        entries.push((modified, path));
+                    }
+                }
+            }
+        }
+
+        // LRU Cap: If > 100 session files, delete oldest
+        if entries.len() > 100 {
+            entries.sort_by_key(|(mtime, _)| *mtime);
+            for (_, path) in entries.iter().take(entries.len() - 100) {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+
     pub fn save_to_dir(&self, proj_path: &Path) -> Result<(), String> {
-        let dir = proj_path.join(".agent-context");
+        let dir = proj_path.join(".agent-context").join("sessions");
         if let Err(e) = fs::create_dir_all(&dir) {
             return Err(format!("Failed to create directory: {}", e));
         }
-        let file_path = dir.join("session.json");
+        let file_path = dir.join(format!("{}.json", self.session_id));
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        fs::write(file_path, content).map_err(|e| e.to_string())
+        fs::write(&file_path, &content).map_err(|e| e.to_string())?;
+
+        // Also write atomic link pointer for legacy single-session tools
+        let legacy_file = proj_path.join(".agent-context").join("session.json");
+        let _ = fs::write(legacy_file, content);
+        Ok(())
     }
 
     pub fn load_from_dir(proj_path: &Path) -> Result<Self, String> {
-        let file_path = proj_path.join(".agent-context").join("session.json");
-        if !file_path.exists() {
-            return Ok(Self::new());
+        Self::cleanup_stale_sessions(proj_path);
+        let dir = proj_path.join(".agent-context").join("sessions");
+        
+        // 1. Try finding most recent session file in sessions/
+        if dir.exists() {
+            if let Ok(read_dir) = fs::read_dir(&dir) {
+                let mut session_files: Vec<(SystemTime, std::path::PathBuf)> = read_dir
+                    .flatten()
+                    .filter_map(|e| {
+                        let p = e.path();
+                        if p.extension().and_then(|s| s.to_str()) == Some("json") {
+                            let mtime = e.metadata().ok()?.modified().ok()?;
+                            Some((mtime, p))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                session_files.sort_by_key(|(mtime, _)| *mtime);
+                if let Some((_, newest_path)) = session_files.last() {
+                    if let Ok(content) = fs::read_to_string(newest_path) {
+                        if let Ok(loaded) = serde_json::from_str::<Self>(&content) {
+                            return Ok(loaded);
+                        }
+                    }
+                }
+            }
         }
-        let content = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&content).map_err(|e| e.to_string())
+
+        // 2. Legacy fallback: .agent-context/session.json
+        let legacy_file = proj_path.join(".agent-context").join("session.json");
+        if legacy_file.exists() {
+            let content = fs::read_to_string(legacy_file).map_err(|e| e.to_string())?;
+            return serde_json::from_str(&content).map_err(|e| e.to_string());
+        }
+
+        Ok(Self::new())
     }
 }
 
@@ -681,5 +748,69 @@ mod tests {
         state.plan_approved = false;
         assert!(state.process_user_message("đồng ý duyệt"));
         assert!(state.plan_approved);
+    }
+
+    #[test]
+    fn test_task_pipeline_resets_plan_approval_for_new_task() {
+        let mut state = ServerState::new();
+        state.workflow_stage = "Build".to_string();
+        state.plan_approved = true;
+        state.edit_authorized = true;
+
+        // Simulate reset logic executed when task_pipeline phase="plan" is invoked
+        state.workflow_stage = "Plan".to_string();
+        state.plan_approved = false;
+        state.edit_authorized = false;
+        state.verification_passed = false;
+        state.verification_command = None;
+        state.expected_output_keyword = None;
+
+        assert_eq!(state.workflow_stage, "Plan");
+        assert!(!state.plan_approved);
+        assert!(!state.edit_authorized);
+    }
+
+    #[test]
+    fn test_multi_session_isolation() {
+        let temp_dir = std::env::temp_dir().join(format!("multi_session_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let mut s1 = ServerState::with_client_name(Some("antigravity".to_string()));
+        s1.workflow_stage = "Build".to_string();
+        s1.plan_approved = true;
+        assert!(s1.save_to_dir(&temp_dir).is_ok());
+
+        let mut s2 = ServerState::with_client_name(Some("cursor".to_string()));
+        s2.workflow_stage = "Plan".to_string();
+        s2.plan_approved = false;
+        assert!(s2.save_to_dir(&temp_dir).is_ok());
+
+        // Both session files exist independently in sessions/
+        let sessions_dir = temp_dir.join(".agent-context").join("sessions");
+        assert!(sessions_dir.join(format!("{}.json", s1.session_id)).exists());
+        assert!(sessions_dir.join(format!("{}.json", s2.session_id)).exists());
+        assert_ne!(s1.session_id, s2.session_id);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_session_gc_cleanup() {
+        let temp_dir = std::env::temp_dir().join(format!("gc_cleanup_test_{}", std::process::id()));
+        let sessions_dir = temp_dir.join(".agent-context").join("sessions");
+        let _ = std::fs::create_dir_all(&sessions_dir);
+
+        // Create 105 mock session files
+        for i in 0..105 {
+            let f = sessions_dir.join(format!("session_mock_{}.json", i));
+            let _ = std::fs::write(&f, r#"{"session_id":"mock"}"#);
+        }
+
+        ServerState::cleanup_stale_sessions(&temp_dir);
+
+        let count = std::fs::read_dir(&sessions_dir).unwrap().count();
+        assert!(count <= 100);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

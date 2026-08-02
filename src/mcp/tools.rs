@@ -189,8 +189,18 @@ fn handle_tool_call_internal(
             state.update_project_path(&proj_path);
             let phase = arguments.get("phase").and_then(|p| p.as_str()).unwrap_or("plan");
             
-            // Record active phase for per-phase reset
+            // Record active phase and auto-reset approval state when starting a new planning phase
             state.active_phase = Some(phase.to_string());
+            if phase == "plan" {
+                state.workflow_stage = "Plan".to_string();
+                state.plan_approved = false;
+                state.edit_authorized = false;
+                state.verification_passed = false;
+                state.verification_command = None;
+                state.expected_output_keyword = None;
+                let _ = state.save_to_dir(&proj_path);
+                tracing::info!("Reset workflow stage to 'Plan' and plan_approved to false for new task pipeline execution.");
+            }
 
             let snapshot = project_snapshot(&proj_path);
             ensure_not_cancelled(state)?;
@@ -343,10 +353,12 @@ fn handle_tool_call_internal(
                     let final_results = selector.rerank(&query, stage1_results, &profile, 15);
                     ensure_not_cancelled(state)?;
 
-                    state.pending_skill_proposals = final_results
-                        .iter()
-                        .map(|(score, item)| (item.name.clone(), item.relative_path.clone(), *score))
-                        .collect();
+                    if state.pending_skill_proposals.is_empty() {
+                        state.pending_skill_proposals = final_results
+                            .iter()
+                            .map(|(score, item)| (item.name.clone(), item.relative_path.clone(), *score))
+                            .collect();
+                    }
 
                     let formatted_results: Vec<String> = final_results
                         .into_iter()
@@ -395,8 +407,8 @@ fn handle_tool_call_internal(
                     if let (Some(cmd), Some(kw)) = (v_cmd, v_kw) {
                         state.verification_command = Some(cmd.to_string());
                         state.expected_output_keyword = Some(kw.to_string());
-                        state.verification_passed = true;
-                        format!("# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED & PASSED\n\n✓ Post-code verification requirements satisfied.", cmd, kw)
+                        state.verification_passed = false; // SECURITY FIX Bug #4: Registered contract; awaiting test execution
+                        format!("# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED (Awaiting test execution output)\n\n✓ Run verification command to satisfy anti-hallucination requirement.", cmd, kw)
                     } else {
                         format!("# Anti-Hallucination Post-Code Verification Checklist\n\n1. **Empirical Verification Required**: Trigger IDE/CLI `ask_question` tool to let user select verification test command (or confirm manual testing), then pass `verification_command` (e.g. 'cargo test') and `expected_output_keyword` (e.g. 'PASSED').\n2. **User Requirement Alignment**: Re-read the original user prompt and verify all explicitly requested features exist.\n3. **Zero Unverified Assumptions**: Base success strictly on empirical evidence, not speculative assumptions.")
                     }
@@ -516,7 +528,7 @@ fn handle_tool_call_internal(
             match op {
                 "save" => {
                     match state.save_to_dir(&proj_path) {
-                        Ok(_) => "# Session Continuity\n\nSession state saved successfully to `.agent-context/session.json`.".to_string(),
+                        Ok(_) => format!("# Session Continuity\n\nSession state saved successfully to `.agent-context/sessions/{}.json`.", state.session_id),
                         Err(e) => format!("Failed to save session: {}", e),
                     }
                 },
@@ -524,7 +536,15 @@ fn handle_tool_call_internal(
                     match ServerState::load_from_dir(&proj_path) {
                         Ok(loaded) => {
                             *state = loaded;
-                            format!("# Session Continuity\n\nLoaded state. Stage: {}, Total Calls: {}", state.workflow_stage, state.tool_calls)
+                            // SECURITY FIX Bug #1: Reset permission flags when loading session
+                            state.plan_approved = false;
+                            state.edit_authorized = false;
+                            state.active_architecture_pattern = None;
+                            state.verification_passed = false;
+                            state.verification_command = None;
+                            state.expected_output_keyword = None;
+                            state.fix_attempts = 0;
+                            format!("# Session Continuity\n\nLoaded state for session '{}'. Permission flags reset (plan_approved=false). Total Calls: {}", state.session_id, state.tool_calls)
                         },
                         Err(e) => format!("Failed to load session: {}", e),
                     }
@@ -560,10 +580,7 @@ fn handle_tool_call_internal(
                     )
                 },
                 "advance" => {
-                    // Composite action: process user message -> set target stage -> authorize edit in 1 call
-                    if let Some(user_msg) = arguments.get("user_message").or_else(|| arguments.get("last_user_message")).and_then(|m| m.as_str()) {
-                        state.process_user_message(user_msg);
-                    }
+                    // SECURITY FIX Bug #3: Do NOT auto-process user_message in advance to prevent agent self-approval
                     let target_stage = arguments.get("target_stage").and_then(|t| t.as_str()).unwrap_or("Build");
                     let stage_res = state.set_stage(target_stage);
 
@@ -624,10 +641,7 @@ fn handle_tool_call_internal(
                     }
                 },
                 _ => {
-                    // "check" action
-                    if let Some(user_msg) = arguments.get("user_message").or_else(|| arguments.get("last_user_message")).and_then(|m| m.as_str()) {
-                        state.process_user_message(user_msg);
-                    }
+                    // "check" action — SECURITY FIX Bug #2: READ ONLY (no state mutation)
                     let status_str = if state.workflow_stage == "Build" && !state.plan_approved { "BLOCKED" } else { "PASSED" };
                     let mut resp = format!("# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}", status_str, state.plan_approved, state.workflow_stage, state.fix_attempts);
                     if state.workflow_stage == "Build" && !state.plan_approved {

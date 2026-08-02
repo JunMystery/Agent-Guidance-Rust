@@ -660,6 +660,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in CI"]
     fn test_hybrid_vector_search_fallback() {
         let candidates = vec![
             SkillItem {
