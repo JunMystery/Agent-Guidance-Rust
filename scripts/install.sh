@@ -127,7 +127,7 @@ detect_cargo_target() {
 
 # ── Install / Update binary (Prebuilt download with fallback to build) ───────
 REPO="JunMystery/Agent-Guidance-Rust"
-VERSION="v1.3.2"
+VERSION="v1.3.3"
 
 detect_target_asset() {
     local os arch

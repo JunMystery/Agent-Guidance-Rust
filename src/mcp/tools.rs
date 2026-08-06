@@ -80,6 +80,30 @@ fn is_generic_home_dir(p: &Path) -> bool {
     false
 }
 
+pub fn detect_project_architecture(proj_path: &Path) -> String {
+    let files = scan_project(proj_path, 2);
+    let paths: Vec<String> = files.into_iter().map(|f| f.path.to_lowercase()).collect();
+
+    if paths.iter().any(|p| p.contains("domain") || p.contains("usecase") || p.contains("infrastructure")) {
+        "Clean_Architecture".to_string()
+    } else if paths.iter().any(|p| p.contains("controllers") || p.contains("services") || p.contains("models")) {
+        "Layered_Architecture".to_string()
+    } else if paths.iter().any(|p| p.contains("features") || p.contains("modules")) {
+        "Package_By_Feature".to_string()
+    } else {
+        "Orchestrator".to_string()
+    }
+}
+
+pub fn resolve_architecture_pattern(raw_pattern: &str, proj_path: &Path) -> String {
+    let trimmed = raw_pattern.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") || trimmed.eq_ignore_ascii_case("none") {
+        detect_project_architecture(proj_path)
+    } else {
+        trimmed.to_string()
+    }
+}
+
 fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
     // 1. Explicit path parameter provided in tool call (Agent declared working dir)
     if !arg_path.is_empty() && arg_path != "." {
@@ -584,18 +608,18 @@ fn handle_tool_call_internal(
                     let target_stage = arguments.get("target_stage").and_then(|t| t.as_str()).unwrap_or("Build");
                     let stage_res = state.set_stage(target_stage);
 
-                    let arch_pattern = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
-                    if !arch_pattern.is_empty() {
-                        let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
-                        let proj_path = detect_project_path(proj_path_arg, state);
-                        state.update_project_path(&proj_path);
-                        let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
-                        state.last_risk_level = Some(risk_level.to_string());
+                    let raw_arch = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("Auto");
+                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
+                    state.update_project_path(&proj_path);
+                    let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
+                    state.last_risk_level = Some(risk_level.to_string());
 
-                        if matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") && state.workflow_stage == "Build" && state.plan_approved {
-                            state.edit_authorized = true;
-                            state.active_architecture_pattern = Some(arch_pattern.to_string());
-                        }
+                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path);
+
+                    if matches!(arch_pattern.as_str(), "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") && state.workflow_stage == "Build" && state.plan_approved {
+                        state.edit_authorized = true;
+                        state.active_architecture_pattern = Some(arch_pattern);
                     }
 
                     match stage_res {
@@ -612,14 +636,15 @@ fn handle_tool_call_internal(
                     state.update_project_path(&proj_path);
                     let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
                     let justification = arguments.get("justification").and_then(|j| j.as_str()).unwrap_or("No justification provided");
-                    let arch_pattern = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("");
+                    let raw_arch = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("Auto");
+                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path);
                     
                     state.last_risk_level = Some(risk_level.to_string());
 
-                    if !matches!(arch_pattern, "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
+                    if !matches!(arch_pattern.as_str(), "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
                         format!(
-                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...)`.",
-                            proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { arch_pattern }
+                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...)`.",
+                            proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { &arch_pattern }
                         )
                     } else if risk_level == "HIGH" && !state.plan_approved {
                         format!(
@@ -628,7 +653,7 @@ fn handle_tool_call_internal(
                         )
                     } else if state.workflow_stage == "Build" && state.plan_approved {
                         state.edit_authorized = true;
-                        state.active_architecture_pattern = Some(arch_pattern.to_string());
+                        state.active_architecture_pattern = Some(arch_pattern.clone());
                         format!(
                             "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Declared Risk: {}\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
                             proj_path.display(), risk_level, arch_pattern, justification, state.workflow_stage, arch_pattern
@@ -794,5 +819,21 @@ mod tests {
         assert!(empty_res.is_ok());
         let empty_text = empty_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
         assert!(empty_text.contains("No skills selected"));
+    }
+
+    #[test]
+    fn test_auto_architecture_detection() {
+        let cwd = std::env::current_dir().unwrap();
+        let detected = detect_project_architecture(&cwd);
+        assert!(matches!(detected.as_str(), "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator"));
+
+        let auto_resolved = resolve_architecture_pattern("Auto", &cwd);
+        assert_eq!(auto_resolved, detected);
+
+        let empty_resolved = resolve_architecture_pattern("", &cwd);
+        assert_eq!(empty_resolved, detected);
+
+        let explicit_resolved = resolve_architecture_pattern("Clean_Architecture", &cwd);
+        assert_eq!(explicit_resolved, "Clean_Architecture");
     }
 }

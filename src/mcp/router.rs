@@ -247,7 +247,7 @@ pub fn handle_request(
                             "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance)" },
                             "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit / advance)" },
                             "justification": { "type": "string", "description": "Reason for edits (for authorize_edit / advance)" },
-                            "architecture_pattern": { "type": "string", "enum": ["Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Declared architecture pattern (for authorize_edit / advance)" }
+                            "architecture_pattern": { "type": "string", "enum": ["Auto", "Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Declared architecture pattern (for authorize_edit / advance). Default is 'Auto' (auto-detects project architecture)." }
                         },
                         "required": ["action"]
                     }
