@@ -26,14 +26,14 @@ Applies to ALL agent interactions: planning, coding, testing, debugging, reviewi
 
 | Objective | Primary Tool | Note |
 | --- | --- | --- |
-| Start task/phase | `agent-guidance_task_pipeline(task="...")` | One-call context, tree, recommendations |
+| Start task/phase | `agent-guidance_task_pipeline(task="...", project_path="<abs_path>", phase="plan")` | One-call context, tree, recommendations |
 | Coding standards/skills | `agent-guidance_guidance(operation="search", query="...")` | Only source for standards & skills |
-| Read file | `agent-guidance_project_context(operation="read", relative_path="...")` | Capped at 300 lines |
-| Search codebase | `agent-guidance_project_context(operation="search", query="...")` | Bounded text search |
-| View file structure | `agent-guidance_project_context(operation="structure", relative_path="...")` | Class/method/function hierarchy |
-| Extract symbols | `agent-guidance_project_context(operation="symbols", relative_path="...")` | Flat list of signatures |
-| Symbol references | `agent-guidance_project_context(operation="references", query="...")` | Find usages across codebase |
-| Directory tree | `agent-guidance_project_context(operation="tree")` | Optimized codebase tree |
+| Read file | `agent-guidance_project_context(operation="read", project_path="<abs_path>", relative_path="...")` | Capped at 300 lines |
+| Search codebase | `agent-guidance_project_context(operation="search", project_path="<abs_path>", query="...")` | Bounded text search |
+| View file structure | `agent-guidance_project_context(operation="structure", project_path="<abs_path>", relative_path="...")` | Class/method/function hierarchy |
+| Extract symbols | `agent-guidance_project_context(operation="symbols", project_path="<abs_path>", relative_path="...")` | Flat list of signatures |
+| Symbol references | `agent-guidance_project_context(operation="references", project_path="<abs_path>", query="...")` | Find usages across codebase |
+| Directory tree | `agent-guidance_project_context(operation="tree", project_path="<abs_path>")` | Optimized codebase tree |
 | Structured workflow | `agent-guidance_guidance(operation="workflow", identifier="plan"|"code"|"test")` | Auto-chained workflow |
 | Pre-code checklist | `agent-guidance_guidance(operation="precode", query="...")` | Rules for arch, security, conventions |
 | Post-code verification | `agent-guidance_verify(query="...")` | Auto-detect tests/reviews/audits |
@@ -48,19 +48,18 @@ Applies to ALL agent interactions: planning, coding, testing, debugging, reviewi
 
 **Standard Lifecycle:** `[Context] -> [Plan] -> [Ask/Revise] -> [Build] -> [Test/Recheck] -> [Fix] -> [Document]/[Proposal]`
 
-**Gate Check & Intent Routing:**
-1. **Investigatory / Read-Only Requests:** Call `workflow_gate(action="check")` or `project_context(...)` directly. No edit authorization or full pipeline needed.
-2. **Task & Coding Requests:** Call `workflow_gate(action="check")` and `task_pipeline(...)` in parallel at turn start.
-3. **Stage Transitions & Edit Authorization:** Use the composite `workflow_gate(action="advance", user_message="...", target_stage="Build", architecture_pattern="...")` to perform check + stage transition + edit authorization in a **single MCP call**.
-4. **Planning Loop:** Propose plan → Request approval → Move to `Build` ONLY after explicit approval.
-5. **Execution Loop:** Move to `Test/Recheck` after coding. If bugs occur, move to `Fix` then re-test.
-6. **Circuit Breaker:** Max 3 consecutive fix attempts per issue. If failed, STOP editing, set stage to `Ask/Revise`, and seek user guidance.
+**MANDATORY Gate Check:**
+Call `workflow_gate(action="check", user_message="<latest_user_message>")` at the start of EVERY turn before using other tools. If `plan_approved: false` or `WORKFLOW_STAGE_BLOCKED`, STOP editing/writing code and request user approval.
+
+1. **Planning Loop:** Propose plan → Request approval → Move to `Build` ONLY after explicit approval.
+2. **Execution Loop:** Move to `Test/Recheck` after coding. If bugs occur, move to `Fix` then re-test.
+3. **Circuit Breaker:** Max 3 consecutive fix attempts per issue. If failed, STOP editing, set stage to `Ask/Revise`, and seek user guidance.
 
 ---
 
-### 9 Core Rules
+### 9 Core Rules (No Exceptions)
 
-1. **Context & Parallel Init:** Run `task_pipeline` or `project_context` to gain context. You MAY invoke `workflow_gate(check)` and `task_pipeline` in parallel during initial turn execution. Call `select_skills` only if specialized skills are needed.
+1. **Context First:** Run `agent-guidance_task_pipeline(task="...", project_path="<abs_path>", phase="plan")` or `agent-guidance_project_context(operation="...", project_path="<abs_path>")` before reading files or modifying code. Always pass the absolute working repository path as `project_path`. If skills are proposed, trigger the IDE/CLI `ask_question` tool to let the user interactively choose skills, then call `select_skills(skills=[...])`. only if specialized skills are needed.
 2. **Fast Edit Authorization:** Use composite `workflow_gate(action="advance", ...)` or `workflow_gate(action="authorize_edit", ...)` before modifying files.
 3. **Token Budget:** Always prioritize MCP tools over raw filesystem access.
 4. **No Direct FS:** Avoid direct file reads/searches when optimized MCP tools exist.

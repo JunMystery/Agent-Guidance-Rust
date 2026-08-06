@@ -170,7 +170,7 @@ function Build-AndInstall {
 
 # ── Install / Update binary (Prebuilt download with fallback to build) ───────
 $repo = "JunMystery/Agent-Guidance-Rust"
-$version = "v1.3.1"
+$version = "v1.2.7"
 $assetName = "agent-guidance-windows-x86_64.zip"
 $url = "https://github.com/$repo/releases/download/$version/$assetName"
 

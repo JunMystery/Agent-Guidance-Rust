@@ -125,20 +125,20 @@ fn detect_project_path(arg_path: &str, state: &ServerState) -> PathBuf {
         }
     }
 
-    // 6. Global persistent project path from prior agent session
-    if let Some(global_path) = ServerState::read_global_project_path() {
-        let p = PathBuf::from(global_path);
-        if p.is_dir() && !is_generic_home_dir(&p) {
-            return p;
-        }
-    }
-
-    // 7. Fallback to process current working directory (if not Antigravity installation root)
+    // 6. Process current working directory (if not Antigravity installation root or generic home)
     if let Ok(cwd) = std::env::current_dir() {
         if !cwd.to_string_lossy().to_lowercase().contains("antigravity")
             && !is_generic_home_dir(&cwd)
         {
             return cwd;
+        }
+    }
+
+    // 7. Global persistent project path from prior agent session (fallback if process CWD unavailable)
+    if let Some(global_path) = ServerState::read_global_project_path() {
+        let p = PathBuf::from(global_path);
+        if p.is_dir() && !is_generic_home_dir(&p) {
+            return p;
         }
     }
 
@@ -733,12 +733,13 @@ mod tests {
         let res2 = detect_project_path(".", &state2);
         assert_eq!(res2, explicit);
 
-        // 4. Check global project path memory file
+        // 4. Check that process CWD takes priority over stale global_path_file
         let global_path_file = ServerState::global_project_path_file();
-        let _ = std::fs::write(&global_path_file, explicit.to_string_lossy().as_bytes());
+        let parent_dir = explicit.parent().unwrap_or(&explicit);
+        let _ = std::fs::write(&global_path_file, parent_dir.to_string_lossy().as_bytes());
         let state_global = ServerState::new();
         let res_global = detect_project_path(".", &state_global);
-        assert_eq!(res_global, explicit);
+        assert_eq!(res_global, explicit); // Must return process current_dir (explicit), not global_path_file (parent_dir)
         let _ = std::fs::remove_file(&global_path_file);
     }
 
