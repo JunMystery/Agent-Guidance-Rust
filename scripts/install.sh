@@ -126,8 +126,19 @@ detect_cargo_target() {
 }
 
 # ── Install / Update binary (Prebuilt download with fallback to build) ───────
-REPO="JunMystery/Agent-Guidance-Rust"
-VERSION="v1.3.3"
+# Auto-detect the latest published release version from GitHub API
+VERSION=""
+if command -v curl &>/dev/null; then
+    VERSION="$(curl -sSL "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+elif command -v wget &>/dev/null; then
+    VERSION="$(wget -qO- "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+fi
+if [ -z "$VERSION" ]; then
+    VERSION="v1.3.4"
+    echo -e "  ${YELLOW}⚠️  Could not fetch latest release tag, defaulting to ${VERSION}${NC}"
+else
+    echo -e "  ${GRAY}Latest release: ${VERSION}${NC}"
+fi
 
 detect_target_asset() {
     local os arch
