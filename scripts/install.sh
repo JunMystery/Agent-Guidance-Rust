@@ -126,6 +126,8 @@ detect_cargo_target() {
 }
 
 # ── Install / Update binary (Prebuilt download with fallback to build) ───────
+REPO="JunMystery/Agent-Guidance-Rust"
+
 # Auto-detect the latest published release version from GitHub API
 VERSION=""
 if command -v curl &>/dev/null; then
