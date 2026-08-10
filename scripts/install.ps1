@@ -185,14 +185,15 @@ try {
 $url = "https://github.com/$repo/releases/download/$version/$assetName"
 
 function Try-DownloadPrebuilt {
+    param([string]$DownloadUrl, [string]$Asset)
     Write-Host ""
-    Write-Host "Attempting prebuilt binary installation ($assetName)..." -ForegroundColor Cyan
+    Write-Host "Attempting prebuilt binary installation ($Asset)..." -ForegroundColor Cyan
     $tmpDir = Join-Path $env:TEMP "ag-download-$(Get-Random)"
     New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
-    $zipPath = Join-Path $tmpDir $assetName
+    $zipPath = Join-Path $tmpDir $Asset
 
     try {
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -ErrorAction Stop
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
         if ((Test-Path $zipPath) -and ((Get-Item $zipPath).Length -gt 0)) {
             Write-Host "  OK Extracting prebuilt release package..." -ForegroundColor Green
             Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force -ErrorAction Stop
@@ -207,7 +208,7 @@ function Try-DownloadPrebuilt {
             }
         }
     } catch {
-        Write-Host "  Prebuilt binary download not available or failed." -ForegroundColor Yellow
+        Write-Host "  Prebuilt binary download not available or failed. ($_)" -ForegroundColor Yellow
     }
     Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
     return $false
@@ -215,7 +216,7 @@ function Try-DownloadPrebuilt {
 
 $installedPrebuilt = $false
 if (-not $buildDir) {
-    $installedPrebuilt = Try-DownloadPrebuilt
+    $installedPrebuilt = Try-DownloadPrebuilt -DownloadUrl $url -Asset $assetName
 }
 
 if (-not $installedPrebuilt) {
