@@ -423,7 +423,7 @@ impl ServerState {
             "Plan" => {
                 if tool_name == "project_context" {
                     let op = args.get("operation").and_then(|o| o.as_str()).unwrap_or("");
-                    if op == "diff" || op == "architecture" {
+                    if op == "diff" {
                         return Err(format!(
                             "WORKFLOW_STAGE_BLOCKED: Operation '{}' on project_context is blocked in 'Plan' stage.",
                             op
@@ -472,12 +472,14 @@ impl ServerState {
                         .unwrap_or("");
                     if !matches!(
                         arch_pattern,
-                        "Clean_Architecture"
+                        "Auto"
+                            | "auto"
+                            | "Clean_Architecture"
                             | "Layered_Architecture"
                             | "Package_By_Feature"
                             | "Orchestrator"
                     ) {
-                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', or 'Orchestrator') in `workflow_gate(action=\"authorize_edit\")`.".to_string())
+                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', or 'Auto') in `workflow_gate(action=\"authorize_edit\")`.".to_string())
                     } else {
                         Ok(())
                     }

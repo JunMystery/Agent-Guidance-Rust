@@ -81,7 +81,7 @@ fn is_generic_home_dir(p: &Path) -> bool {
 }
 
 pub fn detect_project_architecture(proj_path: &Path) -> String {
-    let files = scan_project(proj_path, 2);
+    let files = scan_project(proj_path, 3);
     let paths: Vec<String> = files.into_iter().map(|f| f.path.to_lowercase()).collect();
 
     if paths.iter().any(|p| p.contains("domain") || p.contains("usecase") || p.contains("infrastructure")) {
@@ -258,13 +258,17 @@ fn handle_tool_call_internal(
                 "-> SKILL_PROPOSAL: Trigger IDE/CLI `ask_question` tool to present recommended skills interactively to user, then call `select_skills(skills=[...])` with chosen skills (or `select_skills(skills=[])` if skipped)."
             };
 
+            let detected_arch = detect_project_architecture(&proj_path);
+            state.active_architecture_pattern = Some(detected_arch.clone());
+
             state.record_call(1500, 450);
             format!(
-                "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {}\n\n## Recommendations\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
+                "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {}\n\n## Recommendations\n{}\n\n## Architecture Guidance\n- Detected Pattern: {}\n- Enforce: Create thin dispatcher main + sub-module files from line 1 (Upfront Architecture)\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
                 task,
                 phase,
                 proj_path.display(),
                 if rec_skills.is_empty() { "No specific skill recommendations required for this task (Token budget saved).".to_string() } else { rec_skills.join("\n") },
+                detected_arch,
                 execution_seq,
                 file_count,
                 tree_preview.join("\n"),
@@ -422,7 +426,10 @@ fn handle_tool_call_internal(
                     format!("# Dev Workflow Guidance: [{}]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document", stage)
                 },
                 "precode" => {
-                    format!("# Pre-Code Verification Checklist\n\n1. Enforce Upfront Orchestrator Architecture (create thin dispatcher main + sub-module files from line 1, do NOT wait for 300 LOC refactoring)\n2. Verify symbols via project_context search\n3. Use explicit non-null checks\n4. Check error propagation")
+                    let active_arch = state.active_architecture_pattern
+                        .clone()
+                        .unwrap_or_else(|| detect_project_architecture(&detect_project_path(".", state)));
+                    format!("# Pre-Code Verification Checklist\n\n1. Enforce Upfront Architecture (Detected Pattern: '{}' - create thin dispatcher main + sub-module files from line 1, do NOT wait for 300 LOC refactoring)\n2. Verify symbols via project_context search\n3. Use explicit non-null checks\n4. Check error propagation", active_arch)
                 },
                 "verify" => {
                     let v_cmd = arguments.get("verification_command").and_then(|v| v.as_str());
@@ -535,6 +542,15 @@ fn handle_tool_call_internal(
                     }
                     state.record_call(5000, 500);
                     format!("# Context Search Results for '{}'\n\nMatching Files (Max 20):\n\n{}", query, if results.is_empty() { "No matches found.".to_string() } else { results.into_iter().take(20).collect::<Vec<_>>().join("\n") })
+                },
+                "architecture" => {
+                    let arch_pattern = detect_project_architecture(&proj_path);
+                    state.active_architecture_pattern = Some(arch_pattern.clone());
+                    state.record_call(1000, 200);
+                    format!(
+                        "# Project Architecture Analysis\n\n- Detected Pattern: {}\n- Workspace Root: {}\n\nArchitectural Guidelines:\n- Clean_Architecture: Enforce strict separation between domain, usecase, infrastructure.\n- Layered_Architecture: Enforce controllers -> services -> models flow.\n- Package_By_Feature: Organize code by features/modules.\n- Orchestrator: Keep dispatcher thin and split logic into sub-modules upfront.",
+                        arch_pattern, proj_path.display()
+                    )
                 },
                 _ => format!("Project context operation '{}' completed.", op),
             }
@@ -835,5 +851,60 @@ mod tests {
 
         let explicit_resolved = resolve_architecture_pattern("Clean_Architecture", &cwd);
         assert_eq!(explicit_resolved, "Clean_Architecture");
+    }
+
+    #[test]
+    fn test_auto_architecture_gate_authorization() {
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        // 1. Authorize edit with 'Auto' pattern should succeed and resolve pattern
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "authorize_edit",
+                "architecture_pattern": "Auto",
+                "risk_level": "LOW",
+                "justification": "Refactoring test"
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok(), "workflow_gate authorize_edit with 'Auto' must succeed: {:?}", res);
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Status: PASSED"));
+        assert!(state.edit_authorized);
+        assert!(state.active_architecture_pattern.is_some());
+
+        // 2. Query precode guidance should contain active architecture
+        let precode_res = handle_tool_call("guidance", json!({ "operation": "precode" }), &mut state);
+        assert!(precode_res.is_ok());
+        let precode_text = precode_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(precode_text.contains("Detected Pattern:"));
+    }
+
+    #[test]
+    fn test_project_context_architecture_operation() {
+        let mut state = ServerState::new();
+        // project_context(operation="architecture") should succeed even in Plan stage
+        state.set_stage("Plan").unwrap();
+
+        let res = handle_tool_call("project_context", json!({ "operation": "architecture" }), &mut state);
+        assert!(res.is_ok(), "project_context operation 'architecture' must succeed in Plan stage: {:?}", res);
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("# Project Architecture Analysis"));
+        assert!(text.contains("Detected Pattern:"));
+    }
+
+    #[test]
+    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in unit tests"]
+    fn test_task_pipeline_architecture_guidance_output() {
+        let mut state = ServerState::new();
+
+        let res = handle_tool_call("task_pipeline", json!({ "task": "build new feature", "phase": "plan" }), &mut state);
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("## Architecture Guidance"));
+        assert!(text.contains("Detected Pattern:"));
     }
 }

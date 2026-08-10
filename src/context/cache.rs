@@ -57,7 +57,7 @@ pub fn project_snapshot(root: &Path) -> Arc<ProjectSnapshot> {
     }
 
     let snapshot = Arc::new(ProjectSnapshot {
-        files: Arc::new(scan_project(&canonical_root, 2)),
+        files: Arc::new(scan_project(&canonical_root, 3)),
         skills: Arc::new(load_all_skills(&canonical_root)),
     });
 
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn reuses_snapshot_within_ttl() {
-        let temp_dir = std::env::temp_dir().join(format!("cache_ttl_test_{}", std::process::id()));
+        let temp_dir = std::env::temp_dir().join(format!("cache_ttl_test_{}_{:?}", std::process::id(), std::thread::current().id()));
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let first = project_snapshot(&temp_dir);
