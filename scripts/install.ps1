@@ -170,8 +170,18 @@ function Build-AndInstall {
 
 # ── Install / Update binary (Prebuilt download with fallback to build) ───────
 $repo = "JunMystery/Agent-Guidance-Rust"
-$version = "v1.3.3"
 $assetName = "agent-guidance-windows-x86_64.zip"
+
+# Auto-detect the latest published release version from GitHub API
+try {
+    $latestMeta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -ErrorAction Stop
+    $version = $latestMeta.tag_name
+    Write-Host "  Latest release: $version" -ForegroundColor Gray
+} catch {
+    $version = "v1.3.4"
+    Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
+}
+
 $url = "https://github.com/$repo/releases/download/$version/$assetName"
 
 function Try-DownloadPrebuilt {
@@ -222,8 +232,8 @@ if (-not $installedPrebuilt) {
             Write-Host "  Pulling latest changes from origin/main..." -ForegroundColor Gray
             Push-Location $globalSrc
             try {
-                git fetch --depth 1 origin main 2>&1 | Out-Null
-                git reset --hard origin/main 2>&1 | Out-Null
+                $null = git fetch --depth 1 origin main 2>$null
+                $null = git reset --hard origin/main 2>$null
             } finally {
                 Pop-Location
             }
@@ -231,7 +241,7 @@ if (-not $installedPrebuilt) {
             if (-not (Test-Path $globalSrc)) {
                 New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null
             }
-            git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$globalSrc" 2>&1 | Out-Null
+            $null = git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$globalSrc" 2>$null
         }
 
         Build-AndInstall -SourceDir $globalSrc
