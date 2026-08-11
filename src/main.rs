@@ -13,7 +13,7 @@ mod mcp;
 mod ml;
 mod optimizer;
 
-use mcp::config::{run_setup, run_verify_setup, run_uninstall};
+use mcp::config::{run_setup, run_uninstall, run_verify_setup};
 use ml::embeddings::generate_precomputed_cache;
 
 #[cfg(not(unix))]
@@ -33,7 +33,12 @@ async fn main() -> Result<()> {
         let exe_path = env::current_exe()?;
         let target_bin = if cfg!(windows) {
             dirs::data_local_dir()
-                .map(|d| d.join("Programs").join("agent-guidance").join("bin").join("agent-guidance.exe"))
+                .map(|d| {
+                    d.join("Programs")
+                        .join("agent-guidance")
+                        .join("bin")
+                        .join("agent-guidance.exe")
+                })
                 .unwrap_or(exe_path)
         } else {
             dirs::home_dir()
@@ -76,7 +81,9 @@ async fn main() -> Result<()> {
         let mut state = mcp::state::ServerState::new();
         state.priority_gate_pass();
         let freshness = state.session_freshness_note();
-        let mut msg = "agent-guidance-mcp session started. Priority gate passed and sentinel file created.".to_string();
+        let mut msg =
+            "agent-guidance-mcp session started. Priority gate passed and sentinel file created."
+                .to_string();
         if let Some(note) = freshness {
             msg.push_str(&format!(" {}", note));
         }
@@ -94,7 +101,10 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    info!("Starting Agent Guidance MCP Rust Server v{}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "Starting Agent Guidance MCP Rust Server v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     #[cfg(unix)]
     {
@@ -120,7 +130,9 @@ async fn main() -> Result<()> {
 
     #[cfg(not(unix))]
     {
-        if args.contains(&"--force-daemon".to_string()) || args.contains(&"--force-client".to_string()) {
+        if args.contains(&"--force-daemon".to_string())
+            || args.contains(&"--force-client".to_string())
+        {
             eprintln!("Daemon/proxy mode is not supported on this platform.");
             std::process::exit(1);
         }

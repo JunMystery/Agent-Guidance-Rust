@@ -2,7 +2,7 @@ use anyhow::Result;
 use candle_core::{Device, Module, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
-use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
+use hf_hub::{Repo, RepoType, api::sync::ApiBuilder};
 use std::sync::{OnceLock, RwLock};
 use tokenizers::Tokenizer;
 
@@ -46,7 +46,9 @@ impl CrossEncoder {
 
         let num_labels = 1usize;
         let hidden_size = config.hidden_size;
-        let classifier_w = vb.pp("classifier").get((num_labels, hidden_size), "weight")?;
+        let classifier_w = vb
+            .pp("classifier")
+            .get((num_labels, hidden_size), "weight")?;
         let classifier_b = vb.pp("classifier").get(num_labels, "bias")?;
         let classifier = candle_nn::Linear::new(classifier_w, Some(classifier_b));
 
@@ -66,10 +68,13 @@ impl CrossEncoder {
             .map_err(|e| anyhow::anyhow!("Encoding error: {}", e))?;
 
         let token_ids = Tensor::new(encoding.get_ids(), &self.device)?.unsqueeze(0)?;
-        let attention_mask = Tensor::new(encoding.get_attention_mask(), &self.device)?.unsqueeze(0)?;
+        let attention_mask =
+            Tensor::new(encoding.get_attention_mask(), &self.device)?.unsqueeze(0)?;
         let token_type_ids = token_ids.zeros_like()?;
 
-        let hidden = self.model.forward(&token_ids, &token_type_ids, Some(&attention_mask))?;
+        let hidden = self
+            .model
+            .forward(&token_ids, &token_type_ids, Some(&attention_mask))?;
         let cls = hidden.narrow(1, 0, 1)?.squeeze(1)?;
         let logits = self.classifier.forward(&cls)?;
         let score = logits.narrow(1, 0, 1)?.squeeze(1)?.to_scalar::<f32>()?;
@@ -79,7 +84,11 @@ impl CrossEncoder {
 
 pub fn cached_cross_encoder() -> Result<std::sync::RwLockReadGuard<'static, CrossEncoder>, String> {
     static CE: OnceLock<Result<RwLock<CrossEncoder>, String>> = OnceLock::new();
-    match CE.get_or_init(|| CrossEncoder::load().map(RwLock::new).map_err(|error| error.to_string())) {
+    match CE.get_or_init(|| {
+        CrossEncoder::load()
+            .map(RwLock::new)
+            .map_err(|error| error.to_string())
+    }) {
         Ok(encoder) => encoder.read().map_err(|_| "RwLock poisoned".to_string()),
         Err(error) => Err(error.clone()),
     }
@@ -98,7 +107,13 @@ impl LLMSelector {
         Self
     }
 
-    pub fn rerank(&self, task: &str, candidates: Vec<(f32, SkillItem)>, profile: &crate::catalog::language_detector::ProjectLanguageProfile, limit: usize) -> Vec<(f32, SkillItem)> {
+    pub fn rerank(
+        &self,
+        task: &str,
+        candidates: Vec<(f32, SkillItem)>,
+        profile: &crate::catalog::language_detector::ProjectLanguageProfile,
+        limit: usize,
+    ) -> Vec<(f32, SkillItem)> {
         let task_lower = task.to_lowercase();
         let candidate_filter = |skill: &SkillItem| -> bool {
             let name_lower = skill.name.to_lowercase();
@@ -110,16 +125,30 @@ impl LLMSelector {
             }
 
             // Universal/general skills always pass
-            let universal_keywords = ["workflow", "guidance", "agent", "flow", "test", "review", "git", "cost", "media", "doc"];
-            if universal_keywords.iter().any(|k| name_lower.contains(k) || relative_lower.contains(k)) {
+            let universal_keywords = [
+                "workflow", "guidance", "agent", "flow", "test", "review", "git", "cost", "media",
+                "doc",
+            ];
+            if universal_keywords
+                .iter()
+                .any(|k| name_lower.contains(k) || relative_lower.contains(k))
+            {
                 return true;
             }
 
             // Check language affinity
             let lang_keywords = [
-                ("rust", "rust"), ("python", "python"), ("javascript", "javascript"),
-                ("typescript", "typescript"), ("go", "go"), ("golang", "go"),
-                ("java", "java"), ("cpp", "c++"), ("c++", "c++"), ("ruby", "ruby"), ("php", "php")
+                ("rust", "rust"),
+                ("python", "python"),
+                ("javascript", "javascript"),
+                ("typescript", "typescript"),
+                ("go", "go"),
+                ("golang", "go"),
+                ("java", "java"),
+                ("cpp", "c++"),
+                ("c++", "c++"),
+                ("ruby", "ruby"),
+                ("php", "php"),
             ];
 
             let mut skill_langs = Vec::new();
@@ -132,7 +161,9 @@ impl LLMSelector {
             if !skill_langs.is_empty() {
                 // Skill is language-bound -> must match project's primary languages or direct prompt mention
                 if !profile.primary_languages.is_empty() {
-                    let matches_primary = skill_langs.iter().any(|l| profile.primary_languages.contains(*l));
+                    let matches_primary = skill_langs
+                        .iter()
+                        .any(|l| profile.primary_languages.contains(*l));
                     if !matches_primary {
                         return false;
                     }
@@ -141,13 +172,21 @@ impl LLMSelector {
 
             // Check domain tech affinity (e.g. database, sql, docker, frontend)
             let domain_keywords = [
-                ("database", "database"), ("sql", "sql"), ("docker", "docker"), ("devops", "devops"),
-                ("frontend", "frontend"), ("web", "web"), ("bash", "bash"), ("shell", "shell")
+                ("database", "database"),
+                ("sql", "sql"),
+                ("docker", "docker"),
+                ("devops", "devops"),
+                ("frontend", "frontend"),
+                ("web", "web"),
+                ("bash", "bash"),
+                ("shell", "shell"),
             ];
 
             for (kw, domain) in domain_keywords {
                 if name_lower.contains(kw) || relative_lower.contains(kw) {
-                    if !profile.secondary_tech.is_empty() && !profile.secondary_tech.contains(domain) {
+                    if !profile.secondary_tech.is_empty()
+                        && !profile.secondary_tech.contains(domain)
+                    {
                         // Project does not have this domain tech stack
                         return false;
                     }
@@ -192,9 +231,12 @@ impl LLMSelector {
                 .collect()
         });
         if !scored.is_empty() {
-            tracing::info!("[ML Pipeline] Cross-Encoder reranked {} candidate skills successfully.", scored.len());
+            tracing::info!(
+                "[ML Pipeline] Cross-Encoder reranked {} candidate skills successfully.",
+                scored.len()
+            );
             scored.par_sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-            
+
             // Relevance threshold cutoff (>= 0.35 probability)
             let filtered: Vec<(f32, SkillItem)> = scored
                 .into_iter()
@@ -208,8 +250,12 @@ impl LLMSelector {
         self.keyword_fallback(task, filtered_candidates, limit)
     }
 
-
-    fn keyword_fallback(&self, task: &str, candidates: Vec<(f32, SkillItem)>, limit: usize) -> Vec<(f32, SkillItem)> {
+    fn keyword_fallback(
+        &self,
+        task: &str,
+        candidates: Vec<(f32, SkillItem)>,
+        limit: usize,
+    ) -> Vec<(f32, SkillItem)> {
         let task_keywords: Vec<String> = task
             .to_lowercase()
             .split_whitespace()
@@ -225,7 +271,12 @@ impl LLMSelector {
             .enumerate()
             .map(|(i, (base_score, skill))| {
                 let name_lower = skill.name.to_lowercase();
-                let content_snippet_lower: String = skill.content.chars().take(300).collect::<String>().to_lowercase();
+                let content_snippet_lower: String = skill
+                    .content
+                    .chars()
+                    .take(300)
+                    .collect::<String>()
+                    .to_lowercase();
                 let mut bonus = 0.0f32;
 
                 for kw in &task_keywords {
@@ -247,12 +298,18 @@ impl LLMSelector {
         let mut candidates_vec = candidates;
         let mut results = Vec::new();
         for (_, i) in scored.into_iter().take(limit) {
-            results.push(std::mem::replace(&mut candidates_vec[i], (0.0, SkillItem {
-                name: String::new(),
-                relative_path: String::new(),
-                source: crate::catalog::store::SkillSource::Embedded,
-                content: String::new(),
-            })));
+            results.push(std::mem::replace(
+                &mut candidates_vec[i],
+                (
+                    0.0,
+                    SkillItem {
+                        name: String::new(),
+                        relative_path: String::new(),
+                        source: crate::catalog::store::SkillSource::Embedded,
+                        content: String::new(),
+                    },
+                ),
+            ));
         }
         results
     }
@@ -267,18 +324,24 @@ mod tests {
     fn test_keyword_fallback() {
         let selector = LLMSelector::new();
         let candidates = vec![
-            (0.5, SkillItem {
-                name: "rust-testing".to_string(),
-                relative_path: "rust-testing/SKILL.md".to_string(),
-                source: SkillSource::Embedded,
-                content: "Testing in Rust.".to_string(),
-            }),
-            (0.8, SkillItem {
-                name: "rust-async".to_string(),
-                relative_path: "rust-async/SKILL.md".to_string(),
-                source: SkillSource::Embedded,
-                content: "Async programming in Rust.".to_string(),
-            }),
+            (
+                0.5,
+                SkillItem {
+                    name: "rust-testing".to_string(),
+                    relative_path: "rust-testing/SKILL.md".to_string(),
+                    source: SkillSource::Embedded,
+                    content: "Testing in Rust.".to_string(),
+                },
+            ),
+            (
+                0.8,
+                SkillItem {
+                    name: "rust-async".to_string(),
+                    relative_path: "rust-async/SKILL.md".to_string(),
+                    source: SkillSource::Embedded,
+                    content: "Async programming in Rust.".to_string(),
+                },
+            ),
         ];
         let ranked = selector.keyword_fallback("rust async programming", candidates, 2);
         assert_eq!(ranked.len(), 2);
@@ -291,18 +354,24 @@ mod tests {
 
         let selector = LLMSelector::new();
         let candidates = vec![
-            (0.8, SkillItem {
-                name: "python-fastapi-guide".to_string(),
-                relative_path: "skills/python-fastapi/SKILL.md".to_string(),
-                content: "FastAPI guidelines".to_string(),
-                source: SkillSource::Embedded,
-            }),
-            (0.8, SkillItem {
-                name: "rust-best-practices".to_string(),
-                relative_path: "skills/rust-best-practices/SKILL.md".to_string(),
-                content: "Rust coding guidelines".to_string(),
-                source: SkillSource::Embedded,
-            }),
+            (
+                0.8,
+                SkillItem {
+                    name: "python-fastapi-guide".to_string(),
+                    relative_path: "skills/python-fastapi/SKILL.md".to_string(),
+                    content: "FastAPI guidelines".to_string(),
+                    source: SkillSource::Embedded,
+                },
+            ),
+            (
+                0.8,
+                SkillItem {
+                    name: "rust-best-practices".to_string(),
+                    relative_path: "skills/rust-best-practices/SKILL.md".to_string(),
+                    content: "Rust coding guidelines".to_string(),
+                    source: SkillSource::Embedded,
+                },
+            ),
         ];
 
         let mut rust_profile = ProjectLanguageProfile::default();

@@ -19,7 +19,7 @@ pub fn inference_pool() -> &'static ThreadPool {
 }
 
 pub fn download_models() -> anyhow::Result<()> {
-    use hf_hub::{api::sync::ApiBuilder, Repo, RepoType};
+    use hf_hub::{Repo, RepoType, api::sync::ApiBuilder};
 
     println!("  Downloading embedding model (118MB)...");
     let emb = ApiBuilder::new()

@@ -254,16 +254,22 @@ where
         let permit = match timeout(
             Duration::from_secs(REQUEST_TIMEOUT_SECS),
             worker_pool.acquire_owned(),
-        ).await {
+        )
+        .await
+        {
             Ok(Ok(permit)) => permit,
             Ok(Err(_)) => {
                 error!("Request worker pool closed");
                 continue;
             }
             Err(_) => {
-                error!("Request worker pool wait exceeded {}s", REQUEST_TIMEOUT_SECS);
+                error!(
+                    "Request worker pool wait exceeded {}s",
+                    REQUEST_TIMEOUT_SECS
+                );
                 if let Some(id) = req_id.clone() {
-                    let resp = JsonRpcResponse::error(id, -32000, "Request worker pool is saturated");
+                    let resp =
+                        JsonRpcResponse::error(id, -32000, "Request worker pool is saturated");
                     let out = serde_json::to_string(&resp).unwrap_or_default() + "\n";
                     let _ = writer.write_all(out.as_bytes()).await;
                     let _ = writer.flush().await;
@@ -486,7 +492,10 @@ pub async fn daemon_main() {
     loop {
         tokio::time::sleep(Duration::from_millis(200)).await;
         if stdio_closed.load(Ordering::SeqCst) && socket_connections.load(Ordering::SeqCst) == 0 {
-            info!("No active connections — daemon will shut down in {}s.", idle_timeout_secs);
+            info!(
+                "No active connections — daemon will shut down in {}s.",
+                idle_timeout_secs
+            );
             for remaining in (1..=idle_timeout_secs).rev() {
                 if remaining % 60 == 0 || (remaining <= 10 && remaining % 2 == 0) {
                     info!("Shutdown in {}s...", remaining);

@@ -1,6 +1,6 @@
-use serde_json::{json, Value};
 use crate::mcp::state::ServerState;
 use crate::mcp::tools::handle_tool_call;
+use serde_json::{Value, json};
 
 pub fn handle_request(
     method: &str,
@@ -23,7 +23,7 @@ pub fn handle_request(
                     "version": env!("CARGO_PKG_VERSION")
                 }
             }))
-        },
+        }
         "notifications/initialized" => Ok(json!({})),
         "client/connect" => {
             if let Some(ref p) = params {
@@ -32,7 +32,7 @@ pub fn handle_request(
                 }
             }
             Ok(json!({}))
-        },
+        }
         "ping" => Ok(json!({})),
         "resources/list" => Ok(json!({
             "resources": [
@@ -72,7 +72,8 @@ pub fn handle_request(
             let params = params.ok_or((-32602, "Missing params".to_string()))?;
             let uri = params.get("uri").and_then(|u| u.as_str()).unwrap_or("");
             match uri {
-                "agent-guidance://system/edit-allowed" | "agent-guidance-mcp://system/edit-allowed" => {
+                "agent-guidance://system/edit-allowed"
+                | "agent-guidance-mcp://system/edit-allowed" => {
                     let edit_allowed = state.workflow_stage == "Build" && state.plan_approved;
                     let payload = json!({
                         "edit_allowed": edit_allowed,
@@ -90,7 +91,7 @@ pub fn handle_request(
                             }
                         ]
                     }))
-                },
+                }
                 "standards://version" => {
                     let payload = json!({
                         "name": "Agent Guidance MCP Rust",
@@ -107,7 +108,7 @@ pub fn handle_request(
                             }
                         ]
                     }))
-                },
+                }
                 "standards://manifest" => {
                     let skills = crate::catalog::store::list_embedded_skills();
                     let payload = json!({
@@ -124,7 +125,7 @@ pub fn handle_request(
                             }
                         ]
                     }))
-                },
+                }
                 "agent-guidance-mcp://system/priority" => {
                     let text = "# Priority Gate Instructions\n\nCall `agent-guidance-mcp_task_pipeline` first before invoking gated tools. This unlocks the gate for your active session.";
                     Ok(json!({
@@ -136,7 +137,7 @@ pub fn handle_request(
                             }
                         ]
                     }))
-                },
+                }
                 "agent-guidance-mcp://system/gate" => {
                     let sentinel_exists = ServerState::priority_gate_path().exists();
                     let payload = json!({
@@ -153,11 +154,12 @@ pub fn handle_request(
                             }
                         ]
                     }))
-                },
+                }
                 _ => {
                     if uri.starts_with("standards://skill/") {
                         let skill_name = uri.trim_start_matches("standards://skill/");
-                        if let Some(content) = crate::catalog::store::get_embedded_skill(skill_name) {
+                        if let Some(content) = crate::catalog::store::get_embedded_skill(skill_name)
+                        {
                             return Ok(json!({
                                 "contents": [
                                     {
@@ -172,7 +174,7 @@ pub fn handle_request(
                     Err((-32602, format!("Resource not found: {}", uri)))
                 }
             }
-        },
+        }
         "tools/list" => Ok(json!({
             "tools": [
                 {
@@ -275,14 +277,19 @@ pub fn handle_request(
             }
 
             handle_tool_call(name, arguments, state)
-        },
+        }
         _ => Err((-32601, format!("Method not found: {}", method))),
     }
 }
 
 pub fn is_read_only_request(method: &str, params: &Option<Value>) -> bool {
     match method {
-        "initialize" | "notifications/initialized" | "ping" | "resources/list" | "resources/read" | "tools/list" => true,
+        "initialize"
+        | "notifications/initialized"
+        | "ping"
+        | "resources/list"
+        | "resources/read"
+        | "tools/list" => true,
         "client/connect" => false,
         "tools/call" => {
             if let Some(p) = params {
@@ -291,19 +298,25 @@ pub fn is_read_only_request(method: &str, params: &Option<Value>) -> bool {
                 match name {
                     "project_context" | "guidance" => true,
                     "workflow_gate" => {
-                        let action = args.and_then(|a| a.get("action")).and_then(|act| act.as_str()).unwrap_or("check");
+                        let action = args
+                            .and_then(|a| a.get("action"))
+                            .and_then(|act| act.as_str())
+                            .unwrap_or("check");
                         matches!(action, "check" | "status")
-                    },
+                    }
                     "session_continuity" => {
-                        let op = args.and_then(|a| a.get("operation")).and_then(|o| o.as_str()).unwrap_or("load");
+                        let op = args
+                            .and_then(|a| a.get("operation"))
+                            .and_then(|o| o.as_str())
+                            .unwrap_or("load");
                         op == "load"
-                    },
+                    }
                     _ => false,
                 }
             } else {
                 false
             }
-        },
+        }
         _ => false,
     }
 }
@@ -331,7 +344,12 @@ mod tests {
         let read_val = read_res.unwrap();
         let contents = &read_val["contents"][0];
         assert_eq!(contents["mimeType"], "application/json");
-        assert!(contents["text"].as_str().unwrap().contains("Agent Guidance MCP Rust"));
+        assert!(
+            contents["text"]
+                .as_str()
+                .unwrap()
+                .contains("Agent Guidance MCP Rust")
+        );
 
         // 3. Test resources/read for agent-guidance-mcp://system/priority
         let read_params = json!({"uri": "agent-guidance-mcp://system/priority"});
@@ -340,6 +358,11 @@ mod tests {
         let read_val = read_res.unwrap();
         let contents = &read_val["contents"][0];
         assert_eq!(contents["mimeType"], "text/markdown");
-        assert!(contents["text"].as_str().unwrap().contains("Priority Gate Instructions"));
+        assert!(
+            contents["text"]
+                .as_str()
+                .unwrap()
+                .contains("Priority Gate Instructions")
+        );
     }
 }

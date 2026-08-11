@@ -44,7 +44,8 @@ pub const INTEGRATED_REPOS: &[RepoUpdateSpec] = &[
 
 pub fn get_update_dir() -> PathBuf {
     if cfg!(test) {
-        return std::env::temp_dir().join(format!("agent-guidance-skills-test-{}", std::process::id()));
+        return std::env::temp_dir()
+            .join(format!("agent-guidance-skills-test-{}", std::process::id()));
     }
     dirs::home_dir()
         .map(|h| h.join(".agent-guidance").join("skills"))
@@ -53,7 +54,10 @@ pub fn get_update_dir() -> PathBuf {
 
 fn update_state_path() -> PathBuf {
     if cfg!(test) {
-        return std::env::temp_dir().join(format!("agent-guidance-update-state-test-{}.json", std::process::id()));
+        return std::env::temp_dir().join(format!(
+            "agent-guidance-update-state-test-{}.json",
+            std::process::id()
+        ));
     }
     dirs::home_dir()
         .map(|h| h.join(".agent-guidance").join(".update-state.json"))

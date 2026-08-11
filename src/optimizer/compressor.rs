@@ -10,7 +10,8 @@ pub fn estimate_tokens(text: &str, is_code: bool) -> usize {
 }
 
 pub fn compress_markdown(content: &str) -> String {
-    let re_comments = RE_COMMENTS.get_or_init(|| Regex::new(r"(?s)<!--.*?-->").expect("Invalid comment regex"));
+    let re_comments =
+        RE_COMMENTS.get_or_init(|| Regex::new(r"(?s)<!--.*?-->").expect("Invalid comment regex"));
     let re_badges = RE_BADGES.get_or_init(|| {
         Regex::new(r"!\[.*?\]\(https://img\.shields\.io/.*?\)|!\[.*?\]\(https://badge.*?\)\s*")
             .expect("Invalid badge regex")
@@ -18,7 +19,7 @@ pub fn compress_markdown(content: &str) -> String {
 
     let stripped = re_comments.replace_all(content, "");
     let stripped_badges = re_badges.replace_all(&stripped, "");
-    
+
     let mut lines = Vec::new();
     let mut blank_count = 0;
     for line in stripped_badges.lines() {

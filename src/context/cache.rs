@@ -81,7 +81,11 @@ mod tests {
 
     #[test]
     fn reuses_snapshot_within_ttl() {
-        let temp_dir = std::env::temp_dir().join(format!("cache_ttl_test_{}_{:?}", std::process::id(), std::thread::current().id()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "cache_ttl_test_{}_{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let first = project_snapshot(&temp_dir);

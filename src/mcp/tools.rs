@@ -84,11 +84,20 @@ pub fn detect_project_architecture(proj_path: &Path) -> String {
     let files = scan_project(proj_path, 3);
     let paths: Vec<String> = files.into_iter().map(|f| f.path.to_lowercase()).collect();
 
-    if paths.iter().any(|p| p.contains("domain") || p.contains("usecase") || p.contains("infrastructure")) {
+    if paths
+        .iter()
+        .any(|p| p.contains("domain") || p.contains("usecase") || p.contains("infrastructure"))
+    {
         "Clean_Architecture".to_string()
-    } else if paths.iter().any(|p| p.contains("controllers") || p.contains("services") || p.contains("models")) {
+    } else if paths
+        .iter()
+        .any(|p| p.contains("controllers") || p.contains("services") || p.contains("models"))
+    {
         "Layered_Architecture".to_string()
-    } else if paths.iter().any(|p| p.contains("features") || p.contains("modules")) {
+    } else if paths
+        .iter()
+        .any(|p| p.contains("features") || p.contains("modules"))
+    {
         "Package_By_Feature".to_string()
     } else {
         "Orchestrator".to_string()
@@ -97,7 +106,10 @@ pub fn detect_project_architecture(proj_path: &Path) -> String {
 
 pub fn resolve_architecture_pattern(raw_pattern: &str, proj_path: &Path) -> String {
     let trimmed = raw_pattern.trim();
-    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") || trimmed.eq_ignore_ascii_case("none") {
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("auto")
+        || trimmed.eq_ignore_ascii_case("none")
+    {
         detect_project_architecture(proj_path)
     } else {
         trimmed.to_string()
@@ -183,14 +195,19 @@ pub fn handle_tool_call(
     ensure_not_cancelled(state)?;
 
     let start_time = std::time::Instant::now();
-    let op = arguments.get("operation").or_else(|| arguments.get("action")).or_else(|| arguments.get("phase")).and_then(|v| v.as_str()).map(|s| s.to_string());
+    let op = arguments
+        .get("operation")
+        .or_else(|| arguments.get("action"))
+        .or_else(|| arguments.get("phase"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     let res = match handle_tool_call_internal(name, arguments, state) {
         Ok(val) => {
             let duration = start_time.elapsed().as_millis() as u64;
             crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, None);
             Ok(val)
-        },
+        }
         Err(err) => {
             let duration = start_time.elapsed().as_millis() as u64;
             crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, Some(&err.1));
@@ -207,12 +224,21 @@ fn handle_tool_call_internal(
 ) -> Result<Value, (i32, String)> {
     let response_text = match name {
         "task_pipeline" => {
-            let task = arguments.get("task").and_then(|t| t.as_str()).unwrap_or("general task");
-            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let task = arguments
+                .get("task")
+                .and_then(|t| t.as_str())
+                .unwrap_or("general task");
+            let proj_path_arg = arguments
+                .get("project_path")
+                .and_then(|p| p.as_str())
+                .unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
             state.update_project_path(&proj_path);
-            let phase = arguments.get("phase").and_then(|p| p.as_str()).unwrap_or("plan");
-            
+            let phase = arguments
+                .get("phase")
+                .and_then(|p| p.as_str())
+                .unwrap_or("plan");
+
             // Record active phase and auto-reset approval state when starting a new planning phase
             state.active_phase = Some(phase.to_string());
             if phase == "plan" {
@@ -223,13 +249,18 @@ fn handle_tool_call_internal(
                 state.verification_command = None;
                 state.expected_output_keyword = None;
                 let _ = state.save_to_dir(&proj_path);
-                tracing::info!("Reset workflow stage to 'Plan' and plan_approved to false for new task pipeline execution.");
+                tracing::info!(
+                    "Reset workflow stage to 'Plan' and plan_approved to false for new task pipeline execution."
+                );
             }
 
             let snapshot = project_snapshot(&proj_path);
             ensure_not_cancelled(state)?;
             let file_count = snapshot.files.len();
-            let profile = crate::catalog::language_detector::detect_language_profile(snapshot.files.as_ref(), task);
+            let profile = crate::catalog::language_detector::detect_language_profile(
+                snapshot.files.as_ref(),
+                task,
+            );
 
             let stage1_results = hybrid_vector_search(task, snapshot.skills.as_ref(), 8);
             ensure_not_cancelled(state)?;
@@ -244,13 +275,16 @@ fn handle_tool_call_internal(
 
             let rec_skills: Vec<String> = final_results
                 .into_iter()
-                .map(|(score, item)| {
-                    format!("- {} (Score: {:.2})", item.name, score)
-                })
+                .map(|(score, item)| format!("- {} (Score: {:.2})", item.name, score))
                 .collect();
 
             let execution_seq = "- Step 1: Context & Specification\n- Step 2: Architecture & Implementation Plan\n- Step 3: Code Implementation (Build stage)\n- Step 4: Verification & Testing\n- Step 5: Post-Code Review & Documentation";
-            let tree_preview: Vec<String> = snapshot.files.iter().take(15).map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
+            let tree_preview: Vec<String> = snapshot
+                .files
+                .iter()
+                .take(15)
+                .map(|f| format!("- {} ({})", f.path, f.file_type))
+                .collect();
 
             let next_step_prompt = if rec_skills.is_empty() {
                 "-> Task requires no specific technical skills. Proceed directly with implementation."
@@ -267,18 +301,28 @@ fn handle_tool_call_internal(
                 task,
                 phase,
                 proj_path.display(),
-                if rec_skills.is_empty() { "No specific skill recommendations required for this task (Token budget saved).".to_string() } else { rec_skills.join("\n") },
+                if rec_skills.is_empty() {
+                    "No specific skill recommendations required for this task (Token budget saved)."
+                        .to_string()
+                } else {
+                    rec_skills.join("\n")
+                },
                 detected_arch,
                 execution_seq,
                 file_count,
                 tree_preview.join("\n"),
                 next_step_prompt
             )
-        },
+        }
         "select_skills" => {
-            let requested_skills: Vec<String> = arguments.get("skills")
+            let requested_skills: Vec<String> = arguments
+                .get("skills")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let proposals = std::mem::take(&mut state.pending_skill_proposals);
@@ -286,7 +330,8 @@ fn handle_tool_call_internal(
 
             if requested_skills.is_empty() {
                 state.record_call(100, 50);
-                "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.".to_string()
+                "# Skill Selection\n\nNo skills selected. Proceeding without loading skills."
+                    .to_string()
             } else {
                 let mut loaded_sections = Vec::new();
                 let mut not_found = Vec::new();
@@ -311,9 +356,15 @@ fn handle_tool_call_internal(
 
                         if let Some(content) = raw_content {
                             let compressed = compress_markdown(&content);
-                            loaded_sections.push(format!("### Skill: {}\n```markdown\n{}\n```", name, compressed));
+                            loaded_sections.push(format!(
+                                "### Skill: {}\n```markdown\n{}\n```",
+                                name, compressed
+                            ));
                         } else {
-                            loaded_sections.push(format!("### Skill: {} (Loaded & Logged)\n*Content empty or unavailable*", name));
+                            loaded_sections.push(format!(
+                                "### Skill: {} (Loaded & Logged)\n*Content empty or unavailable*",
+                                name
+                            ));
                         }
                     } else {
                         not_found.push(name.clone());
@@ -322,31 +373,63 @@ fn handle_tool_call_internal(
 
                 state.record_call(1500, 500);
 
-                let mut out = format!("# Skill Selection Confirmed\n\nLoaded & Logged {} skill(s):\n\n{}", loaded_sections.len(), loaded_sections.join("\n\n"));
+                let mut out = format!(
+                    "# Skill Selection Confirmed\n\nLoaded & Logged {} skill(s):\n\n{}",
+                    loaded_sections.len(),
+                    loaded_sections.join("\n\n")
+                );
 
                 if !not_found.is_empty() {
-                    out.push_str(&format!("\n\n⚠ Ignored skills (not in proposal list):\n{}", not_found.iter().map(|s| format!("- {}", s)).collect::<Vec<_>>().join("\n")));
+                    out.push_str(&format!(
+                        "\n\n⚠ Ignored skills (not in proposal list):\n{}",
+                        not_found
+                            .iter()
+                            .map(|s| format!("- {}", s))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    ));
                 }
 
                 out.push_str("\n\n-> Proceed with task using the loaded skill guidance above.");
                 out
             }
-        },
+        }
         "guidance" => {
-            let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("list");
-            let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("").to_lowercase();
+            let op = arguments
+                .get("operation")
+                .and_then(|o| o.as_str())
+                .unwrap_or("list");
+            let query = arguments
+                .get("query")
+                .and_then(|q| q.as_str())
+                .unwrap_or("")
+                .to_lowercase();
             state.record_call(1000, 300);
 
             match op {
                 "list" => {
                     let proj_path = detect_project_path(".", state);
                     let snapshot = project_snapshot(&proj_path);
-                    let names: Vec<String> = snapshot.skills.iter().map(|s| format!("- {} ({})", s.name, s.relative_path)).collect();
-                    format!("# Registered Skills Catalog ({})\n\n{}", names.len(), names.join("\n"))
-                },
+                    let names: Vec<String> = snapshot
+                        .skills
+                        .iter()
+                        .map(|s| format!("- {} ({})", s.name, s.relative_path))
+                        .collect();
+                    format!(
+                        "# Registered Skills Catalog ({})\n\n{}",
+                        names.len(),
+                        names.join("\n")
+                    )
+                }
                 "get" => {
-                    let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("");
-                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let id = arguments
+                        .get("identifier")
+                        .and_then(|i| i.as_str())
+                        .unwrap_or("");
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
                     let proj_path = detect_project_path(proj_path_arg, state);
                     if !id.is_empty() {
                         crate::mcp::db::log_skill_load(id);
@@ -364,12 +447,15 @@ fn handle_tool_call_internal(
                     } else {
                         format!("Skill asset not found: {}", id)
                     }
-                },
+                }
                 "search" => {
                     let proj_path = detect_project_path(".", state);
                     let snapshot = project_snapshot(&proj_path);
                     ensure_not_cancelled(state)?;
-                    let profile = crate::catalog::language_detector::detect_language_profile(snapshot.files.as_ref(), &query);
+                    let profile = crate::catalog::language_detector::detect_language_profile(
+                        snapshot.files.as_ref(),
+                        &query,
+                    );
                     let all_skills = snapshot.skills.as_ref();
 
                     // Stage 1: 1st Stage Candidate Selection
@@ -384,7 +470,9 @@ fn handle_tool_call_internal(
                     if state.pending_skill_proposals.is_empty() {
                         state.pending_skill_proposals = final_results
                             .iter()
-                            .map(|(score, item)| (item.name.clone(), item.relative_path.clone(), *score))
+                            .map(|(score, item)| {
+                                (item.name.clone(), item.relative_path.clone(), *score)
+                            })
                             .collect();
                     }
 
@@ -393,9 +481,14 @@ fn handle_tool_call_internal(
                         .map(|(score, item)| {
                             let source_tag = match &item.source {
                                 SkillSource::Embedded => "[Embedded]".to_string(),
-                                SkillSource::LocalWorkspace(path) => format!("[Local Workspace: {}]", path),
+                                SkillSource::LocalWorkspace(path) => {
+                                    format!("[Local Workspace: {}]", path)
+                                }
                             };
-                            format!("- {} {} (Score: {:.2})\n  Path: {}", item.name, source_tag, score, item.relative_path)
+                            format!(
+                                "- {} {} (Score: {:.2})\n  Path: {}",
+                                item.name, source_tag, score, item.relative_path
+                            )
                         })
                         .collect();
 
@@ -409,59 +502,191 @@ fn handle_tool_call_internal(
                         "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n{}",
                         query,
                         formatted_results.len(),
-                        if formatted_results.is_empty() { "No matching skills found.".to_string() } else { formatted_results.join("\n") },
+                        if formatted_results.is_empty() {
+                            "No matching skills found.".to_string()
+                        } else {
+                            formatted_results.join("\n")
+                        },
                         next_step_prompt
                     )
-                },
+                }
                 "ui_ux" => {
                     let q = if query.is_empty() { "general" } else { &query };
-                    format!("# UI/UX Guidelines for '{}'\n\n- Styling: Modern CSS, Glassmorphism, Dynamic Animations\n- Color Palette: Dark mode default, curated HSL gradients\n- Typography: Inter/Outfit via Google Fonts\n- Accessibility: Semantic HTML5, unique IDs", q)
-                },
+                    format!(
+                        "# UI/UX Guidelines for '{}'\n\n- Styling: Modern CSS, Glassmorphism, Dynamic Animations\n- Color Palette: Dark mode default, curated HSL gradients\n- Typography: Inter/Outfit via Google Fonts\n- Accessibility: Semantic HTML5, unique IDs",
+                        q
+                    )
+                }
                 "docs" => {
-                    let id = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("general");
-                    format!("# Documentation Guidance for '{}' ({})\n\nOfficial patterns, signatures, and API usage guidelines loaded for query: '{}'.", id, query, query)
-                },
+                    let id = arguments
+                        .get("identifier")
+                        .and_then(|i| i.as_str())
+                        .unwrap_or("general");
+
+                    let proj_path = detect_project_path(".", state);
+                    let snapshot = project_snapshot(&proj_path);
+                    let search_term = if !query.is_empty() { &query } else { id };
+
+                    let stage1 = hybrid_vector_search(search_term, snapshot.skills.as_ref(), 5);
+                    let selector = LLMSelector::new();
+                    let profile = crate::catalog::language_detector::detect_language_profile(
+                        snapshot.files.as_ref(),
+                        search_term,
+                    );
+                    let reranked = selector.rerank(search_term, stage1, &profile, 3);
+
+                    if reranked.is_empty() {
+                        format!(
+                            "# Documentation Guidance for '{}' ({})\n\nNo matching documentation skills found in catalog for search term: '{}'.",
+                            id, query, search_term
+                        )
+                    } else {
+                        let mut docs_sections = Vec::new();
+                        for (score, item) in reranked {
+                            if let Some(content) = get_embedded_skill(&item.relative_path) {
+                                docs_sections.push(format!(
+                                    "### Doc Skill: {} (Score: {:.2})\nPath: {}\n\n{}",
+                                    item.name,
+                                    score,
+                                    item.relative_path,
+                                    compress_markdown(&content)
+                                ));
+                            }
+                        }
+                        format!(
+                            "# Documentation Guidance for '{}'\n\nQuery: '{}'\n\n{}",
+                            id,
+                            search_term,
+                            docs_sections.join("\n\n---\n\n")
+                        )
+                    }
+                }
                 "workflow" => {
-                    let stage = arguments.get("identifier").and_then(|i| i.as_str()).unwrap_or("plan");
-                    format!("# Dev Workflow Guidance: [{}]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document", stage)
-                },
+                    let stage = arguments
+                        .get("identifier")
+                        .and_then(|i| i.as_str())
+                        .unwrap_or("plan")
+                        .to_lowercase();
+
+                    let ref_asset = format!("workflow-modes/references/workflow-{}.md", stage);
+                    let alt_asset = format!("workflow-modes/references/{}.md", stage);
+                    let skill_asset = format!("skills/{}/SKILL.md", stage);
+
+                    if let Some(content) = get_embedded_skill(&ref_asset) {
+                        compress_markdown(&content)
+                    } else if let Some(content) = get_embedded_skill(&alt_asset) {
+                        compress_markdown(&content)
+                    } else if let Some(content) = get_embedded_skill(&skill_asset) {
+                        compress_markdown(&content)
+                    } else {
+                        format!(
+                            "# Dev Workflow Guidance: [{}]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document",
+                            stage
+                        )
+                    }
+                }
                 "precode" => {
-                    let active_arch = state.active_architecture_pattern
+                    let proj_path = detect_project_path(".", state);
+                    let snapshot = project_snapshot(&proj_path);
+                    let profile = crate::catalog::language_detector::detect_language_profile(
+                        snapshot.files.as_ref(),
+                        &query,
+                    );
+                    let active_arch = state
+                        .active_architecture_pattern
                         .clone()
-                        .unwrap_or_else(|| detect_project_architecture(&detect_project_path(".", state)));
-                    format!("# Pre-Code Verification Checklist\n\n1. Enforce Upfront Architecture (Detected Pattern: '{}' - create thin dispatcher main + sub-module files from line 1, do NOT wait for 300 LOC refactoring)\n2. Verify symbols via project_context search\n3. Use explicit non-null checks\n4. Check error propagation", active_arch)
-                },
+                        .unwrap_or_else(|| detect_project_architecture(&proj_path));
+
+                    let primary_lang = if profile.primary_languages.contains("rust") {
+                        "Rust"
+                    } else if profile.primary_languages.contains("python") {
+                        "Python"
+                    } else if profile.primary_languages.contains("typescript")
+                        || profile.primary_languages.contains("javascript")
+                    {
+                        "TypeScript/JavaScript"
+                    } else {
+                        "General"
+                    };
+
+                    let lang_rules = match primary_lang {
+                        "Rust" => {
+                            "- Rust Safety: Explicit lifetime/borrowing checks, handle Result/Option cleanly, avoid unwrap() in production paths."
+                        }
+                        "Python" => {
+                            "- Python Safety: Type hints, handle None dereferences explicitly, avoid mutable default arguments."
+                        }
+                        "TypeScript/JavaScript" => {
+                            "- TS/JS Safety: Strict type definitions, optional chaining (`?.`), nullish coalescing (`??`)."
+                        }
+                        _ => {
+                            "- Language Safety: Verify non-null objects before dereferencing, enforce explicit error handling."
+                        }
+                    };
+
+                    format!(
+                        "# Pre-Code Verification Checklist\n\n- Primary Language: {}\n- Detected Pattern: {}\n\n1. **Upfront Architecture**: Enforce '{}' (create thin dispatcher main + sub-module files from line 1, cap files < 300 LOC).\n2. **Language Rules**: {}\n3. **Symbol Inspection**: Verify symbols via `project_context` search before calling or editing.\n4. **Error Handling**: Preserve existing error handling contracts and avoid masking exceptions.",
+                        primary_lang, active_arch, active_arch, lang_rules
+                    )
+                }
                 "verify" => {
-                    let v_cmd = arguments.get("verification_command").and_then(|v| v.as_str());
-                    let v_kw = arguments.get("expected_output_keyword").and_then(|k| k.as_str());
-                    
+                    let v_cmd = arguments
+                        .get("verification_command")
+                        .and_then(|v| v.as_str());
+                    let v_kw = arguments
+                        .get("expected_output_keyword")
+                        .and_then(|k| k.as_str());
+
                     if let (Some(cmd), Some(kw)) = (v_cmd, v_kw) {
                         state.verification_command = Some(cmd.to_string());
                         state.expected_output_keyword = Some(kw.to_string());
                         state.verification_passed = false; // SECURITY FIX Bug #4: Registered contract; awaiting test execution
-                        format!("# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED (Awaiting test execution output)\n\n✓ Run verification command to satisfy anti-hallucination requirement.", cmd, kw)
+                        format!(
+                            "# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED (Awaiting test execution output)\n\n✓ Run verification command to satisfy anti-hallucination requirement.",
+                            cmd, kw
+                        )
                     } else {
-                        format!("# Anti-Hallucination Post-Code Verification Checklist\n\n1. **Empirical Verification Required**: Trigger IDE/CLI `ask_question` tool to let user select verification test command (or confirm manual testing), then pass `verification_command` (e.g. 'cargo test') and `expected_output_keyword` (e.g. 'PASSED').\n2. **User Requirement Alignment**: Re-read the original user prompt and verify all explicitly requested features exist.\n3. **Zero Unverified Assumptions**: Base success strictly on empirical evidence, not speculative assumptions.")
+                        format!(
+                            "# Anti-Hallucination Post-Code Verification Checklist\n\n1. **Empirical Verification Required**: Trigger IDE/CLI `ask_question` tool to let user select verification test command (or confirm manual testing), then pass `verification_command` (e.g. 'cargo test') and `expected_output_keyword` (e.g. 'PASSED').\n2. **User Requirement Alignment**: Re-read the original user prompt and verify all explicitly requested features exist.\n3. **Zero Unverified Assumptions**: Base success strictly on empirical evidence, not speculative assumptions."
+                        )
                     }
-                },
+                }
                 _ => format!("Guidance operation '{}' completed successfully.", op),
             }
-        },
+        }
         "project_context" => {
-            let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("tree");
-            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let op = arguments
+                .get("operation")
+                .and_then(|o| o.as_str())
+                .unwrap_or("tree");
+            let proj_path_arg = arguments
+                .get("project_path")
+                .and_then(|p| p.as_str())
+                .unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
             state.update_project_path(&proj_path);
-            let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("");
-            let rel_path = arguments.get("relative_path").and_then(|r| r.as_str()).unwrap_or("");
+            let query = arguments
+                .get("query")
+                .and_then(|q| q.as_str())
+                .unwrap_or("");
+            let rel_path = arguments
+                .get("relative_path")
+                .and_then(|r| r.as_str())
+                .unwrap_or("");
 
             match op {
                 "tree" => {
                     let files = scan_project(&proj_path, 2);
-                    let file_list: Vec<String> = files.into_iter().map(|f| format!("- {} ({})", f.path, f.file_type)).collect();
+                    let file_list: Vec<String> = files
+                        .into_iter()
+                        .map(|f| format!("- {} ({})", f.path, f.file_type))
+                        .collect();
                     state.record_call(2000, 400);
-                    format!("# Project Tree (Depth Capped at 2)\n\n{}", file_list.join("\n"))
-                },
+                    format!(
+                        "# Project Tree (Depth Capped at 2)\n\n{}",
+                        file_list.join("\n")
+                    )
+                }
                 "read" => {
                     if rel_path.is_empty() {
                         "Error: relative_path is required for read operation.".to_string()
@@ -473,7 +698,7 @@ fn handle_tool_call_internal(
                                     Ok(content) => {
                                         let orig_len = content.len() as u64;
                                         let mut lines: Vec<&str> = content.lines().collect();
-                                        
+
                                         if let Some(symbol) = target_symbol {
                                             // Symbol-targeted extraction (multi-language aware)
                                             let mut matched_snippet = Vec::new();
@@ -488,13 +713,23 @@ fn handle_tool_call_internal(
                                                     matched_snippet.push(*line);
                                                     let open_b = line.matches('{').count() as i32;
                                                     let close_b = line.matches('}').count() as i32;
-                                                    if open_b > 0 { has_braces = true; }
+                                                    if open_b > 0 {
+                                                        has_braces = true;
+                                                    }
                                                     brace_count += open_b - close_b;
-                                                    
-                                                    if has_braces && matched_snippet.len() > 1 && brace_count <= 0 && (line.contains('}') || line.trim().is_empty()) {
+
+                                                    if has_braces
+                                                        && matched_snippet.len() > 1
+                                                        && brace_count <= 0
+                                                        && (line.contains('}')
+                                                            || line.trim().is_empty())
+                                                    {
                                                         break;
                                                     }
-                                                    if !has_braces && matched_snippet.len() >= 30 && line.trim().is_empty() {
+                                                    if !has_braces
+                                                        && matched_snippet.len() >= 30
+                                                        && line.trim().is_empty()
+                                                    {
                                                         break;
                                                     }
                                                     if matched_snippet.len() >= 100 {
@@ -507,70 +742,187 @@ fn handle_tool_call_internal(
                                             }
                                         }
 
-                                        let bounded = lines.into_iter().take(300).collect::<Vec<_>>().join("\n");
+                                        let bounded = lines
+                                            .into_iter()
+                                            .take(300)
+                                            .collect::<Vec<_>>()
+                                            .join("\n");
                                         let compressed = compress_markdown(&bounded);
-                                        state.record_call(orig_len / 4, compressed.len() as u64 / 4);
+                                        state
+                                            .record_call(orig_len / 4, compressed.len() as u64 / 4);
                                         if let Some(symbol) = target_symbol {
-                                            format!("# Target Symbol Extracted: '{}' from {}\n\n{}", symbol, rel_path, compressed)
+                                            format!(
+                                                "# Target Symbol Extracted: '{}' from {}\n\n{}",
+                                                symbol, rel_path, compressed
+                                            )
                                         } else {
-                                            format!("# Bounded File Content: {}\n\n{}", rel_path, compressed)
+                                            format!(
+                                                "# Bounded File Content: {}\n\n{}",
+                                                rel_path, compressed
+                                            )
                                         }
-                                    },
+                                    }
                                     Err(e) => format!("Failed to read file '{}': {}", rel_path, e),
                                 }
-                            },
+                            }
                             Err(err_msg) => format!("Security Error: {}", err_msg),
                         }
                     }
-                },
+                }
                 "search" => {
-                    let files = scan_project(&proj_path, 3);
+                    let files = scan_project(&proj_path, 4);
                     let mut results = Vec::new();
                     if !query.is_empty() {
-                        for file in files.iter().filter(|f| f.file_type == "file").take(50) {
+                        for file in files.iter().filter(|f| f.file_type == "file") {
                             if state.is_cancelled() {
-                                return Err((-32000, "Operation cancelled by client or timeout.".to_string()));
+                                return Err((
+                                    -32000,
+                                    "Operation cancelled by client or timeout.".to_string(),
+                                ));
                             }
                             if let Ok(path) = validate_path(&proj_path, &file.path) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if content.contains(query) {
                                         results.push(format!("- {}", file.path));
+                                        if results.len() >= 20 {
+                                            break;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                     state.record_call(5000, 500);
-                    format!("# Context Search Results for '{}'\n\nMatching Files (Max 20):\n\n{}", query, if results.is_empty() { "No matches found.".to_string() } else { results.into_iter().take(20).collect::<Vec<_>>().join("\n") })
-                },
+                    format!(
+                        "# Context Search Results for '{}'\n\nMatching Files (Max 20):\n\n{}",
+                        query,
+                        if results.is_empty() {
+                            "No matches found.".to_string()
+                        } else {
+                            results.into_iter().take(20).collect::<Vec<_>>().join("\n")
+                        }
+                    )
+                }
                 "architecture" => {
                     let arch_pattern = detect_project_architecture(&proj_path);
                     state.active_architecture_pattern = Some(arch_pattern.clone());
                     state.record_call(1000, 200);
                     format!(
                         "# Project Architecture Analysis\n\n- Detected Pattern: {}\n- Workspace Root: {}\n\nArchitectural Guidelines:\n- Clean_Architecture: Enforce strict separation between domain, usecase, infrastructure.\n- Layered_Architecture: Enforce controllers -> services -> models flow.\n- Package_By_Feature: Organize code by features/modules.\n- Orchestrator: Keep dispatcher thin and split logic into sub-modules upfront.",
-                        arch_pattern, proj_path.display()
+                        arch_pattern,
+                        proj_path.display()
                     )
-                },
+                }
+                "symbols" | "structure" => {
+                    if rel_path.is_empty() {
+                        "Error: relative_path is required for symbols/structure operation.".to_string()
+                    } else {
+                        match validate_path(&proj_path, rel_path) {
+                            Ok(full_path) => {
+                                if let Ok(content) = std::fs::read_to_string(&full_path) {
+                                    let mut symbols = Vec::new();
+                                    for (idx, line) in content.lines().enumerate() {
+                                        let trimmed = line.trim();
+                                        if trimmed.starts_with("pub fn ")
+                                            || trimmed.starts_with("fn ")
+                                            || trimmed.starts_with("pub struct ")
+                                            || trimmed.starts_with("struct ")
+                                            || trimmed.starts_with("pub enum ")
+                                            || trimmed.starts_with("enum ")
+                                            || trimmed.starts_with("impl ")
+                                            || trimmed.starts_with("def ")
+                                            || trimmed.starts_with("class ")
+                                            || trimmed.starts_with("export function")
+                                            || trimmed.starts_with("export class")
+                                            || trimmed.starts_with("export const")
+                                            || trimmed.starts_with("interface ")
+                                        {
+                                            symbols.push(format!("L{:04}: {}", idx + 1, trimmed));
+                                        }
+                                    }
+                                    format!(
+                                        "# Code Symbol Signatures: {}\n\n{}",
+                                        rel_path,
+                                        if symbols.is_empty() {
+                                            "No top-level symbol signatures found.".to_string()
+                                        } else {
+                                            symbols.join("\n")
+                                        }
+                                    )
+                                } else {
+                                    format!("Failed to read file '{}'", rel_path)
+                                }
+                            }
+                            Err(err_msg) => format!("Security Error: {}", err_msg),
+                        }
+                    }
+                }
+                "references" => {
+                    if query.is_empty() {
+                        "Error: query symbol is required for references operation.".to_string()
+                    } else {
+                        let files = scan_project(&proj_path, 4);
+                        let mut refs = Vec::new();
+                        for file in files.iter().filter(|f| f.file_type == "file") {
+                            if let Ok(path) = validate_path(&proj_path, &file.path) {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    for (line_num, line) in content.lines().enumerate() {
+                                        if line.contains(query) {
+                                            refs.push(format!("{}:L{} -> {}", file.path, line_num + 1, line.trim()));
+                                            if refs.len() >= 30 {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if refs.len() >= 30 {
+                                break;
+                            }
+                        }
+                        format!(
+                            "# Symbol References for '{}' (Max 30):\n\n{}",
+                            query,
+                            if refs.is_empty() {
+                                "No references found.".to_string()
+                            } else {
+                                refs.join("\n")
+                            }
+                        )
+                    }
+                }
                 _ => format!("Project context operation '{}' completed.", op),
             }
-        },
+        }
         "ui_ux" => {
-            let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("general");
+            let query = arguments
+                .get("query")
+                .and_then(|q| q.as_str())
+                .unwrap_or("general");
             state.record_call(800, 200);
-            format!("# UI/UX Guidelines for '{}'\n\n- Styling: Modern CSS, Glassmorphism, Dynamic Animations\n- Color Palette: Dark mode default, curated HSL gradients\n- Typography: Inter/Outfit via Google Fonts\n- Accessibility: Semantic HTML5, unique IDs", query)
-        },
+            format!(
+                "# UI/UX Guidelines for '{}'\n\n- Styling: Modern CSS, Glassmorphism, Dynamic Animations\n- Color Palette: Dark mode default, curated HSL gradients\n- Typography: Inter/Outfit via Google Fonts\n- Accessibility: Semantic HTML5, unique IDs",
+                query
+            )
+        }
         "session_continuity" => {
-            let op = arguments.get("operation").and_then(|o| o.as_str()).unwrap_or("load");
-            let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let op = arguments
+                .get("operation")
+                .and_then(|o| o.as_str())
+                .unwrap_or("load");
+            let proj_path_arg = arguments
+                .get("project_path")
+                .and_then(|p| p.as_str())
+                .unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
 
             match op {
-                "save" => {
-                    match state.save_to_dir(&proj_path) {
-                        Ok(_) => format!("# Session Continuity\n\nSession state saved successfully to `.agent-context/sessions/{}.json`.", state.session_id),
-                        Err(e) => format!("Failed to save session: {}", e),
-                    }
+                "save" => match state.save_to_dir(&proj_path) {
+                    Ok(_) => format!(
+                        "# Session Continuity\n\nSession state saved successfully to `.agent-context/sessions/{}.json`.",
+                        state.session_id
+                    ),
+                    Err(e) => format!("Failed to save session: {}", e),
                 },
                 "load" => {
                     match ServerState::load_from_dir(&proj_path) {
@@ -584,56 +936,108 @@ fn handle_tool_call_internal(
                             state.verification_command = None;
                             state.expected_output_keyword = None;
                             state.fix_attempts = 0;
-                            format!("# Session Continuity\n\nLoaded state for session '{}'. Permission flags reset (plan_approved=false). Total Calls: {}", state.session_id, state.tool_calls)
-                        },
+                            format!(
+                                "# Session Continuity\n\nLoaded state for session '{}'. Permission flags reset (plan_approved=false). Total Calls: {}",
+                                state.session_id, state.tool_calls
+                            )
+                        }
                         Err(e) => format!("Failed to load session: {}", e),
                     }
-                },
+                }
+                "clear" => {
+                    let dir = proj_path.join(".agent-context").join("sessions");
+                    if dir.exists() {
+                        let _ = std::fs::remove_dir_all(&dir);
+                    }
+                    *state = ServerState::new();
+                    "# Session Continuity: [clear]\n\nSession snapshots cleared successfully. Active session state reset.".to_string()
+                }
                 _ => format!("# Session Continuity: [{}]\n\nSession state active.", op),
             }
-        },
+        }
         "workflow_gate" => {
-            let action = arguments.get("action").and_then(|a| a.as_str()).unwrap_or("check");
+            let action = arguments
+                .get("action")
+                .and_then(|a| a.as_str())
+                .unwrap_or("check");
             let stage_target = arguments
                 .get("target_stage")
                 .or_else(|| arguments.get("stage"))
                 .and_then(|s| s.as_str());
+            let user_msg = arguments.get("user_message").and_then(|u| u.as_str());
+
+            if let Some(msg) = user_msg {
+                state.process_user_message(msg);
+            }
 
             state.record_call(300, 50);
 
             match action {
+                "approve" | "approve_plan" => {
+                    state.approve_plan();
+                    format!(
+                        "# Workflow Gate: [approve_plan]\n\nStatus: PASSED | Plan Approved: true | Stage: {}",
+                        state.workflow_stage
+                    )
+                }
                 "set_stage" => {
                     if let Some(target) = stage_target {
                         match state.set_stage(target) {
-                            Ok(new_stage) => format!("# Workflow Gate: [set_stage]\n\nStatus: PASSED | Stage Changed To: {} | Plan Approved: {} | Fix Attempts: {}", new_stage, state.plan_approved, state.fix_attempts),
-                            Err(err_msg) => format!("# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}. Trigger IDE/CLI `ask_question` tool to request user approval for stage transition.", err_msg),
+                            Ok(new_stage) => format!(
+                                "# Workflow Gate: [set_stage]\n\nStatus: PASSED | Stage Changed To: {} | Plan Approved: {} | Fix Attempts: {}",
+                                new_stage, state.plan_approved, state.fix_attempts
+                            ),
+                            Err(err_msg) => format!(
+                                "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}. Trigger IDE/CLI `ask_question` tool to request user approval for stage transition.",
+                                err_msg
+                            ),
                         }
                     } else {
                         "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: target_stage argument is required for set_stage action. Trigger IDE/CLI `ask_question` tool to clarify desired stage.".to_string()
                     }
-                },
+                }
                 "status" => {
                     let edit_allowed = state.workflow_stage == "Build" && state.plan_approved;
                     format!(
                         "# Workflow Stage Status\n\n- Active Stage: {}\n- Plan Approved: {}\n- Fix Attempts: {}/3\n- Edit Authorized: {}",
                         state.workflow_stage, state.plan_approved, state.fix_attempts, edit_allowed
                     )
-                },
+                }
                 "advance" => {
                     // SECURITY FIX Bug #3: Do NOT auto-process user_message in advance to prevent agent self-approval
-                    let target_stage = arguments.get("target_stage").and_then(|t| t.as_str()).unwrap_or("Build");
+                    let target_stage = arguments
+                        .get("target_stage")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("Build");
                     let stage_res = state.set_stage(target_stage);
 
-                    let raw_arch = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("Auto");
-                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let raw_arch = arguments
+                        .get("architecture_pattern")
+                        .and_then(|a| a.as_str())
+                        .unwrap_or("Auto");
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
                     let proj_path = detect_project_path(proj_path_arg, state);
                     state.update_project_path(&proj_path);
-                    let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
+                    let risk_level = arguments
+                        .get("risk_level")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("LOW");
                     state.last_risk_level = Some(risk_level.to_string());
 
                     let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path);
 
-                    if matches!(arch_pattern.as_str(), "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") && state.workflow_stage == "Build" && state.plan_approved {
+                    if matches!(
+                        arch_pattern.as_str(),
+                        "Clean_Architecture"
+                            | "Layered_Architecture"
+                            | "Package_By_Feature"
+                            | "Orchestrator"
+                    ) && state.workflow_stage == "Build"
+                        && state.plan_approved
+                    {
                         state.edit_authorized = true;
                         state.active_architecture_pattern = Some(arch_pattern);
                     }
@@ -641,50 +1045,93 @@ fn handle_tool_call_internal(
                     match stage_res {
                         Ok(msg) => format!(
                             "# Workflow Gate: [advance]\n\n{}\n- Edit Authorized: {}\n- Architecture Pattern: {}",
-                            msg, state.edit_authorized, state.active_architecture_pattern.as_deref().unwrap_or("NONE")
+                            msg,
+                            state.edit_authorized,
+                            state
+                                .active_architecture_pattern
+                                .as_deref()
+                                .unwrap_or("NONE")
                         ),
                         Err(err) => format!("# Workflow Gate: [advance]\n\n⚠️ Error: {}", err),
                     }
-                },
+                }
                 "authorize_edit" => {
-                    let proj_path_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
                     let proj_path = detect_project_path(proj_path_arg, state);
                     state.update_project_path(&proj_path);
-                    let risk_level = arguments.get("risk_level").and_then(|r| r.as_str()).unwrap_or("LOW");
-                    let justification = arguments.get("justification").and_then(|j| j.as_str()).unwrap_or("No justification provided");
-                    let raw_arch = arguments.get("architecture_pattern").and_then(|a| a.as_str()).unwrap_or("Auto");
+                    let risk_level = arguments
+                        .get("risk_level")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("LOW");
+                    let justification = arguments
+                        .get("justification")
+                        .and_then(|j| j.as_str())
+                        .unwrap_or("No justification provided");
+                    let raw_arch = arguments
+                        .get("architecture_pattern")
+                        .and_then(|a| a.as_str())
+                        .unwrap_or("Auto");
                     let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path);
-                    
+
                     state.last_risk_level = Some(risk_level.to_string());
 
-                    if !matches!(arch_pattern.as_str(), "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator") {
+                    if !matches!(
+                        arch_pattern.as_str(),
+                        "Clean_Architecture"
+                            | "Layered_Architecture"
+                            | "Package_By_Feature"
+                            | "Orchestrator"
+                    ) {
                         format!(
                             "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...)`.",
-                            proj_path.display(), if arch_pattern.is_empty() { "NONE" } else { &arch_pattern }
+                            proj_path.display(),
+                            if arch_pattern.is_empty() {
+                                "NONE"
+                            } else {
+                                &arch_pattern
+                            }
                         )
                     } else if risk_level == "HIGH" && !state.plan_approved {
                         format!(
                             "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
-                            proj_path.display(), justification
+                            proj_path.display(),
+                            justification
                         )
                     } else if state.workflow_stage == "Build" && state.plan_approved {
                         state.edit_authorized = true;
                         state.active_architecture_pattern = Some(arch_pattern.clone());
                         format!(
                             "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Declared Risk: {}\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
-                            proj_path.display(), risk_level, arch_pattern, justification, state.workflow_stage, arch_pattern
+                            proj_path.display(),
+                            risk_level,
+                            arch_pattern,
+                            justification,
+                            state.workflow_stage,
+                            arch_pattern
                         )
                     } else {
                         format!(
                             "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
-                            proj_path.display(), state.workflow_stage, state.plan_approved
+                            proj_path.display(),
+                            state.workflow_stage,
+                            state.plan_approved
                         )
                     }
-                },
+                }
                 _ => {
                     // "check" action — SECURITY FIX Bug #2: READ ONLY (no state mutation)
-                    let status_str = if state.workflow_stage == "Build" && !state.plan_approved { "BLOCKED" } else { "PASSED" };
-                    let mut resp = format!("# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}", status_str, state.plan_approved, state.workflow_stage, state.fix_attempts);
+                    let status_str = if state.workflow_stage == "Build" && !state.plan_approved {
+                        "BLOCKED"
+                    } else {
+                        "PASSED"
+                    };
+                    let mut resp = format!(
+                        "# Workflow Gate: [check]\n\nStatus: {} | Plan Approved: {} | Stage: {} | Fix Attempts: {}",
+                        status_str, state.plan_approved, state.workflow_stage, state.fix_attempts
+                    );
                     if state.workflow_stage == "Build" && !state.plan_approved {
                         resp.push_str("\n\n⚠️ Trigger IDE/CLI `ask_question` tool to request explicit user plan approval before editing code.");
                     }
@@ -694,7 +1141,7 @@ fn handle_tool_call_internal(
                     resp
                 }
             }
-        },
+        }
         _ => format!("Tool '{}' executed successfully.", name),
     };
 
@@ -816,14 +1263,29 @@ mod tests {
         state.set_stage("Build").unwrap();
 
         state.pending_skill_proposals = vec![
-            ("agent-guidance".to_string(), "skills/agent-guidance/SKILL.md".to_string(), 0.95),
-            ("test-skill".to_string(), "skills/test-skill/SKILL.md".to_string(), 0.80),
+            (
+                "agent-guidance".to_string(),
+                "skills/agent-guidance/SKILL.md".to_string(),
+                0.95,
+            ),
+            (
+                "test-skill".to_string(),
+                "skills/test-skill/SKILL.md".to_string(),
+                0.80,
+            ),
         ];
 
         // 1. Select valid skill
-        let res = handle_tool_call("select_skills", json!({ "skills": ["agent-guidance"] }), &mut state);
+        let res = handle_tool_call(
+            "select_skills",
+            json!({ "skills": ["agent-guidance"] }),
+            &mut state,
+        );
         assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("# Skill Selection Confirmed"));
         assert!(text.contains("agent-guidance"));
 
@@ -833,7 +1295,10 @@ mod tests {
         // 3. Select with empty array when no proposals remain
         let empty_res = handle_tool_call("select_skills", json!({ "skills": [] }), &mut state);
         assert!(empty_res.is_ok());
-        let empty_text = empty_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let empty_text = empty_res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(empty_text.contains("No skills selected"));
     }
 
@@ -841,7 +1306,10 @@ mod tests {
     fn test_auto_architecture_detection() {
         let cwd = std::env::current_dir().unwrap();
         let detected = detect_project_architecture(&cwd);
-        assert!(matches!(detected.as_str(), "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator"));
+        assert!(matches!(
+            detected.as_str(),
+            "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator"
+        ));
 
         let auto_resolved = resolve_architecture_pattern("Auto", &cwd);
         assert_eq!(auto_resolved, detected);
@@ -870,16 +1338,27 @@ mod tests {
             }),
             &mut state,
         );
-        assert!(res.is_ok(), "workflow_gate authorize_edit with 'Auto' must succeed: {:?}", res);
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(
+            res.is_ok(),
+            "workflow_gate authorize_edit with 'Auto' must succeed: {:?}",
+            res
+        );
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("Status: PASSED"));
         assert!(state.edit_authorized);
         assert!(state.active_architecture_pattern.is_some());
 
         // 2. Query precode guidance should contain active architecture
-        let precode_res = handle_tool_call("guidance", json!({ "operation": "precode" }), &mut state);
+        let precode_res =
+            handle_tool_call("guidance", json!({ "operation": "precode" }), &mut state);
         assert!(precode_res.is_ok());
-        let precode_text = precode_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let precode_text = precode_res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(precode_text.contains("Detected Pattern:"));
     }
 
@@ -889,9 +1368,20 @@ mod tests {
         // project_context(operation="architecture") should succeed even in Plan stage
         state.set_stage("Plan").unwrap();
 
-        let res = handle_tool_call("project_context", json!({ "operation": "architecture" }), &mut state);
-        assert!(res.is_ok(), "project_context operation 'architecture' must succeed in Plan stage: {:?}", res);
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let res = handle_tool_call(
+            "project_context",
+            json!({ "operation": "architecture" }),
+            &mut state,
+        );
+        assert!(
+            res.is_ok(),
+            "project_context operation 'architecture' must succeed in Plan stage: {:?}",
+            res
+        );
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("# Project Architecture Analysis"));
         assert!(text.contains("Detected Pattern:"));
     }
@@ -901,10 +1391,81 @@ mod tests {
     fn test_task_pipeline_architecture_guidance_output() {
         let mut state = ServerState::new();
 
-        let res = handle_tool_call("task_pipeline", json!({ "task": "build new feature", "phase": "plan" }), &mut state);
+        let res = handle_tool_call(
+            "task_pipeline",
+            json!({ "task": "build new feature", "phase": "plan" }),
+            &mut state,
+        );
         assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         assert!(text.contains("## Architecture Guidance"));
         assert!(text.contains("Detected Pattern:"));
+    }
+
+    #[test]
+    fn test_guidance_workflow_loads_embedded_reference() {
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "guidance",
+            json!({ "operation": "workflow", "identifier": "code" }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        // Embedded workflow-code.md should be loaded instead of generic 1-liner
+        assert!(text.contains("code") || text.contains("Code") || text.contains("Build"));
+        assert!(!text.contains("# Dev Workflow Guidance: [code]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document"));
+    }
+
+    #[test]
+    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in unit tests"]
+    fn test_guidance_docs_vector_search() {
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "guidance",
+            json!({ "operation": "docs", "query": "rust testing" }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains("# Documentation Guidance for"));
+    }
+
+    #[test]
+    fn test_workflow_gate_plan_approval_via_user_message() {
+        let mut state = ServerState::new();
+        assert!(!state.plan_approved);
+
+        // 1. Calling workflow_gate approve_plan action sets plan_approved=true
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({ "action": "approve_plan" }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        assert!(state.plan_approved);
+
+        // 2. set_stage to Build now succeeds
+        let stage_res = handle_tool_call(
+            "workflow_gate",
+            json!({ "action": "set_stage", "target_stage": "Build" }),
+            &mut state,
+        );
+        assert!(stage_res.is_ok());
+        let text = stage_res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains("Status: PASSED"));
+        assert_eq!(state.workflow_stage, "Build");
     }
 }

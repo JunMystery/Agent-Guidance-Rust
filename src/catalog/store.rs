@@ -117,11 +117,7 @@ pub fn load_all_skills(proj_path: &Path) -> Vec<SkillItem> {
     // 1. Embedded skills
     for path in list_embedded_skills() {
         if let Some(content) = get_embedded_skill(&path) {
-            let name = path
-                .split('/')
-                .next()
-                .unwrap_or(&path)
-                .to_string();
+            let name = path.split('/').next().unwrap_or(&path).to_string();
 
             skills.push(SkillItem {
                 name,
@@ -152,7 +148,10 @@ mod tests {
     #[test]
     fn test_extract_frontmatter_name() {
         let content = "---\nname: my-test-skill\ndescription: test\n---";
-        assert_eq!(extract_frontmatter_name(content), Some("my-test-skill".to_string()));
+        assert_eq!(
+            extract_frontmatter_name(content),
+            Some("my-test-skill".to_string())
+        );
     }
 
     #[test]

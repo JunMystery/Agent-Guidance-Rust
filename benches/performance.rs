@@ -1,7 +1,7 @@
-#[path = "../src/context/scanner.rs"]
-mod scanner;
 #[path = "../src/context/db.rs"]
 mod db;
+#[path = "../src/context/scanner.rs"]
+mod scanner;
 
 use std::hint::black_box;
 use std::path::Path;

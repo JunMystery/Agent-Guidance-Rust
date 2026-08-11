@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::path::Path;
 
 #[allow(dead_code)]
@@ -77,14 +77,24 @@ impl CodeGraphDb {
             [],
         )?;
 
-        tx.execute("CREATE INDEX IF NOT EXISTS idx_symbols_file_path ON symbols(file_path);", [])?;
-        tx.execute("CREATE INDEX IF NOT EXISTS idx_files_modified_at ON files(modified_at);", [])?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_symbols_file_path ON symbols(file_path);",
+            [],
+        )?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_files_modified_at ON files(modified_at);",
+            [],
+        )?;
 
         tx.commit()?;
         Ok(())
     }
 
-    pub fn search_symbols(&self, query: &str, limit: usize) -> Result<Vec<(String, String, usize)>> {
+    pub fn search_symbols(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, String, usize)>> {
         let safe_query = sanitize_fts5_query(query);
         if safe_query.is_empty() {
             return Ok(Vec::new());
@@ -118,18 +128,33 @@ pub fn sanitize_fts5_query(query: &str) -> String {
     // Strip FTS5 operators and special chars: double quotes, asterisks, AND, OR, NOT, NEAR, etc.
     let cleaned: String = query
         .chars()
-        .map(|c| if c.is_alphanumeric() || c.is_whitespace() || c == '_' { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c.is_whitespace() || c == '_' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect();
 
     let tokens: Vec<&str> = cleaned
         .split_whitespace()
-        .filter(|t| !t.eq_ignore_ascii_case("AND") && !t.eq_ignore_ascii_case("OR") && !t.eq_ignore_ascii_case("NOT") && !t.eq_ignore_ascii_case("NEAR"))
+        .filter(|t| {
+            !t.eq_ignore_ascii_case("AND")
+                && !t.eq_ignore_ascii_case("OR")
+                && !t.eq_ignore_ascii_case("NOT")
+                && !t.eq_ignore_ascii_case("NEAR")
+        })
         .collect();
 
     if tokens.is_empty() {
         String::new()
     } else {
-        tokens.iter().map(|t| format!("\"{}\"", t)).collect::<Vec<_>>().join(" ")
+        tokens
+            .iter()
+            .map(|t| format!("\"{}\"", t))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 

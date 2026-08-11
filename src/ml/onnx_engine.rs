@@ -35,7 +35,10 @@ impl OnnxEmbeddingModel {
             .commit_from_file(&onnx_path)
             .map_err(|e| anyhow::anyhow!("ONNX model commit error: {}", e))?;
 
-        info!("ONNX Runtime embedding engine initialized from {:?}", onnx_path);
+        info!(
+            "ONNX Runtime embedding engine initialized from {:?}",
+            onnx_path
+        );
         Ok(Self { session, tokenizer })
     }
 
@@ -60,7 +63,8 @@ impl OnnxEmbeddingModel {
         let seq_len = input_ids.len();
 
         let input_ids_tensor = ort::value::Value::from_array((vec![1, seq_len], input_ids))?;
-        let attention_mask_tensor = ort::value::Value::from_array((vec![1, seq_len], attention_mask))?;
+        let attention_mask_tensor =
+            ort::value::Value::from_array((vec![1, seq_len], attention_mask))?;
 
         let inputs = ort::inputs! {
             "input_ids" => input_ids_tensor,

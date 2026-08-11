@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
 
@@ -125,7 +125,11 @@ impl ServerState {
     pub fn with_client_name(client_name: Option<String>) -> Self {
         let mut s = Self::default();
         if let Some(ref name) = client_name {
-            s.session_id = format!("session_{}_{}", std::process::id(), name.to_lowercase().replace(' ', "_"));
+            s.session_id = format!(
+                "session_{}_{}",
+                std::process::id(),
+                name.to_lowercase().replace(' ', "_")
+            );
         }
         s.agent_client_name = client_name;
         s
@@ -293,6 +297,10 @@ impl ServerState {
             .unwrap_or(false)
     }
 
+    pub fn approve_plan(&mut self) {
+        self.plan_approved = true;
+    }
+
     pub fn set_stage(&mut self, target: &str) -> Result<String, String> {
         let normalized = match target.trim().to_lowercase().as_str() {
             "context" => "Context",
@@ -396,9 +404,7 @@ impl ServerState {
         // 2. Whitelisted & Not Gated tools bypass priority gate check
         let is_whitelisted_or_ungated = matches!(
             tool_name,
-            "workflow_gate"
-                | "session_continuity"
-                | "select_skills"
+            "workflow_gate" | "session_continuity" | "select_skills"
         );
 
         if !is_whitelisted_or_ungated {
@@ -465,7 +471,9 @@ impl ServerState {
             "Build" => {
                 if !self.plan_approved {
                     Err("WORKFLOW_STAGE_BLOCKED: Tool execution in 'Build' stage is blocked because plan_approved is false. Obtain user approval first.".to_string())
-                } else if tool_name == "workflow_gate" && args.get("action").and_then(|a| a.as_str()) == Some("authorize_edit") {
+                } else if tool_name == "workflow_gate"
+                    && args.get("action").and_then(|a| a.as_str()) == Some("authorize_edit")
+                {
                     let arch_pattern = args
                         .get("architecture_pattern")
                         .and_then(|a| a.as_str())
@@ -566,7 +574,7 @@ impl ServerState {
     pub fn load_from_dir(proj_path: &Path) -> Result<Self, String> {
         Self::cleanup_stale_sessions(proj_path);
         let dir = proj_path.join(".agent-context").join("sessions");
-        
+
         // 1. Try finding most recent session file in sessions/
         if dir.exists() {
             if let Ok(read_dir) = fs::read_dir(&dir) {
@@ -774,7 +782,8 @@ mod tests {
 
     #[test]
     fn test_multi_session_isolation() {
-        let temp_dir = std::env::temp_dir().join(format!("multi_session_test_{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("multi_session_test_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let mut s1 = ServerState::with_client_name(Some("antigravity".to_string()));
@@ -789,8 +798,16 @@ mod tests {
 
         // Both session files exist independently in sessions/
         let sessions_dir = temp_dir.join(".agent-context").join("sessions");
-        assert!(sessions_dir.join(format!("{}.json", s1.session_id)).exists());
-        assert!(sessions_dir.join(format!("{}.json", s2.session_id)).exists());
+        assert!(
+            sessions_dir
+                .join(format!("{}.json", s1.session_id))
+                .exists()
+        );
+        assert!(
+            sessions_dir
+                .join(format!("{}.json", s2.session_id))
+                .exists()
+        );
         assert_ne!(s1.session_id, s2.session_id);
 
         let _ = std::fs::remove_dir_all(&temp_dir);

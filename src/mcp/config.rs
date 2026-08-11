@@ -1,9 +1,9 @@
+use crate::mcp::templates::*;
 use anyhow::Result;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::info;
-use crate::mcp::templates::*;
 
 pub fn run_setup(binary_path: &Path) -> Result<()> {
     info!("Configuring MCP clients with binary at {:?}", binary_path);
@@ -18,34 +18,96 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
             app_path.join("Claude").join("claude_desktop_config.json"),
             app_path.join("Code").join("User"),
             app_path.join("Cursor").join("User"),
-            app_path.join("Devin").join("Cascade").join("mcp_config.json"),
+            app_path
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
         )
     } else if cfg!(target_os = "macos") {
         (
-            home.join("Library").join("Application Support").join("Claude").join("claude_desktop_config.json"),
-            home.join("Library").join("Application Support").join("Code").join("User"),
-            home.join("Library").join("Application Support").join("Cursor").join("User"),
-            home.join("Library").join("Application Support").join("Devin").join("Cascade").join("mcp_config.json"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Code")
+                .join("User"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Cursor")
+                .join("User"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
         )
     } else {
         (
-            home.join(".config").join("Claude").join("claude_desktop_config.json"),
+            home.join(".config")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
             home.join(".config").join("Code").join("User"),
             home.join(".config").join("Cursor").join("User"),
-            home.join(".config").join("Devin").join("Cascade").join("mcp_config.json"),
+            home.join(".config")
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
         )
     };
 
     let targets = vec![
         ("Claude Desktop", claude_path, true, "mcpServers"),
-        ("Antigravity / Gemini Global MCP config", home.join(".gemini").join("config").join("mcp_config.json"), true, "mcpServers"),
-        ("Antigravity Legacy MCP config", home.join(".gemini").join("antigravity").join("mcp_config.json"), true, "mcpServers"),
-        ("Cursor Native", home.join(".cursor").join("mcp.json"), true, "mcpServers"),
-        ("VS Code Native", code_path.join("mcp.json"), true, "servers"),
-        ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), true, "mcpServers"),
+        (
+            "Antigravity / Gemini Global MCP config",
+            home.join(".gemini").join("config").join("mcp_config.json"),
+            true,
+            "mcpServers",
+        ),
+        (
+            "Antigravity Legacy MCP config",
+            home.join(".gemini")
+                .join("antigravity")
+                .join("mcp_config.json"),
+            true,
+            "mcpServers",
+        ),
+        (
+            "Cursor Native",
+            home.join(".cursor").join("mcp.json"),
+            true,
+            "mcpServers",
+        ),
+        (
+            "VS Code Native",
+            code_path.join("mcp.json"),
+            true,
+            "servers",
+        ),
+        (
+            "Continue.dev",
+            home.join(".continue")
+                .join("mcpServers")
+                .join("config.json"),
+            true,
+            "mcpServers",
+        ),
         ("Devin/Cascade", devin_path, true, "mcpServers"),
-        ("Claude Code", home.join(".claude").join("mcp.json"), true, "mcpServers"),
-        ("Windsurf", home.join(".codeium").join("windsurf").join("mcp_config.json"), true, "mcpServers"),
+        (
+            "Claude Code",
+            home.join(".claude").join("mcp.json"),
+            true,
+            "mcpServers",
+        ),
+        (
+            "Windsurf",
+            home.join(".codeium")
+                .join("windsurf")
+                .join("mcp_config.json"),
+            true,
+            "mcpServers",
+        ),
     ];
 
     for (name, path, force, key) in targets {
@@ -56,14 +118,47 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     }
 
     let extensions = vec![
-        ("VS Code Cline", code_path.join("globalStorage").join("saoudrizwan.claude-dev").join("settings").join("cline_mcp_settings.json")),
-        ("VS Code Roo-Code", code_path.join("globalStorage").join("roovet.roo-cline").join("settings").join("cline_mcp_settings.json")),
-        ("Cursor Cline", cursor_path.join("globalStorage").join("saoudrizwan.claude-dev").join("settings").join("cline_mcp_settings.json")),
-        ("Cursor Roo-Code", cursor_path.join("globalStorage").join("roovet.roo-cline").join("settings").join("cline_mcp_settings.json")),
+        (
+            "VS Code Cline",
+            code_path
+                .join("globalStorage")
+                .join("saoudrizwan.claude-dev")
+                .join("settings")
+                .join("cline_mcp_settings.json"),
+        ),
+        (
+            "VS Code Roo-Code",
+            code_path
+                .join("globalStorage")
+                .join("roovet.roo-cline")
+                .join("settings")
+                .join("cline_mcp_settings.json"),
+        ),
+        (
+            "Cursor Cline",
+            cursor_path
+                .join("globalStorage")
+                .join("saoudrizwan.claude-dev")
+                .join("settings")
+                .join("cline_mcp_settings.json"),
+        ),
+        (
+            "Cursor Roo-Code",
+            cursor_path
+                .join("globalStorage")
+                .join("roovet.roo-cline")
+                .join("settings")
+                .join("cline_mcp_settings.json"),
+        ),
     ];
 
     for (name, path) in extensions {
-        if path.parent().and_then(|p| p.parent()).map(|p| p.exists()).unwrap_or(false) {
+        if path
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.exists())
+            .unwrap_or(false)
+        {
             merge_mcp_config(&path, SERVER_ID, &bin_str, "mcpServers")?;
             info!("Successfully configured {}", name);
         }
@@ -81,7 +176,10 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     println!();
     println!("Pre-downloading ML models for skill search...");
     if let Err(e) = crate::ml::download_models() {
-        println!("  ⚠  Model download failed: {}. Models will download on first use.", e);
+        println!(
+            "  ⚠  Model download failed: {}. Models will download on first use.",
+            e
+        );
     }
 
     Ok(())
@@ -95,7 +193,8 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
 
     // 1. Check binary
     let exists = binary_path.exists();
-    println!("[{}] Binary: {} ({})",
+    println!(
+        "[{}] Binary: {} ({})",
         if exists { "✓" } else { "✗" },
         bin_str,
         if exists { "found" } else { "NOT FOUND" }
@@ -103,22 +202,77 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
 
     // 2. Check MCP configs
     let mcp_targets: Vec<(&str, PathBuf, &str)> = vec![
-        ("Claude Desktop", home.join(".config").join("Claude").join("claude_desktop_config.json"), "mcpServers"),
-        ("Antigravity / Gemini Global", home.join(".gemini").join("config").join("mcp_config.json"), "mcpServers"),
-        ("Antigravity Legacy", home.join(".gemini").join("antigravity").join("mcp_config.json"), "mcpServers"),
-        ("Cursor", home.join(".cursor").join("mcp.json"), "mcpServers"),
-        ("VS Code", home.join(".config").join("Code").join("User").join("mcp.json"), "servers"),
-        ("Continue.dev", home.join(".continue").join("mcpServers").join("config.json"), "mcpServers"),
-        ("Devin/Cascade", home.join(".config").join("Devin").join("Cascade").join("mcp_config.json"), "mcpServers"),
-        ("Claude Code", home.join(".claude").join("mcp.json"), "mcpServers"),
-        ("Windsurf", home.join(".codeium").join("windsurf").join("mcp_config.json"), "mcpServers"),
-        ("OpenCode", home.join(".config").join("opencode").join("opencode.json"), "mcp"),
+        (
+            "Claude Desktop",
+            home.join(".config")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+            "mcpServers",
+        ),
+        (
+            "Antigravity / Gemini Global",
+            home.join(".gemini").join("config").join("mcp_config.json"),
+            "mcpServers",
+        ),
+        (
+            "Antigravity Legacy",
+            home.join(".gemini")
+                .join("antigravity")
+                .join("mcp_config.json"),
+            "mcpServers",
+        ),
+        (
+            "Cursor",
+            home.join(".cursor").join("mcp.json"),
+            "mcpServers",
+        ),
+        (
+            "VS Code",
+            home.join(".config")
+                .join("Code")
+                .join("User")
+                .join("mcp.json"),
+            "servers",
+        ),
+        (
+            "Continue.dev",
+            home.join(".continue")
+                .join("mcpServers")
+                .join("config.json"),
+            "mcpServers",
+        ),
+        (
+            "Devin/Cascade",
+            home.join(".config")
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
+            "mcpServers",
+        ),
+        (
+            "Claude Code",
+            home.join(".claude").join("mcp.json"),
+            "mcpServers",
+        ),
+        (
+            "Windsurf",
+            home.join(".codeium")
+                .join("windsurf")
+                .join("mcp_config.json"),
+            "mcpServers",
+        ),
+        (
+            "OpenCode",
+            home.join(".config").join("opencode").join("opencode.json"),
+            "mcp",
+        ),
     ];
 
     println!("\n--- MCP Client Registrations ---");
     for (name, path, key) in &mcp_targets {
         let registered = check_mcp_registration(path, key);
-        println!("[{}] {}: {}",
+        println!(
+            "[{}] {}: {}",
             if registered { "✓" } else { " " },
             name,
             path.display()
@@ -128,21 +282,28 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
     // 3. Check global rules
     println!("\n--- Global Rules (AGENTS.md / CLAUDE.md) ---");
     let rule_targets: Vec<(&str, PathBuf)> = vec![
-        ("Gemini/Antigravity", home.join(".gemini").join("config").join("AGENTS.md")),
-        ("OpenCode", home.join(".config").join("opencode").join("AGENTS.md")),
+        (
+            "Gemini/Antigravity",
+            home.join(".gemini").join("config").join("AGENTS.md"),
+        ),
+        (
+            "OpenCode",
+            home.join(".config").join("opencode").join("AGENTS.md"),
+        ),
         ("Claude Code", home.join(".claude").join("CLAUDE.md")),
         ("ChatGPT/Codex", home.join(".codex").join("AGENTS.md")),
-        ("Windsurf", home.join(".codeium").join("windsurf").join("AGENTS.md")),
+        (
+            "Windsurf",
+            home.join(".codeium").join("windsurf").join("AGENTS.md"),
+        ),
     ];
 
     for (name, path) in &rule_targets {
-        let has_tag = path.exists() && fs::read_to_string(path)
-            .map(|c| c.contains(AGENT_GUIDANCE_TAG_START))
-            .unwrap_or(false);
-        println!("[{}] {}",
-            if has_tag { "✓" } else { " " },
-            name
-        );
+        let has_tag = path.exists()
+            && fs::read_to_string(path)
+                .map(|c| c.contains(AGENT_GUIDANCE_TAG_START))
+                .unwrap_or(false);
+        println!("[{}] {}", if has_tag { "✓" } else { " " }, name);
     }
 
     println!("\n=== Verification Complete ===");
@@ -161,35 +322,88 @@ pub fn run_uninstall() -> Result<()> {
             app_path.join("Claude").join("claude_desktop_config.json"),
             app_path.join("Code").join("User").join("globalStorage"),
             app_path.join("Cursor").join("User").join("globalStorage"),
-            app_path.join("Devin").join("Cascade").join("mcp_config.json"),
+            app_path
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
         )
     } else if cfg!(target_os = "macos") {
         (
-            home.join("Library").join("Application Support").join("Claude").join("claude_desktop_config.json"),
-            home.join("Library").join("Application Support").join("Code").join("User").join("globalStorage"),
-            home.join("Library").join("Application Support").join("Cursor").join("User").join("globalStorage"),
-            home.join("Library").join("Application Support").join("Devin").join("Cascade").join("mcp_config.json"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Code")
+                .join("User")
+                .join("globalStorage"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Cursor")
+                .join("User")
+                .join("globalStorage"),
+            home.join("Library")
+                .join("Application Support")
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
         )
     } else {
         (
-            home.join(".config").join("Claude").join("claude_desktop_config.json"),
-            home.join(".config").join("Code").join("User").join("globalStorage"),
-            home.join(".config").join("Cursor").join("User").join("globalStorage"),
-            home.join(".config").join("Devin").join("Cascade").join("mcp_config.json"),
+            home.join(".config")
+                .join("Claude")
+                .join("claude_desktop_config.json"),
+            home.join(".config")
+                .join("Code")
+                .join("User")
+                .join("globalStorage"),
+            home.join(".config")
+                .join("Cursor")
+                .join("User")
+                .join("globalStorage"),
+            home.join(".config")
+                .join("Devin")
+                .join("Cascade")
+                .join("mcp_config.json"),
         )
     };
 
     let mcp_targets: Vec<(PathBuf, &str)> = vec![
         (claude_path, "mcpServers"),
-        (home.join(".gemini").join("config").join("mcp_config.json"), "mcpServers"),
-        (home.join(".gemini").join("antigravity").join("mcp_config.json"), "mcpServers"),
+        (
+            home.join(".gemini").join("config").join("mcp_config.json"),
+            "mcpServers",
+        ),
+        (
+            home.join(".gemini")
+                .join("antigravity")
+                .join("mcp_config.json"),
+            "mcpServers",
+        ),
         (home.join(".cursor").join("mcp.json"), "mcpServers"),
-        (code_path.parent().unwrap_or(&code_path).join("mcp.json"), "servers"),
-        (home.join(".continue").join("mcpServers").join("config.json"), "mcpServers"),
+        (
+            code_path.parent().unwrap_or(&code_path).join("mcp.json"),
+            "servers",
+        ),
+        (
+            home.join(".continue")
+                .join("mcpServers")
+                .join("config.json"),
+            "mcpServers",
+        ),
         (devin_path, "mcpServers"),
         (home.join(".claude").join("mcp.json"), "mcpServers"),
-        (home.join(".codeium").join("windsurf").join("mcp_config.json"), "mcpServers"),
-        (home.join(".config").join("opencode").join("opencode.json"), "mcp"),
+        (
+            home.join(".codeium")
+                .join("windsurf")
+                .join("mcp_config.json"),
+            "mcpServers",
+        ),
+        (
+            home.join(".config").join("opencode").join("opencode.json"),
+            "mcp",
+        ),
         (home.join(".codex").join("config.toml"), ""),
     ];
 
@@ -229,7 +443,9 @@ fn remove_mcp_entry(config_path: &Path, server_id: &str, key: &str) -> Result<()
 
 fn remove_codex_entry(config_path: &Path) -> Result<()> {
     let content = fs::read_to_string(config_path)?;
-    let mut value: toml::Value = content.parse::<toml::Value>().unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()));
+    let mut value: toml::Value = content
+        .parse::<toml::Value>()
+        .unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()));
     if let Some(table) = value.as_table_mut() {
         if let Some(servers) = table.get_mut("mcp_servers").and_then(|v| v.as_table_mut()) {
             servers.remove(SERVER_ID);
@@ -251,7 +467,11 @@ fn remove_global_rules(home: &Path) -> Result<()> {
     for path in &targets {
         if path.exists() {
             if let Ok(content) = fs::read_to_string(path) {
-                let cleaned = strip_tagged_section(&content, AGENT_GUIDANCE_TAG_START, AGENT_GUIDANCE_TAG_END);
+                let cleaned = strip_tagged_section(
+                    &content,
+                    AGENT_GUIDANCE_TAG_START,
+                    AGENT_GUIDANCE_TAG_END,
+                );
                 if cleaned != content {
                     fs::write(path, cleaned)?;
                     info!("Cleaned rules from: {}", path.display());
@@ -264,16 +484,37 @@ fn remove_global_rules(home: &Path) -> Result<()> {
 
 fn remove_skills_enforcer(home: &Path) -> Result<()> {
     let targets = vec![
-        home.join(".claude").join("skills").join("agent-guidance").join("SKILL.md"),
-        home.join(".config").join("opencode").join("skills").join("agent-guidance").join("SKILL.md"),
-        home.join(".agents").join("skills").join("agent-guidance").join("SKILL.md"),
-        home.join(".codex").join("skills").join("agent-guidance").join("SKILL.md"),
-        home.join(".codeium").join("windsurf").join("skills").join("agent-guidance").join("SKILL.md"),
+        home.join(".claude")
+            .join("skills")
+            .join("agent-guidance")
+            .join("SKILL.md"),
+        home.join(".config")
+            .join("opencode")
+            .join("skills")
+            .join("agent-guidance")
+            .join("SKILL.md"),
+        home.join(".agents")
+            .join("skills")
+            .join("agent-guidance")
+            .join("SKILL.md"),
+        home.join(".codex")
+            .join("skills")
+            .join("agent-guidance")
+            .join("SKILL.md"),
+        home.join(".codeium")
+            .join("windsurf")
+            .join("skills")
+            .join("agent-guidance")
+            .join("SKILL.md"),
     ];
     for path in &targets {
         if path.exists() {
             if let Ok(content) = fs::read_to_string(path) {
-                let cleaned = strip_tagged_section(&content, AGENT_GUIDANCE_SKILL_TAG_START, AGENT_GUIDANCE_SKILL_TAG_END);
+                let cleaned = strip_tagged_section(
+                    &content,
+                    AGENT_GUIDANCE_SKILL_TAG_START,
+                    AGENT_GUIDANCE_SKILL_TAG_END,
+                );
                 if cleaned.trim().is_empty() {
                     let _ = fs::remove_file(path);
                     info!("Removed skill enforcer: {}", path.display());
@@ -314,12 +555,11 @@ fn check_mcp_registration(config_path: &Path, key: &str) -> bool {
         Err(_) => return false,
     };
     match serde_json::from_str::<Value>(&content) {
-        Ok(root) => {
-            root.get(key)
-                .and_then(|v| v.as_object())
-                .and_then(|m| m.get(SERVER_ID))
-                .is_some()
-        }
+        Ok(root) => root
+            .get(key)
+            .and_then(|v| v.as_object())
+            .and_then(|m| m.get(SERVER_ID))
+            .is_some(),
         Err(_) => content.contains(SERVER_ID),
     }
 }
@@ -411,7 +651,8 @@ fn configure_opencode(opencode_path: &Path, bin_path: &str) -> Result<()> {
 
     let instructions = obj.entry("instructions").or_insert_with(|| json!([]));
     if let Some(arr) = instructions.as_array_mut()
-        && !arr.contains(&json!("AGENTS.md")) {
+        && !arr.contains(&json!("AGENTS.md"))
+    {
         arr.push(json!("AGENTS.md"));
     }
 
@@ -430,11 +671,16 @@ fn configure_codex_toml(codex_path: &Path, bin_path: &str) -> Result<()> {
         String::new()
     };
 
-    let mut value: toml::Value = existing.parse::<toml::Value>().unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()));
+    let mut value: toml::Value = existing
+        .parse::<toml::Value>()
+        .unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()));
 
     let table = value.as_table_mut().expect("TOML root must be a table");
     if !table.contains_key("mcp_servers") {
-        table.insert("mcp_servers".to_string(), toml::Value::Table(toml::map::Map::new()));
+        table.insert(
+            "mcp_servers".to_string(),
+            toml::Value::Table(toml::map::Map::new()),
+        );
     }
 
     let mcp_servers = table["mcp_servers"]
@@ -447,7 +693,10 @@ fn configure_codex_toml(codex_path: &Path, bin_path: &str) -> Result<()> {
         SERVER_ID.to_string(),
         toml::Value::Table({
             let mut s = toml::map::Map::new();
-            s.insert("command".to_string(), toml::Value::String(bin_path.to_string()));
+            s.insert(
+                "command".to_string(),
+                toml::Value::String(bin_path.to_string()),
+            );
             s.insert("args".to_string(), toml::Value::Array(vec![]));
             s
         }),
@@ -465,11 +714,23 @@ fn configure_codex_toml(codex_path: &Path, bin_path: &str) -> Result<()> {
 
 fn configure_global_rules(home: &Path) -> Result<()> {
     let targets = vec![
-        ("Gemini/Antigravity", home.join(".gemini").join("config").join("AGENTS.md")),
-        ("OpenCode", home.join(".config").join("opencode").join("AGENTS.md")),
-        ("Claude Code Compatibility", home.join(".claude").join("CLAUDE.md")),
+        (
+            "Gemini/Antigravity",
+            home.join(".gemini").join("config").join("AGENTS.md"),
+        ),
+        (
+            "OpenCode",
+            home.join(".config").join("opencode").join("AGENTS.md"),
+        ),
+        (
+            "Claude Code Compatibility",
+            home.join(".claude").join("CLAUDE.md"),
+        ),
         ("ChatGPT/Codex", home.join(".codex").join("AGENTS.md")),
-        ("Windsurf", home.join(".codeium").join("windsurf").join("AGENTS.md")),
+        (
+            "Windsurf",
+            home.join(".codeium").join("windsurf").join("AGENTS.md"),
+        ),
     ];
 
     for (_name, path) in targets {
@@ -479,7 +740,12 @@ fn configure_global_rules(home: &Path) -> Result<()> {
             String::new()
         };
 
-        let new_content = replace_or_append_tagged_section(&content, AGENT_GUIDANCE_TAG_START, AGENT_GUIDANCE_TAG_END, crate::mcp::templates::AGENT_RULES_BLOCK.trim());
+        let new_content = replace_or_append_tagged_section(
+            &content,
+            AGENT_GUIDANCE_TAG_START,
+            AGENT_GUIDANCE_TAG_END,
+            crate::mcp::templates::AGENT_RULES_BLOCK.trim(),
+        );
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -491,11 +757,43 @@ fn configure_global_rules(home: &Path) -> Result<()> {
 
 fn configure_skills_enforcer(home: &Path) -> Result<()> {
     let global_targets = vec![
-        ("Claude Code Global", home.join(".claude").join("skills").join("agent-guidance").join("SKILL.md")),
-        ("OpenCode Global", home.join(".config").join("opencode").join("skills").join("agent-guidance").join("SKILL.md")),
-        ("Cline/Roo-Code Global", home.join(".agents").join("skills").join("agent-guidance").join("SKILL.md")),
-        ("ChatGPT/Codex Global", home.join(".codex").join("skills").join("agent-guidance").join("SKILL.md")),
-        ("Windsurf Global", home.join(".codeium").join("windsurf").join("skills").join("agent-guidance").join("SKILL.md")),
+        (
+            "Claude Code Global",
+            home.join(".claude")
+                .join("skills")
+                .join("agent-guidance")
+                .join("SKILL.md"),
+        ),
+        (
+            "OpenCode Global",
+            home.join(".config")
+                .join("opencode")
+                .join("skills")
+                .join("agent-guidance")
+                .join("SKILL.md"),
+        ),
+        (
+            "Cline/Roo-Code Global",
+            home.join(".agents")
+                .join("skills")
+                .join("agent-guidance")
+                .join("SKILL.md"),
+        ),
+        (
+            "ChatGPT/Codex Global",
+            home.join(".codex")
+                .join("skills")
+                .join("agent-guidance")
+                .join("SKILL.md"),
+        ),
+        (
+            "Windsurf Global",
+            home.join(".codeium")
+                .join("windsurf")
+                .join("skills")
+                .join("agent-guidance")
+                .join("SKILL.md"),
+        ),
     ];
 
     for (_name, path) in global_targets {
@@ -505,7 +803,12 @@ fn configure_skills_enforcer(home: &Path) -> Result<()> {
             String::new()
         };
 
-        let new_content = replace_or_append_tagged_section(&content, AGENT_GUIDANCE_SKILL_TAG_START, AGENT_GUIDANCE_SKILL_TAG_END, crate::mcp::templates::ENFORCER_SKILL_CONTENT.trim());
+        let new_content = replace_or_append_tagged_section(
+            &content,
+            AGENT_GUIDANCE_SKILL_TAG_START,
+            AGENT_GUIDANCE_SKILL_TAG_END,
+            crate::mcp::templates::ENFORCER_SKILL_CONTENT.trim(),
+        );
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -515,9 +818,15 @@ fn configure_skills_enforcer(home: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn replace_or_append_tagged_section(content: &str, start_tag: &str, end_tag: &str, new_section: &str) -> String {
+pub fn replace_or_append_tagged_section(
+    content: &str,
+    start_tag: &str,
+    end_tag: &str,
+    new_section: &str,
+) -> String {
     if let (Some(start_idx), Some(end_idx)) = (content.find(start_tag), content.find(end_tag))
-        && start_idx < end_idx {
+        && start_idx < end_idx
+    {
         let before = content[..start_idx].trim_end();
         let after = content[end_idx + end_tag.len()..].trim_start();
         let mut res = String::new();

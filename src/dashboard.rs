@@ -2,7 +2,7 @@ use anyhow::Result;
 use rust_embed::Embed;
 use serde_json::json;
 use std::path::PathBuf;
-use std::sync::{mpsc::sync_channel, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc::sync_channel};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tiny_http::{Header, Response, Server, StatusCode};
 
@@ -28,7 +28,8 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
     });
 
     let addr = format!("127.0.0.1:{}", port);
-    let server = Server::http(&addr).map_err(|e| anyhow::anyhow!("Failed to bind server to {}: {}", addr, e))?;
+    let server = Server::http(&addr)
+        .map_err(|e| anyhow::anyhow!("Failed to bind server to {}: {}", addr, e))?;
     println!("✓ Usage Dashboard server listening on http://{}", addr);
     let stats_cache = Arc::new(Mutex::new(StatsCache::default()));
 
@@ -38,12 +39,14 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
         let receiver = receiver.clone();
         let project_path = proj_dir.clone();
         let cache = stats_cache.clone();
-        std::thread::spawn(move || loop {
-            let request = match receiver.lock().ok().and_then(|queue| queue.recv().ok()) {
-                Some(request) => request,
-                None => break,
-            };
-            handle_dashboard_request(request, &project_path, &cache);
+        std::thread::spawn(move || {
+            loop {
+                let request = match receiver.lock().ok().and_then(|queue| queue.recv().ok()) {
+                    Some(request) => request,
+                    None => break,
+                };
+                handle_dashboard_request(request, &project_path, &cache);
+            }
         });
     }
 
@@ -56,8 +59,17 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
     Ok(())
 }
 
-fn handle_dashboard_request(request: tiny_http::Request, project_path: &str, cache: &Arc<Mutex<StatsCache>>) {
-    let url = request.url().split('?').next().unwrap_or("/").trim_end_matches('/');
+fn handle_dashboard_request(
+    request: tiny_http::Request,
+    project_path: &str,
+    cache: &Arc<Mutex<StatsCache>>,
+) {
+    let url = request
+        .url()
+        .split('?')
+        .next()
+        .unwrap_or("/")
+        .trim_end_matches('/');
     let path = if url.is_empty() { "/" } else { url };
 
     match path {
@@ -79,7 +91,11 @@ fn handle_dashboard_request(request: tiny_http::Request, project_path: &str, cac
         _ if path.starts_with("/js/") => {
             let rel = path.trim_start_matches("/js/");
             let asset_path = format!("js/{}", rel);
-            serve_asset(request, &asset_path, "application/javascript; charset=utf-8");
+            serve_asset(
+                request,
+                &asset_path,
+                "application/javascript; charset=utf-8",
+            );
         }
         _ => json_response(request, 404, &json!({"error": "Not found"})),
     }
@@ -94,7 +110,11 @@ fn serve_asset(request: tiny_http::Request, name: &str, mime_type: &str) {
             .with_status_code(StatusCode(200));
         let _ = request.respond(response);
     } else {
-        json_response(request, 404, &json!({"error": format!("Asset '{}' not found", name)}));
+        json_response(
+            request,
+            404,
+            &json!({"error": format!("Asset '{}' not found", name)}),
+        );
     }
 }
 
@@ -124,12 +144,16 @@ fn handle_api_stats(request: tiny_http::Request, proj_dir: &str, cache: &Arc<Mut
         .unwrap_or_else(|| PathBuf::from("usage.db"));
 
     if !db_path.exists() {
-        json_response(request, 200, &json!({
-            "success": false,
-            "error": "NO_USAGE_DATA",
-            "db_status": "missing",
-            "message": format!("No usage.db found at {:?}", db_path)
-        }));
+        json_response(
+            request,
+            200,
+            &json!({
+                "success": false,
+                "error": "NO_USAGE_DATA",
+                "db_status": "missing",
+                "message": format!("No usage.db found at {:?}", db_path)
+            }),
+        );
         return;
     }
 
@@ -180,53 +204,64 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
                 COALESCE(SUM(tokens_original), 0) AS tok_orig,
                 COALESCE(SUM(tokens_optimized), 0) AS tok_opt
          FROM tool_calls WHERE started_at >= ?
-         GROUP BY tool_name, operation ORDER BY cnt DESC LIMIT 50"
+         GROUP BY tool_name, operation ORDER BY cnt DESC LIMIT 50",
     )?;
-    let tool_breakdown: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
-        Ok(json!({
-            "tool_name": row.get::<_, String>(0)?,
-            "operation": row.get::<_, Option<String>>(1)?,
-            "cnt": row.get::<_, i64>(2)?,
-            "tok_orig": row.get::<_, i64>(3)?,
-            "tok_opt": row.get::<_, i64>(4)?,
-        }))
-    })?.filter_map(|r| r.ok()).collect();
+    let tool_breakdown: Vec<serde_json::Value> = stmt
+        .query_map([cutoff_24h], |row| {
+            Ok(json!({
+                "tool_name": row.get::<_, String>(0)?,
+                "operation": row.get::<_, Option<String>>(1)?,
+                "cnt": row.get::<_, i64>(2)?,
+                "tok_orig": row.get::<_, i64>(3)?,
+                "tok_opt": row.get::<_, i64>(4)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
 
     let mut stmt = conn.prepare(
         "SELECT skill_id, COUNT(*) AS cnt FROM skill_loads WHERE loaded_at >= ? GROUP BY skill_id ORDER BY cnt DESC LIMIT 50"
     )?;
-    let top_skills: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
-        Ok(json!({
-            "skill_id": row.get::<_, String>(0)?,
-            "cnt": row.get::<_, i64>(1)?,
-        }))
-    })?.filter_map(|r| r.ok()).collect();
+    let top_skills: Vec<serde_json::Value> = stmt
+        .query_map([cutoff_24h], |row| {
+            Ok(json!({
+                "skill_id": row.get::<_, String>(0)?,
+                "cnt": row.get::<_, i64>(1)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
 
-    let mut stmt = conn.prepare(
-        "SELECT skill_id, loaded_at FROM skill_loads ORDER BY loaded_at DESC LIMIT 10"
-    )?;
-    let recent_skill_calls: Vec<serde_json::Value> = stmt.query_map([], |row| {
-        Ok(json!({
-            "skill_id": row.get::<_, String>(0)?,
-            "loaded_at": row.get::<_, i64>(1)?,
-        }))
-    })?.filter_map(|r| r.ok()).collect();
+    let mut stmt = conn
+        .prepare("SELECT skill_id, loaded_at FROM skill_loads ORDER BY loaded_at DESC LIMIT 10")?;
+    let recent_skill_calls: Vec<serde_json::Value> = stmt
+        .query_map([], |row| {
+            Ok(json!({
+                "skill_id": row.get::<_, String>(0)?,
+                "loaded_at": row.get::<_, i64>(1)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
 
     let mut stmt = conn.prepare(
         "SELECT tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, error_message
          FROM tool_calls WHERE started_at >= ? ORDER BY started_at DESC LIMIT 50"
     )?;
-    let recent_actions: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
-        Ok(json!({
-            "tool_name": row.get::<_, String>(0)?,
-            "operation": row.get::<_, Option<String>>(1)?,
-            "started_at": row.get::<_, i64>(2)?,
-            "duration_ms": row.get::<_, Option<i64>>(3)?.unwrap_or(0),
-            "tokens_original": row.get::<_, Option<i64>>(4)?.unwrap_or(0),
-            "tokens_optimized": row.get::<_, Option<i64>>(5)?.unwrap_or(0),
-            "error_message": row.get::<_, Option<String>>(6)?,
-        }))
-    })?.filter_map(|r| r.ok()).collect();
+    let recent_actions: Vec<serde_json::Value> = stmt
+        .query_map([cutoff_24h], |row| {
+            Ok(json!({
+                "tool_name": row.get::<_, String>(0)?,
+                "operation": row.get::<_, Option<String>>(1)?,
+                "started_at": row.get::<_, i64>(2)?,
+                "duration_ms": row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                "tokens_original": row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                "tokens_optimized": row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                "error_message": row.get::<_, Option<String>>(6)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
 
     let current_hour = now / 3600;
     let mut hourly_savings = Vec::new();
@@ -235,12 +270,14 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         let bucket_start = bucket * 3600;
         let bucket_end = bucket_start + 3600;
 
-        let (orig, opt): (i64, i64) = conn.query_row(
-            "SELECT COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0)
+        let (orig, opt): (i64, i64) = conn
+            .query_row(
+                "SELECT COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0)
              FROM tool_calls WHERE started_at >= ? AND started_at < ?",
-            [bucket_start, bucket_end],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        ).unwrap_or((0, 0));
+                [bucket_start, bucket_end],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap_or((0, 0));
 
         let saved = orig - opt;
         let date_label = format!("{:02}:00", bucket % 24);
@@ -272,7 +309,11 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         });
         let (calls, skills, embeds, llms, orig, opt) = res.unwrap_or((0, 0, 0, 0, 0, 0));
         let saved = orig - opt;
-        let pct = if orig > 0 { ((saved as f64 / orig as f64) * 100.0 * 10.0).round() / 10.0 } else { 0.0 };
+        let pct = if orig > 0 {
+            ((saved as f64 / orig as f64) * 100.0 * 10.0).round() / 10.0
+        } else {
+            0.0
+        };
         json!({
             "tool_calls": calls,
             "skills_loaded": skills,
@@ -285,13 +326,41 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         })
     };
 
-    let p24_calls: i64 = conn.query_row("SELECT COUNT(*) FROM tool_calls WHERE started_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
-    let p24_skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
-    let p24_embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
-    let p24_llm: i64 = conn.query_row("SELECT COUNT(*) FROM llm_queries WHERE queried_at >= ?", [cutoff_24h], |r| r.get(0)).unwrap_or(0);
+    let p24_calls: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tool_calls WHERE started_at >= ?",
+            [cutoff_24h],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let p24_skills: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?",
+            [cutoff_24h],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let p24_embeds: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?",
+            [cutoff_24h],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let p24_llm: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM llm_queries WHERE queried_at >= ?",
+            [cutoff_24h],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
     let (p24_orig, p24_opt): (i64, i64) = conn.query_row("SELECT COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0) FROM tool_calls WHERE started_at >= ?", [cutoff_24h], |r| Ok((r.get(0)?, r.get(1)?))).unwrap_or((0, 0));
     let p24_saved = p24_orig - p24_opt;
-    let p24_pct = if p24_orig > 0 { ((p24_saved as f64 / p24_orig as f64) * 100.0 * 10.0).round() / 10.0 } else { 0.0 };
+    let p24_pct = if p24_orig > 0 {
+        ((p24_saved as f64 / p24_orig as f64) * 100.0 * 10.0).round() / 10.0
+    } else {
+        0.0
+    };
 
     let past_24h_summary = json!({
         "tool_calls": p24_calls,
@@ -313,12 +382,15 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
     let mut stmt = conn.prepare(
         "SELECT query_text, queried_at FROM embed_queries WHERE queried_at >= ? ORDER BY queried_at DESC LIMIT 50"
     )?;
-    let embed_recent: Vec<serde_json::Value> = stmt.query_map([cutoff_24h], |row| {
-        Ok(json!({
-            "query": row.get::<_, String>(0)?,
-            "created_at": row.get::<_, i64>(1)?,
-        }))
-    })?.filter_map(|r| r.ok()).collect();
+    let embed_recent: Vec<serde_json::Value> = stmt
+        .query_map([cutoff_24h], |row| {
+            Ok(json!({
+                "query": row.get::<_, String>(0)?,
+                "created_at": row.get::<_, i64>(1)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
 
     Ok(json!({
         "db_status": "ok",

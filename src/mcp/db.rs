@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, params};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -37,10 +37,22 @@ fn get_today_string(now_secs: i64) -> String {
 }
 
 fn prune_old_records(conn: &Connection, cutoff_secs: i64) {
-    let _ = conn.execute("DELETE FROM tool_calls WHERE started_at < ?", params![cutoff_secs]);
-    let _ = conn.execute("DELETE FROM skill_loads WHERE loaded_at < ?", params![cutoff_secs]);
-    let _ = conn.execute("DELETE FROM embed_queries WHERE created_at < ?", params![cutoff_secs]);
-    let _ = conn.execute("DELETE FROM llm_queries WHERE created_at < ?", params![cutoff_secs]);
+    let _ = conn.execute(
+        "DELETE FROM tool_calls WHERE started_at < ?",
+        params![cutoff_secs],
+    );
+    let _ = conn.execute(
+        "DELETE FROM skill_loads WHERE loaded_at < ?",
+        params![cutoff_secs],
+    );
+    let _ = conn.execute(
+        "DELETE FROM embed_queries WHERE created_at < ?",
+        params![cutoff_secs],
+    );
+    let _ = conn.execute(
+        "DELETE FROM llm_queries WHERE created_at < ?",
+        params![cutoff_secs],
+    );
 }
 
 fn update_daily_summary(
@@ -127,7 +139,16 @@ pub fn log_tool_call(
     }
 
     let day_str = get_today_string(now);
-    update_daily_summary(&conn, &day_str, 1, 0, 0, 0, orig_tokens as i64, opt_tokens as i64);
+    update_daily_summary(
+        &conn,
+        &day_str,
+        1,
+        0,
+        0,
+        0,
+        orig_tokens as i64,
+        opt_tokens as i64,
+    );
 }
 
 pub fn log_skill_load(skill_id: &str) {

@@ -3,9 +3,9 @@ use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{Repo, RepoType, api::sync::ApiBuilder};
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokenizers::Tokenizer;
@@ -202,7 +202,9 @@ fn load_precomputed_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
     if cached_skills != current_skills {
         return None;
     }
-    if manifest.get("fingerprint").and_then(|value| value.as_u64()) != Some(catalog_fingerprint(skills)) {
+    if manifest.get("fingerprint").and_then(|value| value.as_u64())
+        != Some(catalog_fingerprint(skills))
+    {
         return None;
     }
     let data = PRECOMPUTED_VECTORS;
@@ -302,7 +304,11 @@ pub fn generate_precomputed_cache() -> Result<()> {
         let mut token_buf = Vec::new();
         token_buf.extend_from_slice(&count.to_le_bytes());
         for c in &candidates {
-            let prompt = format!("passage: {} {}", c.name, c.content.chars().take(300).collect::<String>());
+            let prompt = format!(
+                "passage: {} {}",
+                c.name,
+                c.content.chars().take(300).collect::<String>()
+            );
             if let Ok(encoding) = model_guard.tokenizer.encode(prompt, true) {
                 let ids = encoding.get_ids();
                 let len = ids.len() as u32;
@@ -396,7 +402,9 @@ fn load_passage_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
     if cached_skills != current_skills {
         return None;
     }
-    if manifest.get("fingerprint").and_then(|value| value.as_u64()) != Some(catalog_fingerprint(skills)) {
+    if manifest.get("fingerprint").and_then(|value| value.as_u64())
+        != Some(catalog_fingerprint(skills))
+    {
         return None;
     }
 
@@ -430,7 +438,11 @@ fn load_passage_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
 
 pub fn cached_model() -> Result<std::sync::RwLockReadGuard<'static, EmbeddingModel>, String> {
     static MODEL: OnceLock<Result<RwLock<EmbeddingModel>, String>> = OnceLock::new();
-    match MODEL.get_or_init(|| EmbeddingModel::load_or_download().map(RwLock::new).map_err(|e| e.to_string())) {
+    match MODEL.get_or_init(|| {
+        EmbeddingModel::load_or_download()
+            .map(RwLock::new)
+            .map_err(|e| e.to_string())
+    }) {
         Ok(model) => model.read().map_err(|_| "RwLock poisoned".to_string()),
         Err(err) => Err(err.clone()),
     }
@@ -548,8 +560,15 @@ fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Arc<V
             .collect()
     });
     store_passage_cache(vecs, candidates);
-    cache.read().ok()
-        .and_then(|guard| guard.iter().find(|entry| entry.fingerprint == fingerprint).map(|entry| entry.vectors.clone()))
+    cache
+        .read()
+        .ok()
+        .and_then(|guard| {
+            guard
+                .iter()
+                .find(|entry| entry.fingerprint == fingerprint)
+                .map(|entry| entry.vectors.clone())
+        })
         .unwrap_or_else(|| Arc::new(Vec::new()))
 }
 
@@ -604,7 +623,11 @@ pub fn hybrid_vector_search(
             }
 
             scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-            return scored.into_iter().take(top_k).map(|(s, i)| (s, candidates[i].clone())).collect();
+            return scored
+                .into_iter()
+                .take(top_k)
+                .map(|(s, i)| (s, candidates[i].clone()))
+                .collect();
         }
     }
 
@@ -634,7 +657,11 @@ pub fn hybrid_vector_search(
     }
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored.into_iter().take(top_k).map(|(s, i)| (s, candidates[i].clone())).collect()
+    scored
+        .into_iter()
+        .take(top_k)
+        .map(|(s, i)| (s, candidates[i].clone()))
+        .collect()
 }
 
 #[cfg(test)]
