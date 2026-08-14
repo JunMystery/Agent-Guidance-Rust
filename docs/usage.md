@@ -18,16 +18,15 @@ Open the printed URL, usually `http://localhost:5173`, and inspect the registere
 
 At the start of a coding session:
 
-1. Call `task_pipeline(task, project_path, phase="plan")` to load relevant standards, skill recommendations, and an initial project tree.
-2. For large refactors, upgrades, audits, or unfamiliar code, use `project_context(operation="search", project_path=..., query=...)` and `project_context(operation="tree", project_path=...)` when a reusable overview is useful.
-3. Use `guidance(operation="precode", query=task)` to get a structured pre-code checklist before editing.
-4. Before editing any file, verify the workflow stage allows edits: `workflow_gate(action="check")` → if not `Build` with `plan_approved=true`, present implementation plan and call `workflow_gate(action="set_stage", target_stage="Build")`.
-5. Call `require_edit_approval(project_path=..., risk_level="LOW", justification=..., architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` immediately before any file edit to confirm architectural compliance gate is open.
-6. Inspect the current target file with `project_context(operation="read", relative_path=...)`.
-7. Use `ui_ux(operation=...)` for frontend, design-system, branding, landing page, dashboard, or slide guidance.
-8. Run smallest relevant verification command after changes (`cargo test`, `npm test`).
+1. Call `task_pipeline(task, project_path, phase="plan")` to unlock the priority gate, initialize language/architecture detection, and load relevant standards and skill proposals.
+2. For large refactors, upgrades, audits, or unfamiliar code, use `project_context(operation="search", project_path=..., query=...)`, `project_context(operation="symbols", ...)`, and `project_context(operation="tree", project_path=...)`.
+3. Use `guidance(operation="precode", query=task)` to get a structured upfront sub-module decomposition blueprint tailored to the project's architecture.
+4. Before editing any file, verify the workflow stage allows edits: `workflow_gate(action="check")` → present implementation plan to user.
+5. Authorize the edit using composite `workflow_gate(action="authorize_edit", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"CLI_Pipeline"|"Flat_Library"|"Orchestrator"|"Auto")` once approved.
+6. Inspect target files with `project_context(operation="read", relative_path=..., target_symbol=...)` (bounded at 300 LOC max).
+7. Run empirical verification tests after changes (`cargo test`, `npm test`).
+8. Register verification results using `guidance(operation="verify", verification_command=..., expected_output_keyword=...)`.
 9. Use `session_continuity(operation="save", ...)` to persist task state across interruptions.
-10. Use `guidance(operation="verify", verification_command=..., expected_output_keyword=...)` for post-change verification steps.
 
 Avoid repeated broad scans during the same session unless the project changed significantly.
 

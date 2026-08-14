@@ -301,6 +301,38 @@ impl ServerState {
         self.plan_approved = true;
     }
 
+    pub fn load_persisted_architecture(proj_path: &Path) -> Option<String> {
+        let arch_file = proj_path.join(".agent-context").join("architecture.json");
+        if arch_file.exists() {
+            if let Ok(content) = fs::read_to_string(&arch_file) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(pat) = val.get("architecture_pattern").and_then(|p| p.as_str()) {
+                        let trimmed = pat.trim();
+                        if !trimmed.is_empty() {
+                            return Some(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn save_persisted_architecture(proj_path: &Path, pattern: &str) -> Result<(), String> {
+        let dir = proj_path.join(".agent-context");
+        if let Err(e) = fs::create_dir_all(&dir) {
+            return Err(format!("Failed to create .agent-context directory: {}", e));
+        }
+        let arch_file = dir.join("architecture.json");
+        let payload = serde_json::json!({
+            "architecture_pattern": pattern,
+            "updated_at": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+        });
+        let content = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
+        fs::write(&arch_file, content).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn set_stage(&mut self, target: &str) -> Result<String, String> {
         let normalized = match target.trim().to_lowercase().as_str() {
             "context" => "Context",
@@ -321,7 +353,7 @@ impl ServerState {
         if normalized == "Plan" || normalized == "Context" {
             self.plan_approved = false;
             self.edit_authorized = false;
-            self.active_architecture_pattern = None;
+            // Note: active_architecture_pattern is preserved across stages for session consistency
         }
 
         if normalized == "Build" && !self.plan_approved {
@@ -480,14 +512,17 @@ impl ServerState {
                         .unwrap_or("");
                     if !matches!(
                         arch_pattern,
-                        "Auto"
+                        ""
+                            | "Auto"
                             | "auto"
                             | "Clean_Architecture"
                             | "Layered_Architecture"
                             | "Package_By_Feature"
                             | "Orchestrator"
+                            | "CLI_Pipeline"
+                            | "Flat_Library"
                     ) {
-                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', or 'Auto') in `workflow_gate(action=\"authorize_edit\")`.".to_string())
+                        Err("ARCHITECTURE_GATE_BLOCKED: You must provide a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', 'CLI_Pipeline', 'Flat_Library', or 'Auto') in `workflow_gate(action=\"authorize_edit\")`.".to_string())
                     } else {
                         Ok(())
                     }

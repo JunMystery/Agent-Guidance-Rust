@@ -81,10 +81,15 @@ fn is_generic_home_dir(p: &Path) -> bool {
 }
 
 pub fn detect_project_architecture(proj_path: &Path) -> String {
+    // 1. Check persistent project architecture configuration if present
+    if let Some(persisted) = ServerState::load_persisted_architecture(proj_path) {
+        return persisted;
+    }
+
     let files = scan_project(proj_path, 3);
     let paths: Vec<String> = files.into_iter().map(|f| f.path.to_lowercase()).collect();
 
-    if paths
+    let detected = if paths
         .iter()
         .any(|p| p.contains("domain") || p.contains("usecase") || p.contains("infrastructure"))
     {
@@ -99,17 +104,34 @@ pub fn detect_project_architecture(proj_path: &Path) -> String {
         .any(|p| p.contains("features") || p.contains("modules"))
     {
         "Package_By_Feature".to_string()
+    } else if paths
+        .iter()
+        .any(|p| p.contains("commands") || p.contains("cli") || p.contains("cmd") || p.contains("args"))
+    {
+        "CLI_Pipeline".to_string()
+    } else if paths.len() <= 12 {
+        "Flat_Library".to_string()
     } else {
         "Orchestrator".to_string()
-    }
+    };
+
+    // Automatically persist the detected pattern to .agent-context/architecture.json
+    let _ = ServerState::save_persisted_architecture(proj_path, &detected);
+    detected
 }
 
-pub fn resolve_architecture_pattern(raw_pattern: &str, proj_path: &Path) -> String {
+pub fn resolve_architecture_pattern(raw_pattern: &str, proj_path: &Path, state: &ServerState) -> String {
     let trimmed = raw_pattern.trim();
     if trimmed.is_empty()
         || trimmed.eq_ignore_ascii_case("auto")
         || trimmed.eq_ignore_ascii_case("none")
     {
+        // Check active state memory first, then disk / heuristics
+        if let Some(ref memorized) = state.active_architecture_pattern {
+            if !memorized.is_empty() {
+                return memorized.clone();
+            }
+        }
         detect_project_architecture(proj_path)
     } else {
         trimmed.to_string()
@@ -203,9 +225,38 @@ pub fn handle_tool_call(
         .map(|s| s.to_string());
 
     let res = match handle_tool_call_internal(name, arguments, state) {
-        Ok(val) => {
+        Ok(mut val) => {
             let duration = start_time.elapsed().as_millis() as u64;
-            crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, None);
+
+            // Universal token optimization & compression across all MCP tool responses
+            let opt_enabled = std::env::var("AGENT_GUIDANCE_TOKEN_OPT")
+                .map(|v| v != "0")
+                .unwrap_or(true);
+
+            let mut orig_tokens = 0;
+            let mut opt_tokens = 0;
+
+            if let Some(content_arr) = val.get_mut("content").and_then(|c| c.as_array_mut()) {
+                for item in content_arr.iter_mut() {
+                    if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                        let orig = estimate_tokens(text, false) as u64;
+                        orig_tokens += orig;
+                        if opt_enabled {
+                            let compressed = compress_markdown(text);
+                            let opt = estimate_tokens(&compressed, false) as u64;
+                            opt_tokens += opt;
+                            if let Some(obj) = item.as_object_mut() {
+                                obj.insert("text".to_string(), Value::String(compressed));
+                            }
+                        } else {
+                            opt_tokens += orig;
+                        }
+                    }
+                }
+            }
+
+            state.record_call(orig_tokens, opt_tokens);
+            crate::mcp::db::log_tool_call(name, op.as_deref(), orig_tokens, opt_tokens, duration, None);
             Ok(val)
         }
         Err(err) => {
@@ -295,9 +346,11 @@ fn handle_tool_call_internal(
             let detected_arch = detect_project_architecture(&proj_path);
             state.active_architecture_pattern = Some(detected_arch.clone());
 
+            let core_rules_checklist = "## Mandatory Agent Execution Mandates (9 Core Rules)\n1. **Context First**: Always run `task_pipeline` or `project_context` before reading files or modifying code.\n2. **Fast Edit Authorization**: Must call `workflow_gate(action=\"authorize_edit\")` before editing.\n3. **Token Budget**: Max 300 lines per read, use symbol extraction over full-file dumps.\n4. **No Direct FS**: Prioritize MCP tools over raw filesystem access.\n5. **Ground & Plan**: Verify codebase facts via search before proposing changes.\n6. **Upfront Architecture & 300 LOC Cap**: Enforce 300 LOC limit from line 1. Split entry dispatchers from sub-module handlers upfront.\n7. **Intent Gate**: Classify request type before acting.\n8. **Delegation First**: Decompose and delegate multi-step tasks when applicable.\n9. **Phase Progression**: Complete Context -> Plan -> Build -> Test -> Review sequence.";
+
             state.record_call(1500, 450);
             format!(
-                "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {}\n\n## Recommendations\n{}\n\n## Architecture Guidance\n- Detected Pattern: {}\n- Enforce: Create thin dispatcher main + sub-module files from line 1 (Upfront Architecture)\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
+                "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {}\n\n## Recommendations\n{}\n\n## Architecture Guidance\n- Active Pattern: {}\n- Enforce: Create thin dispatcher main + sub-module files from line 1 (Upfront Architecture, 300 LOC Cap)\n\n{}\n\n## Execution Sequence\n{}\n\n## Project Tree (Scanned Files: {})\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
                 task,
                 phase,
                 proj_path.display(),
@@ -308,6 +361,7 @@ fn handle_tool_call_internal(
                     rec_skills.join("\n")
                 },
                 detected_arch,
+                core_rules_checklist,
                 execution_seq,
                 file_count,
                 tree_preview.join("\n"),
@@ -624,9 +678,30 @@ fn handle_tool_call_internal(
                         }
                     };
 
+                    let arch_blueprint = match active_arch.as_str() {
+                        "Clean_Architecture" => {
+                            "- Upfront Blueprint: Entry Dispatcher (< 100 LOC) -> `domain/` models/traits (< 200 LOC) -> `usecase/` business logic (< 250 LOC) -> `infrastructure/` (< 250 LOC)."
+                        }
+                        "Layered_Architecture" => {
+                            "- Upfront Blueprint: Dispatcher (< 100 LOC) -> `controllers/` (< 200 LOC) -> `services/` (< 250 LOC) -> `models/` (< 150 LOC)."
+                        }
+                        "Package_By_Feature" => {
+                            "- Upfront Blueprint: Feature Entry (< 100 LOC) -> feature-specific handler (< 200 LOC) -> feature types (< 150 LOC)."
+                        }
+                        "CLI_Pipeline" => {
+                            "- Upfront Blueprint: CLI entrypoint main (< 80 LOC) -> `commands/` sub-handlers (< 200 LOC) -> core execution engine (< 250 LOC)."
+                        }
+                        "Flat_Library" => {
+                            "- Upfront Blueprint: Public API facade (< 120 LOC) -> focused internal modules (< 250 LOC each)."
+                        }
+                        _ => {
+                            "- Upfront Blueprint: Thin main dispatcher (< 100 LOC) -> dedicated feature sub-modules (< 250 LOC each)."
+                        }
+                    };
+
                     format!(
-                        "# Pre-Code Verification Checklist\n\n- Primary Language: {}\n- Detected Pattern: {}\n\n1. **Upfront Architecture**: Enforce '{}' (create thin dispatcher main + sub-module files from line 1, cap files < 300 LOC).\n2. **Language Rules**: {}\n3. **Symbol Inspection**: Verify symbols via `project_context` search before calling or editing.\n4. **Error Handling**: Preserve existing error handling contracts and avoid masking exceptions.",
-                        primary_lang, active_arch, active_arch, lang_rules
+                        "# Pre-Code Verification Checklist\n\n- Primary Language: {}\n- Architecture Pattern: {}\n\n1. **Upfront Architecture & 300 LOC Cap (Mandatory)**:\n   {}\n   - *Hard Rule*: Do NOT wait for files to reach 300 LOC to refactor. Create sub-modules from line 1.\n2. **Language Rules**:\n   {}\n3. **Symbol & API Grounding**:\n   - Verify symbol signatures using `project_context(operation=\"symbols\")` or search before modifying callers.\n4. **Error Handling Integrity**:\n   - Preserve existing error boundaries. Never use unwrap() or empty catch blocks in production paths.",
+                        primary_lang, active_arch, arch_blueprint, lang_rules
                     )
                 }
                 "verify" => {
@@ -742,6 +817,9 @@ fn handle_tool_call_internal(
                                             }
                                         }
 
+                                        let total_lines = lines.len();
+                                        let was_capped = total_lines > 300;
+
                                         let bounded = lines
                                             .into_iter()
                                             .take(300)
@@ -750,15 +828,29 @@ fn handle_tool_call_internal(
                                         let compressed = compress_markdown(&bounded);
                                         state
                                             .record_call(orig_len / 4, compressed.len() as u64 / 4);
+
+                                        let loc_warning = if was_capped && target_symbol.is_none() {
+                                            format!(
+                                                "\n\n---\n⚠️ **ARCHITECTURE MANDATE (300 LOC Cap Exceeded)**: File `{}` has **{} total lines** (capped at 300 lines).\n**MANDATORY ACTION**: Do NOT add new logic directly into this file. Decompose into sub-modules upfront (split entry dispatchers from sub-module handlers).",
+                                                rel_path, total_lines
+                                            )
+                                        } else if total_lines > 100 && target_symbol.is_none() {
+                                            format!(
+                                                "\n\n---\n💡 **Token Optimization Tip**: Pass `target_symbol=\"<fn_or_struct_name>\"` in `project_context(operation=\"read\")` to extract only the target definition and save token budget."
+                                            )
+                                        } else {
+                                            String::new()
+                                        };
+
                                         if let Some(symbol) = target_symbol {
                                             format!(
-                                                "# Target Symbol Extracted: '{}' from {}\n\n{}",
-                                                symbol, rel_path, compressed
+                                                "# Target Symbol Extracted: '{}' from {}\n\n{}{}",
+                                                symbol, rel_path, compressed, loc_warning
                                             )
                                         } else {
                                             format!(
-                                                "# Bounded File Content: {}\n\n{}",
-                                                rel_path, compressed
+                                                "# Bounded File Content: {}\n\n{}{}",
+                                                rel_path, compressed, loc_warning
                                             )
                                         }
                                     }
@@ -806,9 +898,10 @@ fn handle_tool_call_internal(
                 "architecture" => {
                     let arch_pattern = detect_project_architecture(&proj_path);
                     state.active_architecture_pattern = Some(arch_pattern.clone());
+                    let _ = ServerState::save_persisted_architecture(&proj_path, &arch_pattern);
                     state.record_call(1000, 200);
                     format!(
-                        "# Project Architecture Analysis\n\n- Detected Pattern: {}\n- Workspace Root: {}\n\nArchitectural Guidelines:\n- Clean_Architecture: Enforce strict separation between domain, usecase, infrastructure.\n- Layered_Architecture: Enforce controllers -> services -> models flow.\n- Package_By_Feature: Organize code by features/modules.\n- Orchestrator: Keep dispatcher thin and split logic into sub-modules upfront.",
+                        "# Project Architecture Analysis\n\n- Detected / Memorized Pattern: {}\n- Workspace Root: {}\n- Persistence: Memorized in `.agent-context/architecture.json`\n\nArchitectural Guidelines:\n- Clean_Architecture: Enforce strict separation between domain, usecase, infrastructure.\n- Layered_Architecture: Enforce controllers -> services -> models flow.\n- Package_By_Feature: Organize code by features/modules.\n- Orchestrator: Keep dispatcher thin and split logic into sub-modules upfront.\n- CLI_Pipeline: Separate argument parsing, command handlers, and core execution engine.\n- Flat_Library: Keep modules focused and avoid over-nested directories.",
                         arch_pattern,
                         proj_path.display()
                     )
@@ -1003,6 +1096,27 @@ fn handle_tool_call_internal(
                         state.workflow_stage, state.plan_approved, state.fix_attempts, edit_allowed
                     )
                 }
+                "set_architecture" => {
+                    let raw_arch = arguments
+                        .get("architecture_pattern")
+                        .or_else(|| arguments.get("pattern"))
+                        .and_then(|a| a.as_str())
+                        .unwrap_or("Auto");
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
+                    state.update_project_path(&proj_path);
+                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path, state);
+                    state.active_architecture_pattern = Some(arch_pattern.clone());
+                    let _ = ServerState::save_persisted_architecture(&proj_path, &arch_pattern);
+                    format!(
+                        "# Architecture Pattern Locked\n\n- Project: {}\n- Confirmed Architecture: {}\n- Persistence: Saved to `.agent-context/architecture.json`\n\n✓ Pattern memorized for all workflow stages and future sessions.",
+                        proj_path.display(),
+                        arch_pattern
+                    )
+                }
                 "advance" => {
                     // SECURITY FIX Bug #3: Do NOT auto-process user_message in advance to prevent agent self-approval
                     let target_stage = arguments
@@ -1027,7 +1141,7 @@ fn handle_tool_call_internal(
                         .unwrap_or("LOW");
                     state.last_risk_level = Some(risk_level.to_string());
 
-                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path);
+                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path, state);
 
                     if matches!(
                         arch_pattern.as_str(),
@@ -1035,6 +1149,8 @@ fn handle_tool_call_internal(
                             | "Layered_Architecture"
                             | "Package_By_Feature"
                             | "Orchestrator"
+                            | "CLI_Pipeline"
+                            | "Flat_Library"
                     ) && state.workflow_stage == "Build"
                         && state.plan_approved
                     {
@@ -1074,7 +1190,7 @@ fn handle_tool_call_internal(
                         .get("architecture_pattern")
                         .and_then(|a| a.as_str())
                         .unwrap_or("Auto");
-                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path);
+                    let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path, state);
 
                     state.last_risk_level = Some(risk_level.to_string());
 
@@ -1084,9 +1200,11 @@ fn handle_tool_call_internal(
                             | "Layered_Architecture"
                             | "Package_By_Feature"
                             | "Orchestrator"
+                            | "CLI_Pipeline"
+                            | "Flat_Library"
                     ) {
                         format!(
-                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...)`.",
+                            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', 'CLI_Pipeline', 'Flat_Library', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...)`.",
                             proj_path.display(),
                             if arch_pattern.is_empty() {
                                 "NONE"
@@ -1311,13 +1429,14 @@ mod tests {
             "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator"
         ));
 
-        let auto_resolved = resolve_architecture_pattern("Auto", &cwd);
+        let state = ServerState::new();
+        let auto_resolved = resolve_architecture_pattern("Auto", &cwd, &state);
         assert_eq!(auto_resolved, detected);
 
-        let empty_resolved = resolve_architecture_pattern("", &cwd);
+        let empty_resolved = resolve_architecture_pattern("", &cwd, &state);
         assert_eq!(empty_resolved, detected);
 
-        let explicit_resolved = resolve_architecture_pattern("Clean_Architecture", &cwd);
+        let explicit_resolved = resolve_architecture_pattern("Clean_Architecture", &cwd, &state);
         assert_eq!(explicit_resolved, "Clean_Architecture");
     }
 
@@ -1359,7 +1478,7 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string();
-        assert!(precode_text.contains("Detected Pattern:"));
+        assert!(precode_text.contains("Architecture Pattern:"));
     }
 
     #[test]
@@ -1383,7 +1502,7 @@ mod tests {
             .unwrap()
             .to_string();
         assert!(text.contains("# Project Architecture Analysis"));
-        assert!(text.contains("Detected Pattern:"));
+        assert!(text.contains("Pattern:"));
     }
 
     #[test]
@@ -1467,5 +1586,111 @@ mod tests {
             .to_string();
         assert!(text.contains("Status: PASSED"));
         assert_eq!(state.workflow_stage, "Build");
+    }
+
+    #[test]
+    fn test_architecture_pattern_persistence_and_locking() {
+        let temp_dir = std::env::temp_dir().join(format!("arch_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let mut state = ServerState::new();
+
+        // 1. Explicitly set architecture pattern via workflow_gate
+        let set_res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "set_architecture",
+                "architecture_pattern": "CLI_Pipeline",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(set_res.is_ok());
+        assert_eq!(
+            state.active_architecture_pattern.as_deref(),
+            Some("CLI_Pipeline")
+        );
+
+        // 2. Verify disk persistence in .agent-context/architecture.json
+        let loaded = ServerState::load_persisted_architecture(&temp_dir);
+        assert_eq!(loaded.as_deref(), Some("CLI_Pipeline"));
+
+        // 3. Stage transition to Plan does not wipe active_architecture_pattern
+        let plan_stage = state.set_stage("Plan");
+        assert!(plan_stage.is_ok());
+        assert_eq!(
+            state.active_architecture_pattern.as_deref(),
+            Some("CLI_Pipeline")
+        );
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_expanded_architecture_patterns() {
+        let mut state = ServerState::new();
+        state.workflow_stage = "Build".to_string();
+        state.plan_approved = true;
+
+        for pattern in &["CLI_Pipeline", "Flat_Library", "Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"] {
+            let res = handle_tool_call(
+                "workflow_gate",
+                json!({
+                    "action": "authorize_edit",
+                    "architecture_pattern": pattern,
+                    "risk_level": "LOW",
+                    "justification": "Testing expanded pattern"
+                }),
+                &mut state,
+            );
+            assert!(res.is_ok(), "Pattern {} should be authorized: {:?}", pattern, res);
+            let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+            assert!(text.contains("Status: PASSED"), "Pattern {} failed authorization: {}", pattern, text);
+        }
+    }
+
+    #[test]
+    fn test_project_context_read_300_loc_warning() {
+        let temp_dir = std::env::temp_dir().join(format!("read_loc_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let large_file = temp_dir.join("large_file.rs");
+        let content = (1..=350).map(|i| format!("fn function_{}() {{}}", i)).collect::<Vec<_>>().join("\n");
+        let _ = std::fs::write(&large_file, &content);
+
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "project_context",
+            json!({
+                "operation": "read",
+                "relative_path": "large_file.rs",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("ARCHITECTURE MANDATE (300 LOC Cap Exceeded)"));
+        assert!(text.contains("350 total lines"));
+        assert!(text.contains("Decompose into sub-modules upfront"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_precode_upfront_split_blueprint() {
+        let mut state = ServerState::new();
+        state.active_architecture_pattern = Some("CLI_Pipeline".to_string());
+
+        let res = handle_tool_call(
+            "guidance",
+            json!({ "operation": "precode", "query": "rust" }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Upfront Architecture & 300 LOC Cap (Mandatory)"));
+        assert!(text.contains("CLI_Pipeline"));
+        assert!(text.contains("CLI entrypoint main (< 80 LOC)"));
     }
 }
