@@ -93,6 +93,34 @@ The built-in ML catalog engine leverages local Rust bindings for Hugging Face `c
 - **Stage 2 (Intent Reranking)**: Cross-encoder reranks top candidates based on domain context.
 - **On-Demand Loading**: Skills are injected dynamically into context via `select_skills(skills=[...])` only when confirmed.
 
+### Custom Skill Sets (User Extensibility)
+You can easily add your own custom skills without rebuilding or reconfiguring the MCP server:
+- **Global Custom Skills**: Simply copy or paste your skill directories/markdown files directly into:
+  - **`~/.agent-guidance/skills/`** (or `~/.agents/skills/`)
+- **Workspace-Specific Skills**: Place custom skills directly in your active project repository under:
+  - **`<project_root>/.agents/skills/`**
+  - **`<project_root>/.opencode/skills/`**
+  - **`<project_root>/.claude/skills/`**
+
+All `.md` files in these directories are automatically scanned, parsed for YAML frontmatter (`name: ...`), and indexed into the local search catalog on the fly.
+
+---
+
+## 📚 Documentation Index
+
+Comprehensive guides, architecture deep-dives, and client setup instructions are available in the [`docs/`](docs/) directory:
+
+| Section | Topic | Documentation Link |
+| :--- | :--- | :--- |
+| **Architecture** | System Design & Lifecycles | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| **Getting Started** | Quickstart & Overview | [`docs/getting-started.md`](docs/getting-started.md) |
+| **Installation** | Platform Setup & Upgrades | [`docs/installation.md`](docs/installation.md) |
+| **Usage Guide** | Orchestrator & Workflow Usage | [`docs/usage.md`](docs/usage.md) |
+| **Development** | Contributing & Testing | [`docs/development.md`](docs/development.md) |
+| **IDE Setup** | Antigravity, Cursor, VS Code, Windsurf | [`docs/setup/`](docs/setup/) |
+| **Skills Guide** | Skill Anatomy & Catalog Policy | [`docs/skills/SKILLS_OVERVIEW.md`](docs/skills/SKILLS_OVERVIEW.md) |
+| **Reference** | MCP Surface & Protocol Spec | [`docs/reference/mcp-surface.md`](docs/reference/mcp-surface.md) |
+
 ---
 
 ## 🚀 Quickstart & Setup
