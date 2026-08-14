@@ -86,28 +86,44 @@ pub fn detect_project_architecture(proj_path: &Path) -> String {
         return persisted;
     }
 
-    let files = scan_project(proj_path, 3);
+    let files = scan_project(proj_path, 8);
     let paths: Vec<String> = files.into_iter().map(|f| f.path.to_lowercase()).collect();
 
-    let detected = if paths
-        .iter()
-        .any(|p| p.contains("domain") || p.contains("usecase") || p.contains("infrastructure"))
-    {
+    let detected = if paths.iter().any(|p| {
+        p.contains("domain")
+            || p.contains("usecase")
+            || p.contains("use_case")
+            || p.contains("infrastructure")
+            || p.contains("infra")
+            || p.contains("entities")
+            || p.contains("entity")
+    }) {
         "Clean_Architecture".to_string()
-    } else if paths
-        .iter()
-        .any(|p| p.contains("controllers") || p.contains("services") || p.contains("models"))
-    {
+    } else if paths.iter().any(|p| {
+        p.contains("controller")
+            || p.contains("service")
+            || p.contains("model")
+            || p.contains("viewmodel")
+            || p.contains("repository")
+            || p.contains("dao")
+            || p.contains("database")
+    }) {
         "Layered_Architecture".to_string()
-    } else if paths
-        .iter()
-        .any(|p| p.contains("features") || p.contains("modules"))
-    {
+    } else if paths.iter().any(|p| {
+        p.contains("feature")
+            || p.contains("module")
+            || p.contains("screens")
+            || p.contains("pages")
+    }) {
         "Package_By_Feature".to_string()
-    } else if paths
-        .iter()
-        .any(|p| p.contains("commands") || p.contains("cli") || p.contains("cmd") || p.contains("args"))
-    {
+    } else if paths.iter().any(|p| {
+        p.contains("commands")
+            || p.contains("command")
+            || p.contains("cli")
+            || p.contains("cmd")
+            || p.contains("args")
+            || p.contains("opt")
+    }) {
         "CLI_Pipeline".to_string()
     } else if paths.len() <= 12 {
         "Flat_Library".to_string()
@@ -275,10 +291,15 @@ fn handle_tool_call_internal(
 ) -> Result<Value, (i32, String)> {
     let response_text = match name {
         "task_pipeline" => {
-            let task = arguments
+            let raw_task = arguments
                 .get("task")
                 .and_then(|t| t.as_str())
                 .unwrap_or("general task");
+            let task = if raw_task.trim().is_empty() {
+                "general task"
+            } else {
+                raw_task.trim()
+            };
             let proj_path_arg = arguments
                 .get("project_path")
                 .and_then(|p| p.as_str())
@@ -305,26 +326,48 @@ fn handle_tool_call_internal(
                 );
             }
 
+            let focus = arguments
+                .get("focus")
+                .and_then(|f| f.as_str())
+                .map(|f| f.trim())
+                .filter(|f| !f.is_empty() && *f != "general");
+            let search_query = if let Some(f) = focus {
+                format!("{} {}", task, f)
+            } else {
+                task.to_string()
+            };
+
             let snapshot = project_snapshot(&proj_path);
             ensure_not_cancelled(state)?;
             let file_count = snapshot.files.len();
             let profile = crate::catalog::language_detector::detect_language_profile(
                 snapshot.files.as_ref(),
-                task,
+                &search_query,
             );
 
-            let stage1_results = hybrid_vector_search(task, snapshot.skills.as_ref(), 8);
+            let stage1_results = hybrid_vector_search(&search_query, snapshot.skills.as_ref(), 16);
             ensure_not_cancelled(state)?;
             let selector = LLMSelector::new();
-            let final_results = selector.rerank(task, stage1_results, &profile, 8);
+            let final_results = selector.rerank(&search_query, stage1_results, &profile, 16);
             ensure_not_cancelled(state)?;
 
-            state.pending_skill_proposals = final_results
+            let mut seen_names = std::collections::HashSet::new();
+            let mut deduped_results = Vec::new();
+            for (score, item) in final_results {
+                if seen_names.insert(item.name.clone()) {
+                    deduped_results.push((score, item));
+                    if deduped_results.len() >= 8 {
+                        break;
+                    }
+                }
+            }
+
+            state.pending_skill_proposals = deduped_results
                 .iter()
                 .map(|(score, item)| (item.name.clone(), item.relative_path.clone(), *score))
                 .collect();
 
-            let rec_skills: Vec<String> = final_results
+            let rec_skills: Vec<String> = deduped_results
                 .into_iter()
                 .map(|(score, item)| format!("- {} (Score: {:.2})", item.name, score))
                 .collect();
@@ -338,9 +381,9 @@ fn handle_tool_call_internal(
                 .collect();
 
             let next_step_prompt = if rec_skills.is_empty() {
-                "-> Task requires no specific technical skills. Proceed directly with implementation."
+                "-> CODEBASE EXPLORATION: Use `project_context(operation=\"search\", query=\"...\")` to locate code and `project_context(operation=\"read\", relative_path=\"...\")` to inspect functions. Do NOT use raw grep_search, list_dir, or view_file."
             } else {
-                "-> SKILL_PROPOSAL: Trigger IDE/CLI `ask_question` tool to present recommended skills interactively to user, then call `select_skills(skills=[...])` with chosen skills (or `select_skills(skills=[])` if skipped)."
+                "-> SKILL_PROPOSAL: Trigger IDE/CLI `ask_question` tool to present recommended skills interactively to user, then call `select_skills(skills=[...])` with chosen skills (or `select_skills(skills=[])` if skipped).\n-> MANDATORY NEXT STEP: Use `project_context(operation=\"search\", query=\"...\")` to find files and `project_context(operation=\"read\", relative_path=\"...\")` to inspect code. Avoid raw filesystem tools."
             };
 
             let detected_arch = detect_project_architecture(&proj_path);
@@ -380,11 +423,15 @@ fn handle_tool_call_internal(
                 .unwrap_or_default();
 
             let proposals = std::mem::take(&mut state.pending_skill_proposals);
-            let proj_path = detect_project_path(".", state);
+            let proj_path_arg = arguments
+                .get("project_path")
+                .and_then(|p| p.as_str())
+                .unwrap_or(".");
+            let proj_path = detect_project_path(proj_path_arg, state);
 
             if requested_skills.is_empty() {
                 state.record_call(100, 50);
-                "# Skill Selection\n\nNo skills selected. Proceeding without loading skills."
+                "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.\n\n-> MANDATORY NEXT STEP: Use `project_context(operation=\"search\", query=\"...\")` to search keywords/symbols or `project_context(operation=\"read\", relative_path=\"...\", target_symbol=\"...\")` to inspect code."
                     .to_string()
             } else {
                 let mut loaded_sections = Vec::new();
@@ -419,6 +466,24 @@ fn handle_tool_call_internal(
                                 "### Skill: {} (Loaded & Logged)\n*Content empty or unavailable*",
                                 name
                             ));
+                        }
+                    } else if let Some(c) = get_embedded_skill(name) {
+                        crate::mcp::db::log_skill_load(name);
+                        let compressed = compress_markdown(&c);
+                        loaded_sections.push(format!(
+                            "### Skill: {} [Embedded Catalog]\n```markdown\n{}\n```",
+                            name, compressed
+                        ));
+                    } else if let Ok(full_path) = validate_path(&proj_path, name) {
+                        if let Ok(c) = std::fs::read_to_string(&full_path) {
+                            crate::mcp::db::log_skill_load(name);
+                            let compressed = compress_markdown(&c);
+                            loaded_sections.push(format!(
+                                "### Skill: {} [Local Workspace]\n```markdown\n{}\n```",
+                                name, compressed
+                            ));
+                        } else {
+                            not_found.push(name.clone());
                         }
                     } else {
                         not_found.push(name.clone());
@@ -462,7 +527,11 @@ fn handle_tool_call_internal(
 
             match op {
                 "list" => {
-                    let proj_path = detect_project_path(".", state);
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
                     let snapshot = project_snapshot(&proj_path);
                     let names: Vec<String> = snapshot
                         .skills
@@ -503,7 +572,11 @@ fn handle_tool_call_internal(
                     }
                 }
                 "search" => {
-                    let proj_path = detect_project_path(".", state);
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
                     let snapshot = project_snapshot(&proj_path);
                     ensure_not_cancelled(state)?;
                     let profile = crate::catalog::language_detector::detect_language_profile(
@@ -518,11 +591,22 @@ fn handle_tool_call_internal(
 
                     // Stage 2: 2nd Stage Context & Intent Re-ranking
                     let selector = LLMSelector::new();
-                    let final_results = selector.rerank(&query, stage1_results, &profile, 15);
+                    let final_results = selector.rerank(&query, stage1_results, &profile, 20);
                     ensure_not_cancelled(state)?;
 
+                    let mut seen_names = std::collections::HashSet::new();
+                    let mut deduped_results = Vec::new();
+                    for (score, item) in final_results {
+                        if seen_names.insert(item.name.clone()) {
+                            deduped_results.push((score, item));
+                            if deduped_results.len() >= 15 {
+                                break;
+                            }
+                        }
+                    }
+
                     if state.pending_skill_proposals.is_empty() {
-                        state.pending_skill_proposals = final_results
+                        state.pending_skill_proposals = deduped_results
                             .iter()
                             .map(|(score, item)| {
                                 (item.name.clone(), item.relative_path.clone(), *score)
@@ -530,7 +614,7 @@ fn handle_tool_call_internal(
                             .collect();
                     }
 
-                    let formatted_results: Vec<String> = final_results
+                    let formatted_results: Vec<String> = deduped_results
                         .into_iter()
                         .map(|(score, item)| {
                             let source_tag = match &item.source {
@@ -577,7 +661,11 @@ fn handle_tool_call_internal(
                         .and_then(|i| i.as_str())
                         .unwrap_or("general");
 
-                    let proj_path = detect_project_path(".", state);
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
                     let snapshot = project_snapshot(&proj_path);
                     let search_term = if !query.is_empty() { &query } else { id };
 
@@ -640,7 +728,11 @@ fn handle_tool_call_internal(
                     }
                 }
                 "precode" => {
-                    let proj_path = detect_project_path(".", state);
+                    let proj_path_arg = arguments
+                        .get("project_path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or(".");
+                    let proj_path = detect_project_path(proj_path_arg, state);
                     let snapshot = project_snapshot(&proj_path);
                     let profile = crate::catalog::language_detector::detect_language_profile(
                         snapshot.files.as_ref(),
@@ -653,6 +745,12 @@ fn handle_tool_call_internal(
 
                     let primary_lang = if profile.primary_languages.contains("rust") {
                         "Rust"
+                    } else if profile.primary_languages.contains("kotlin")
+                        || profile.primary_languages.contains("java")
+                    {
+                        "Kotlin/Java"
+                    } else if profile.primary_languages.contains("go") {
+                        "Go"
                     } else if profile.primary_languages.contains("python") {
                         "Python"
                     } else if profile.primary_languages.contains("typescript")
@@ -666,6 +764,12 @@ fn handle_tool_call_internal(
                     let lang_rules = match primary_lang {
                         "Rust" => {
                             "- Rust Safety: Explicit lifetime/borrowing checks, handle Result/Option cleanly, avoid unwrap() in production paths."
+                        }
+                        "Kotlin/Java" => {
+                            "- Kotlin/Java Safety: Scope coroutines to Dispatchers.IO/Default, avoid forced unwraps (!!), respect StateFlow/LiveData lifecycles, keep Compose functions idempotent."
+                        }
+                        "Go" => {
+                            "- Go Safety: Enforce explicit error checking (if err != nil), bind goroutine lifecycles to context.Context cancellation, avoid data races on shared structs."
                         }
                         "Python" => {
                             "- Python Safety: Type hints, handle None dereferences explicitly, avoid mutable default arguments."
@@ -764,7 +868,7 @@ fn handle_tool_call_internal(
                 }
                 "read" => {
                     if rel_path.is_empty() {
-                        "Error: relative_path is required for read operation.".to_string()
+                        "Error: relative_path is required for read operation. Example: project_context(operation=\"read\", project_path=\"...\", relative_path=\"src/main.rs\", target_symbol=\"my_fn\")".to_string()
                     } else {
                         let target_symbol = arguments.get("target_symbol").and_then(|s| s.as_str());
                         match validate_path(&proj_path, rel_path) {
@@ -862,9 +966,12 @@ fn handle_tool_call_internal(
                     }
                 }
                 "search" => {
-                    let files = scan_project(&proj_path, 4);
-                    let mut results = Vec::new();
-                    if !query.is_empty() {
+                    if query.is_empty() {
+                        "Error: query is required for search operation. Example: project_context(operation=\"search\", project_path=\"...\", query=\"search_term\")".to_string()
+                    } else {
+                        let files = scan_project(&proj_path, 12);
+                        let mut results = Vec::new();
+                        let query_lower = query.to_lowercase();
                         for file in files.iter().filter(|f| f.file_type == "file") {
                             if state.is_cancelled() {
                                 return Err((
@@ -874,26 +981,41 @@ fn handle_tool_call_internal(
                             }
                             if let Ok(path) = validate_path(&proj_path, &file.path) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
-                                    if content.contains(query) {
-                                        results.push(format!("- {}", file.path));
-                                        if results.len() >= 20 {
+                                    if content.to_lowercase().contains(&query_lower) {
+                                        let snippets: Vec<String> = content
+                                            .lines()
+                                            .enumerate()
+                                            .filter(|(_, line)| line.to_lowercase().contains(&query_lower))
+                                            .take(2)
+                                            .map(|(idx, line)| {
+                                                let t = line.trim();
+                                                let bounded_line = if t.len() > 80 { &t[..80] } else { t };
+                                                format!("L{}: {}", idx + 1, bounded_line)
+                                            })
+                                            .collect();
+                                        if snippets.is_empty() {
+                                            results.push(format!("- {}", file.path));
+                                        } else {
+                                            results.push(format!("- {} ({})", file.path, snippets.join(" | ")));
+                                        }
+                                        if results.len() >= 25 {
                                             break;
                                         }
                                     }
                                 }
                             }
                         }
+                        state.record_call(5000, 500);
+                        format!(
+                            "# Context Search Results for '{}'\n\nMatching Files (Max 25):\n\n{}\n\n---\n💡 **Next Step**: Pass `relative_path=\"...\"` to `project_context(operation=\"read\")` to read file content.",
+                            query,
+                            if results.is_empty() {
+                                "No matches found.".to_string()
+                            } else {
+                                results.into_iter().take(25).collect::<Vec<_>>().join("\n")
+                            }
+                        )
                     }
-                    state.record_call(5000, 500);
-                    format!(
-                        "# Context Search Results for '{}'\n\nMatching Files (Max 20):\n\n{}",
-                        query,
-                        if results.is_empty() {
-                            "No matches found.".to_string()
-                        } else {
-                            results.into_iter().take(20).collect::<Vec<_>>().join("\n")
-                        }
-                    )
                 }
                 "architecture" => {
                     let arch_pattern = detect_project_architecture(&proj_path);
@@ -908,7 +1030,7 @@ fn handle_tool_call_internal(
                 }
                 "symbols" | "structure" => {
                     if rel_path.is_empty() {
-                        "Error: relative_path is required for symbols/structure operation.".to_string()
+                        "Error: relative_path is required for symbols/structure operation. Example: project_context(operation=\"symbols\", project_path=\"...\", relative_path=\"src/main.rs\")".to_string()
                     } else {
                         match validate_path(&proj_path, rel_path) {
                             Ok(full_path) => {
@@ -922,13 +1044,23 @@ fn handle_tool_call_internal(
                                             || trimmed.starts_with("struct ")
                                             || trimmed.starts_with("pub enum ")
                                             || trimmed.starts_with("enum ")
+                                            || trimmed.starts_with("pub trait ")
+                                            || trimmed.starts_with("trait ")
                                             || trimmed.starts_with("impl ")
                                             || trimmed.starts_with("def ")
+                                            || trimmed.starts_with("async def ")
                                             || trimmed.starts_with("class ")
+                                            || trimmed.starts_with("fun ")
+                                            || trimmed.starts_with("suspend fun ")
+                                            || trimmed.starts_with("override fun ")
+                                            || trimmed.starts_with("object ")
+                                            || trimmed.starts_with("companion object")
+                                            || trimmed.starts_with("interface ")
                                             || trimmed.starts_with("export function")
                                             || trimmed.starts_with("export class")
                                             || trimmed.starts_with("export const")
-                                            || trimmed.starts_with("interface ")
+                                            || trimmed.starts_with("export interface")
+                                            || trimmed.starts_with("func ")
                                         {
                                             symbols.push(format!("L{:04}: {}", idx + 1, trimmed));
                                         }
@@ -952,16 +1084,19 @@ fn handle_tool_call_internal(
                 }
                 "references" => {
                     if query.is_empty() {
-                        "Error: query symbol is required for references operation.".to_string()
+                        "Error: query symbol is required for references operation. Example: project_context(operation=\"references\", project_path=\"...\", query=\"MyStruct\")".to_string()
                     } else {
-                        let files = scan_project(&proj_path, 4);
+                        let files = scan_project(&proj_path, 12);
                         let mut refs = Vec::new();
+                        let query_lower = query.to_lowercase();
                         for file in files.iter().filter(|f| f.file_type == "file") {
                             if let Ok(path) = validate_path(&proj_path, &file.path) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     for (line_num, line) in content.lines().enumerate() {
-                                        if line.contains(query) {
-                                            refs.push(format!("{}:L{} -> {}", file.path, line_num + 1, line.trim()));
+                                        if line.to_lowercase().contains(&query_lower) {
+                                            let trimmed = line.trim();
+                                            let bounded_line = if trimmed.len() > 100 { &trimmed[..100] } else { trimmed };
+                                            refs.push(format!("{}:L{} -> {}", file.path, line_num + 1, bounded_line));
                                             if refs.len() >= 30 {
                                                 break;
                                             }
@@ -1692,5 +1827,162 @@ mod tests {
         assert!(text.contains("Upfront Architecture & 300 LOC Cap (Mandatory)"));
         assert!(text.contains("CLI_Pipeline"));
         assert!(text.contains("CLI entrypoint main (< 80 LOC)"));
+    }
+
+    #[test]
+    fn test_project_context_deep_search_and_snippets() {
+        let temp_dir = std::env::temp_dir().join(format!("deep_search_test_{}", std::process::id()));
+        let deep_path = temp_dir.join("app").join("src").join("main").join("java").join("com").join("example").join("ui").join("tour");
+        let _ = std::fs::create_dir_all(&deep_path);
+        let deep_file = deep_path.join("ProductTour.kt");
+        let content = "package com.example.ui.tour\n\nclass ProductTour {\n    fun startTour() {\n        val tourAnchor = 42\n    }\n}\n";
+        let _ = std::fs::write(&deep_file, content);
+
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "project_context",
+            json!({
+                "operation": "search",
+                "query": "touranchor",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok(), "Deep search failed: {:?}", res);
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("ProductTour.kt"), "Deep search did not find ProductTour.kt: {}", text);
+        assert!(text.contains("tourAnchor"), "Deep search did not extract snippet: {}", text);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_project_context_kotlin_symbols() {
+        let temp_dir = std::env::temp_dir().join(format!("kotlin_symbols_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let kt_file = temp_dir.join("ProductTour.kt");
+        let content = "package com.nodescape.app.ui.tour\n\nclass ProductTourOverlay {\n    suspend fun showTour() {}\n    companion object {\n        fun create() {}\n    }\n}\n";
+        let _ = std::fs::write(&kt_file, content);
+
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "project_context",
+            json!({
+                "operation": "symbols",
+                "relative_path": "ProductTour.kt",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("class ProductTourOverlay"));
+        assert!(text.contains("suspend fun showTour"));
+        assert!(text.contains("companion object"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_detect_deep_layered_architecture_singular() {
+        let temp_dir = std::env::temp_dir().join(format!("deep_arch_layered_{}", std::process::id()));
+        let service_dir = temp_dir.join("app").join("src").join("main").join("java").join("com").join("example").join("service");
+        let viewmodel_dir = temp_dir.join("app").join("src").join("main").join("java").join("com").join("example").join("viewmodel");
+        let _ = std::fs::create_dir_all(&service_dir);
+        let _ = std::fs::create_dir_all(&viewmodel_dir);
+        let _ = std::fs::write(service_dir.join("PingService.kt"), "class PingService");
+        let _ = std::fs::write(viewmodel_dir.join("MainViewModel.kt"), "class MainViewModel");
+
+        let detected = detect_project_architecture(&temp_dir);
+        assert_eq!(detected, "Layered_Architecture");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_detect_deep_clean_architecture_infra() {
+        let temp_dir = std::env::temp_dir().join(format!("deep_arch_clean_{}", std::process::id()));
+        let infra_dir = temp_dir.join("app").join("src").join("main").join("java").join("com").join("example").join("infra");
+        let domain_dir = temp_dir.join("app").join("src").join("main").join("java").join("com").join("example").join("domain");
+        let _ = std::fs::create_dir_all(&infra_dir);
+        let _ = std::fs::create_dir_all(&domain_dir);
+        let _ = std::fs::write(infra_dir.join("NetworkClient.kt"), "class NetworkClient");
+        let _ = std::fs::write(domain_dir.join("UserEntity.kt"), "class UserEntity");
+
+        let detected = detect_project_architecture(&temp_dir);
+        assert_eq!(detected, "Clean_Architecture");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_guidance_precode_kotlin_and_go_rules() {
+        let temp_dir = std::env::temp_dir().join(format!("precode_kotlin_test_{}", std::process::id()));
+        let kt_dir = temp_dir.join("app").join("src").join("main").join("java").join("com").join("example");
+        let _ = std::fs::create_dir_all(&kt_dir);
+        let _ = std::fs::write(kt_dir.join("MainActivity.kt"), "class MainActivity");
+
+        let mut state = ServerState::new();
+        state.update_project_path(&temp_dir);
+        let res = handle_tool_call(
+            "guidance",
+            json!({
+                "operation": "precode",
+                "query": "android kotlin UI",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Primary Language: Kotlin/Java"));
+        assert!(text.contains("Dispatchers.IO/Default"));
+        assert!(text.contains("StateFlow/LiveData lifecycles"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_select_skills_direct_fallback_when_proposals_empty() {
+        let mut state = ServerState::new();
+        // proposals is empty
+        assert!(state.pending_skill_proposals.is_empty());
+
+        let res = handle_tool_call(
+            "select_skills",
+            json!({
+                "skills": ["android-clean-architecture"]
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Skill Selection Confirmed"));
+        assert!(text.contains("android-clean-architecture [Embedded Catalog]"));
+    }
+
+    #[test]
+    #[ignore] // Requires pre-cached HuggingFace model files; avoid network I/O in unit tests
+    fn test_task_pipeline_skill_deduplication_and_empty_task_fallback() {
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "task_pipeline",
+            json!({
+                "task": "",
+                "project_path": ".",
+                "phase": "plan",
+                "focus": "security"
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("# Task Pipeline Activated"));
+
+        // Check that pending_skill_proposals contains no duplicates
+        let mut names = std::collections::HashSet::new();
+        for (name, _, _) in &state.pending_skill_proposals {
+            assert!(names.insert(name.clone()), "Duplicate skill proposal found: {}", name);
+        }
     }
 }

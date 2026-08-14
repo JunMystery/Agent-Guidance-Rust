@@ -33,10 +33,19 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             let relative = path.strip_prefix(&target_root).unwrap_or(path);
             let rel_str = relative.to_string_lossy().to_string();
 
-            if rel_str == ".git"
-                || rel_str.starts_with(".git/")
-                || rel_str == ".agent-context"
-                || rel_str.starts_with(".agent-context/")
+            let normalized = rel_str.replace('\\', "/");
+            if normalized == ".git"
+                || normalized.starts_with(".git/")
+                || normalized == ".agent-context"
+                || normalized.starts_with(".agent-context/")
+                || normalized == "target"
+                || normalized.starts_with("target/")
+                || normalized == "node_modules"
+                || normalized.starts_with("node_modules/")
+                || normalized == ".gradle"
+                || normalized.starts_with(".gradle/")
+                || normalized == "build"
+                || normalized.starts_with("build/")
             {
                 continue;
             }
@@ -66,5 +75,22 @@ mod tests {
         let files = scan_project(current_dir, 2);
         assert!(!files.is_empty());
         assert!(files.iter().any(|f| f.path == "Cargo.toml"));
+    }
+
+    #[test]
+    fn test_scan_project_excludes_agent_context_and_build() {
+        let temp_dir = std::env::temp_dir().join(format!("scan_excl_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(temp_dir.join(".agent-context").join("sessions"));
+        let _ = std::fs::create_dir_all(temp_dir.join("build").join("outputs"));
+        let _ = std::fs::create_dir_all(temp_dir.join("src"));
+        let _ = std::fs::write(temp_dir.join("src").join("main.rs"), "fn main() {}");
+        let _ = std::fs::write(temp_dir.join(".agent-context").join("sessions").join("test.json"), "{}");
+
+        let files = scan_project(&temp_dir, 5);
+        assert!(files.iter().any(|f| f.path.contains("main.rs")));
+        assert!(!files.iter().any(|f| f.path.contains(".agent-context")));
+        assert!(!files.iter().any(|f| f.path.contains("build")));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

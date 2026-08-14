@@ -14,8 +14,11 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 |---|---|---|
 | Start any task or phase | `task_pipeline(task="...", project_path="<path>", phase="plan")` | `project_path`, `task`, `phase` |
 | Confirm skill selection | `select_skills(skills=["skill-a", "skill-b"])` | `skills` (array) |
+| Search codebase / keywords | `project_context(operation="search", query="...")` | `operation`, `project_path`, `query` |
+| Read file / extract symbol | `project_context(operation="read", relative_path="...", target_symbol="...")` | `operation`, `project_path`, `relative_path`, `target_symbol` (optional) |
+| List code symbols in file | `project_context(operation="symbols", relative_path="...")` | `operation`, `project_path`, `relative_path` |
+| Find symbol usages | `project_context(operation="references", query="...")` | `operation`, `project_path`, `query` |
 | Check edit authorization | `workflow_gate(action="authorize_edit", project_path="...", risk_level="LOW", justification="...", architecture_pattern="Auto"|"Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"Orchestrator")` | `action`, `project_path`, `risk_level`, `justification`, `architecture_pattern` |
-| Read file / extract symbol | `project_context(operation="read", relative_path="...", target_symbol="...")` | `operation`, `project_path`, `target_symbol` (optional) |
 | Empirical post-code test | `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` | `verification_command`, `expected_output_keyword` |
 | Check coding standards | `guidance(operation="search", query="...")` | `operation`, `query` |
 

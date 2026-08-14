@@ -186,21 +186,25 @@ pub fn handle_request(
                             "task": { "type": "string", "description": "The task description or goal" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
                             "phase": { "type": "string", "enum": ["plan", "implement", "test", "debug", "review", "refactor"], "description": "Active development phase for per-phase context reset" },
-                            "focus": { "type": "string", "default": "general" }
+                            "focus": { "type": "string", "default": "general", "description": "Optional focus area (e.g. 'security', 'performance', 'frontend', 'testing') to refine skill search ranking." }
                         },
                         "required": ["task", "project_path", "phase"]
                     }
                 },
                 {
                     "name": "select_skills",
-                    "description": "Confirm which proposed skills to load. Returns compressed SKILL.md contents inline for all selected skills. Pass skill names from the proposed list, or pass an empty array to skip all.",
+                    "description": "Confirm which proposed or catalog skills to load into the active conversation context. Returns compressed SKILL.md contents inline. Pass skill names (e.g. ['android-clean-architecture']), or pass an empty array [] to skip all.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "skills": {
                                 "type": "array",
                                 "items": { "type": "string" },
-                                "description": "Skill names to load (from proposed list). Empty array = skip all."
+                                "description": "Skill names to load (e.g. ['android-clean-architecture', 'error-handling']). Pass empty array [] to proceed without loading skills."
+                            },
+                            "project_path": {
+                                "type": "string",
+                                "description": "Absolute path of active repository workspace"
                             }
                         },
                         "required": ["skills"]
@@ -208,30 +212,39 @@ pub fn handle_request(
                 },
                 {
                     "name": "guidance",
-                    "description": "Standards catalog and skill lookup. 168 skills available on-demand.",
+                    "description": "Standards catalog, 2-stage vector search, 168 embedded skills, pre-code architecture blueprints, and empirical verification contracts.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "operation": { "type": "string" },
-                            "query": { "type": "string" },
-                            "identifier": { "type": "string" },
-                            "verification_command": { "type": "string", "description": "Required for 'verify' operation: Lệnh shell kiểm thử thực tế (ví dụ: 'cargo test')" },
-                            "expected_output_keyword": { "type": "string", "description": "Required for 'verify' operation: Từ khóa kết quả kỳ vọng (ví dụ: 'PASSED')" }
+                            "operation": {
+                                "type": "string",
+                                "enum": ["search", "get", "list", "precode", "verify", "workflow", "ui_ux", "docs"],
+                                "description": "Operation to perform: 'search' (2-stage BERT + Cross-Encoder vector search over skills), 'get' (retrieve skill content by identifier), 'list' (list registered skills catalog), 'precode' (generate upfront 300 LOC architecture blueprint), 'verify' (register empirical verification contract), 'workflow' (retrieve stage workflow guidelines), 'ui_ux' (modern UI/UX design standards), 'docs' (technical documentation search)"
+                            },
+                            "query": { "type": "string", "description": "Search query or keyword for 'search', 'docs', 'ui_ux', or 'precode'" },
+                            "identifier": { "type": "string", "description": "Skill name/path for 'get' / 'docs', or workflow stage name for 'workflow'" },
+                            "project_path": { "type": "string", "description": "Absolute path of active repository workspace" },
+                            "verification_command": { "type": "string", "description": "Required for 'verify' operation: Actual shell test command to run (e.g. 'cargo test')" },
+                            "expected_output_keyword": { "type": "string", "description": "Required for 'verify' operation: Expected success keyword in test output (e.g. 'ok' or 'PASSED')" }
                         },
                         "required": ["operation"]
                     }
                 },
                 {
                     "name": "project_context",
-                    "description": "Read and search project files with built-in token budgets.",
+                    "description": "Read, search, and extract code symbols across project files with built-in 300 LOC token budgets. Use this tool instead of raw grep_search, list_dir, or view_file.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "operation": { "type": "string" },
+                            "operation": {
+                                "type": "string",
+                                "enum": ["search", "read", "symbols", "structure", "references", "architecture", "tree"],
+                                "description": "Operation to perform: 'search' (keyword/pattern search across codebase), 'read' (read file bounded to 300 LOC or extract specific symbol), 'symbols'/'structure' (list functions/classes/methods in file), 'references' (find all usages of symbol), 'architecture' (detect/memorize project architectural pattern), 'tree' (top-level project structure)"
+                            },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
-                            "query": { "type": "string" },
-                            "relative_path": { "type": "string" },
-                            "target_symbol": { "type": "string", "description": "Target function/class/struct symbol to extract precisely for token-saving read" },
+                            "query": { "type": "string", "description": "Search keyword, symbol name, or pattern (required for 'search' and 'references')" },
+                            "relative_path": { "type": "string", "description": "Relative file path within project (required for 'read', 'symbols', and 'structure', e.g. 'src/main.rs')" },
+                            "target_symbol": { "type": "string", "description": "Specific function/class/struct/enum symbol to extract precisely for token-saving read (optional for 'read')" },
                             "layer": { "type": "string", "enum": ["ui", "domain", "data", "infrastructure"], "description": "Architecture domain layer of the target file" }
                         },
                         "required": ["operation", "project_path"]
@@ -239,28 +252,36 @@ pub fn handle_request(
                 },
                 {
                     "name": "workflow_gate",
-                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'advance') or authorize code edit permissions ('authorize_edit').",
+                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'set_architecture', 'advance') or authorize code edit permissions ('authorize_edit').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "authorize_edit", "advance"], "description": "Action to perform: 'check', 'status', 'set_stage', 'authorize_edit', or 'advance' (composite check + transition + authorize)" },
-                            "target_stage": { "type": "string" },
+                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', or 'advance' (composite check + transition + authorize)" },
+                            "target_stage": { "type": "string", "description": "Target workflow stage to transition into: 'Context', 'Plan', 'Ask_Revise', 'Build', 'Test_Recheck', 'Fix', 'Proposal', or 'Review'" },
                             "user_message": { "type": "string" },
                             "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance)" },
                             "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit / advance)" },
                             "justification": { "type": "string", "description": "Reason for edits (for authorize_edit / advance)" },
-                            "architecture_pattern": { "type": "string", "enum": ["Auto", "Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator"], "description": "Declared architecture pattern (for authorize_edit / advance). Default is 'Auto' (auto-detects project architecture)." }
+                            "architecture_pattern": { "type": "string", "enum": ["Auto", "Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator", "CLI_Pipeline", "Flat_Library"], "description": "Declared architecture pattern (for authorize_edit / advance). Default is 'Auto' (auto-detects project architecture)." }
                         },
                         "required": ["action"]
                     }
                 },
                 {
                     "name": "session_continuity",
-                    "description": "Persist or recover task session state for continuity.",
+                    "description": "Persist, restore, or clear task session states and token metrics across multi-turn workflows.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "operation": { "type": "string" }
+                            "operation": {
+                                "type": "string",
+                                "enum": ["save", "load", "clear"],
+                                "description": "Operation to perform: 'save' (snapshot current session state to disk), 'load' (restore most recent session state and token metrics), 'clear' (erase all saved session snapshots)"
+                            },
+                            "project_path": {
+                                "type": "string",
+                                "description": "Absolute path of active repository workspace (e.g. 'E:/Github/Agent-Guidance-Rust')"
+                            }
                         },
                         "required": ["operation"]
                     }

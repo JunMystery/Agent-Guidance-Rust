@@ -28,11 +28,26 @@ pub fn list_embedded_skills() -> Vec<String> {
 }
 
 pub fn get_embedded_skill(path: &str) -> Option<String> {
-    SkillAssets::get(path).and_then(|file| {
-        std::str::from_utf8(file.data.as_ref())
+    if let Some(file) = SkillAssets::get(path) {
+        return std::str::from_utf8(file.data.as_ref())
             .ok()
-            .map(|s| s.to_string())
-    })
+            .map(|s| s.to_string());
+    }
+    let trimmed = path.trim_start_matches("skills/").trim_start_matches('/');
+    let variations = [
+        format!("{}/SKILL.md", trimmed),
+        format!("skills/{}/SKILL.md", trimmed),
+        format!("{}.md", trimmed),
+        trimmed.to_string(),
+    ];
+    for v in &variations {
+        if let Some(file) = SkillAssets::get(v) {
+            return std::str::from_utf8(file.data.as_ref())
+                .ok()
+                .map(|s| s.to_string());
+        }
+    }
+    None
 }
 
 pub fn scan_workspace_skills(proj_path: &Path) -> Vec<SkillItem> {

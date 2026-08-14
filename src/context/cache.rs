@@ -57,7 +57,7 @@ pub fn project_snapshot(root: &Path) -> Arc<ProjectSnapshot> {
     }
 
     let snapshot = Arc::new(ProjectSnapshot {
-        files: Arc::new(scan_project(&canonical_root, 3)),
+        files: Arc::new(scan_project(&canonical_root, 8)),
         skills: Arc::new(load_all_skills(&canonical_root)),
     });
 

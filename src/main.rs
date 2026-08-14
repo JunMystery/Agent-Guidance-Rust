@@ -23,6 +23,24 @@ use daemon::handle_mcp_lines;
 async fn main() -> Result<()> {
     // Handle flags that don't need logging
     let args: Vec<String> = env::args().collect();
+    if args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
+        println!("Agent Guidance MCP Server & CLI Tool v{}", env!("CARGO_PKG_VERSION"));
+        println!("Usage: agent-guidance [OPTIONS]");
+        println!();
+        println!("Options:");
+        println!("  --setup             Install and configure MCP server across all IDE clients");
+        println!("  --verify-setup      Verify MCP configuration paths in all IDE clients");
+        println!("  --update            Sync and download 3rd-party skill repositories into ~/.agent-guidance/skills");
+        println!("  --upgrade           Pull latest source from git, rebuild release binary, and update all IDE configs");
+        println!("  --self-update       Alias for --upgrade");
+        println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000");
+        println!("  --uninstall         Remove MCP server configurations from all IDE clients");
+        println!("  --help, -h          Print this help message");
+        println!();
+        println!("When run without flags, agent-guidance runs as an MCP JSON-RPC server on stdio.");
+        return Ok(());
+    }
+
     if args.contains(&"--dashboard".to_string()) {
         let port = 3000;
         dashboard::run_dashboard_server(port, None)?;
@@ -52,6 +70,39 @@ async fn main() -> Result<()> {
 
     if args.contains(&"--update".to_string()) || args.contains(&"--auto-update".to_string()) {
         catalog::updater::run_update()?;
+        return Ok(());
+    }
+
+    if args.contains(&"--upgrade".to_string()) || args.contains(&"--self-update".to_string()) {
+        println!("Checking for latest Agent Guidance MCP updates from git...");
+        let current_dir = env::current_dir()?;
+        let status = std::process::Command::new("git")
+            .args(["pull", "--ff-only"])
+            .current_dir(&current_dir)
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                println!("✓ Git pull completed. Rebuilding release binary with cargo...");
+                let build_status = std::process::Command::new("cargo")
+                    .args(["build", "--release"])
+                    .current_dir(&current_dir)
+                    .status();
+                if let Ok(bs) = build_status {
+                    if bs.success() {
+                        let exe_name = if cfg!(windows) { "agent-guidance.exe" } else { "agent-guidance" };
+                        let target_bin = current_dir.join("target").join("release").join(exe_name);
+                        run_setup(&target_bin)?;
+                        println!("✓ Agent Guidance MCP updated, recompiled, and configured across all IDE clients successfully!");
+                    } else {
+                        eprintln!("Cargo release build failed.");
+                    }
+                }
+            }
+            _ => {
+                println!("⚠ Git pull failed or current directory is not a git repository.");
+            }
+        }
         return Ok(());
     }
 

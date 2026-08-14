@@ -341,10 +341,10 @@ impl ServerState {
             "build" => "Build",
             "test_recheck" | "test" | "recheck" | "test/recheck" => "Test_Recheck",
             "fix" => "Fix",
-            "proposal" | "document" => "Proposal",
+            "proposal" | "document" | "review" | "proposal/review" => "Proposal",
             _ => {
                 return Err(format!(
-                    "Invalid workflow stage '{}'. Allowed stages: Context, Plan, Ask_Revise, Build, Test_Recheck, Fix, Proposal.",
+                    "Invalid workflow stage '{}'. Allowed stages: Context, Plan, Ask_Revise, Build, Test_Recheck, Fix, Proposal (or Review).",
                     target
                 ));
             }
@@ -866,5 +866,18 @@ mod tests {
         assert!(count <= 100);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_workflow_gate_review_stage_alias() {
+        let mut state = ServerState::new();
+        state.approve_plan();
+        assert_eq!(state.set_stage("Build").unwrap(), "Build");
+        assert_eq!(state.set_stage("Review").unwrap(), "Proposal");
+        assert_eq!(state.workflow_stage, "Proposal");
+
+        let mut state2 = ServerState::new();
+        assert_eq!(state2.set_stage("review").unwrap(), "Proposal");
+        assert_eq!(state2.workflow_stage, "Proposal");
     }
 }
