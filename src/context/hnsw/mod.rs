@@ -1,75 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 
-fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    if v1.len() != v2.len() || v1.is_empty() {
-        return 0.0;
-    }
-    let mut dot = 0.0f32;
-    let mut norm1 = 0.0f32;
-    let mut norm2 = 0.0f32;
-    for i in 0..v1.len() {
-        dot += v1[i] * v2[i];
-        norm1 += v1[i] * v1[i];
-        norm2 += v2[i] * v2[i];
-    }
-    let denom = (norm1 * norm2).sqrt();
-    if denom == 0.0 {
-        0.0
-    } else {
-        (dot / denom).clamp(-1.0, 1.0)
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Neighbor {
-    id: usize,
-    similarity: f32,
-}
-
-impl PartialEq for Neighbor {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for Neighbor {}
-
-impl PartialOrd for Neighbor {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.similarity.partial_cmp(&other.similarity)
-    }
-}
-
-impl Ord for Neighbor {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap_or(Ordering::Equal)
-    }
-}
-
-/// A reverse-ordered neighbor for min-heap priority queues.
-#[derive(Debug, Clone)]
-struct MinNeighbor(Neighbor);
-
-impl PartialEq for MinNeighbor {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
-impl Eq for MinNeighbor {}
-
-impl PartialOrd for MinNeighbor {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.0.partial_cmp(&self.0)
-    }
-}
-
-impl Ord for MinNeighbor {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.0.cmp(&self.0)
-    }
-}
+pub mod types;
+use types::{cosine_similarity, MinNeighbor, Neighbor};
 
 /// Hierarchical Navigable Small World (HNSW) Vector Index for sub-millisecond similarity search.
 #[derive(Debug, Clone)]
@@ -303,38 +236,5 @@ impl<T> HnswIndex<T> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_hnsw_graph_insertion_and_search() {
-        let mut index = HnswIndex::new(16, 64, 32);
-
-        let v1 = vec![1.0, 0.0, 0.0];
-        let v2 = vec![0.0, 1.0, 0.0];
-        let v3 = vec![0.0, 0.0, 1.0];
-        let v4 = vec![0.707, 0.707, 0.0];
-
-        index.insert(v1, "vector_x");
-        index.insert(v2, "vector_y");
-        index.insert(v3, "vector_z");
-        index.insert(v4, "vector_xy");
-
-        assert_eq!(index.len(), 4);
-
-        // Search near vector_x
-        let query = vec![0.9, 0.1, 0.0];
-        let hits = index.search(&query, 2, 0.5);
-
-        assert!(!hits.is_empty());
-        assert_eq!(*hits[0].1, "vector_x");
-        assert!(hits[0].0 > 0.9);
-    }
-
-    #[test]
-    fn test_hnsw_empty_search() {
-        let index: HnswIndex<String> = HnswIndex::default();
-        let hits = index.search(&[1.0, 2.0], 5, 0.0);
-        assert!(hits.is_empty());
-    }
-}
+#[path = "../hnsw_tests.rs"]
+mod tests;

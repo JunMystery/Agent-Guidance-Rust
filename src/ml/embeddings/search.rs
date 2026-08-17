@@ -1,0 +1,123 @@
+use std::sync::{Arc, RwLock};
+use crate::catalog::store::SkillItem;
+use super::cache::{cached_model, embed_skills_cache, GPU_SKILL_MATRIX};
+use super::precomputed::catalog_fingerprint;
+
+pub fn hybrid_vector_search(
+    query: &str,
+    candidates: &[SkillItem],
+    top_k: usize,
+) -> Vec<(f32, SkillItem)> {
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    crate::mcp::db::log_embed_query(query);
+
+    let q_lower = query.to_lowercase();
+    let words: Vec<&str> = q_lower.split_whitespace().collect();
+
+    let model_res = cached_model();
+    let (q_vec, c_vecs) = match &model_res {
+        Ok(model) => {
+            let q = model.embed_text(query, Some("query")).ok();
+            let c = embed_skills_cache(candidates, model);
+            (q, c)
+        }
+        _ => (None::<Vec<f32>>, Arc::new(Vec::new())),
+    };
+
+    let mut scored: Vec<(f32, usize)> = Vec::new();
+    if let Some(ref qv) = q_vec {
+        if !c_vecs.is_empty() {
+            let fingerprint = catalog_fingerprint(candidates);
+            let gpu_scores: Option<Vec<f32>> = if let Ok(ref model) = model_res {
+                let gpu_slot = GPU_SKILL_MATRIX.get_or_init(|| RwLock::new(None));
+                if let Ok(guard) = gpu_slot.read() {
+                    if let Some(ref matrix) = *guard {
+                        if matrix.fingerprint == fingerprint && matrix.count == candidates.len() {
+                            matrix.score_query(qv, &model.device).ok()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            for (i, cand) in candidates.iter().enumerate() {
+                let base_score = match &gpu_scores {
+                    Some(scores) => scores.get(i).copied().unwrap_or(0.0),
+                    None => {
+                        let vec_i = if i < c_vecs.len() {
+                            &c_vecs[i]
+                        } else {
+                            continue;
+                        };
+                        qv.iter().zip(vec_i.iter()).map(|(a, b)| a * b).sum()
+                    }
+                };
+
+                let mut score = base_score;
+                let name_lower = cand.name.to_lowercase();
+                if name_lower == q_lower {
+                    score += 0.5;
+                } else if name_lower.contains(&q_lower) {
+                    score += 0.3;
+                } else {
+                    for w in &words {
+                        if name_lower.contains(w) {
+                            score += 0.1;
+                        }
+                    }
+                }
+
+                scored.push((score, i));
+            }
+
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            return scored
+                .into_iter()
+                .take(top_k)
+                .map(|(s, i)| (s, candidates[i].clone()))
+                .collect();
+        }
+    }
+
+    for (i, cand) in candidates.iter().enumerate() {
+        let name_lower = cand.name.to_lowercase();
+        let content_lower = cand.content.to_lowercase();
+        let mut score = 0.0f32;
+
+        if name_lower == q_lower {
+            score += 1.0;
+        } else if name_lower.contains(&q_lower) {
+            score += 0.7;
+        }
+
+        for w in &words {
+            if name_lower.contains(w) {
+                score += 0.4;
+            }
+            if content_lower.contains(w) {
+                score += 0.1;
+            }
+        }
+
+        if score > 0.0 || query.is_empty() {
+            scored.push((score, i));
+        }
+    }
+
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored
+        .into_iter()
+        .take(top_k)
+        .map(|(s, i)| (s, candidates[i].clone()))
+        .collect()
+}

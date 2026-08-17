@@ -44,3 +44,5 @@ pub fn download_models() -> anyhow::Result<()> {
     println!("  ✓ ML models cached at ~/.cache/huggingface/hub/");
     Ok(())
 }
+
+pub mod cross_encoder;

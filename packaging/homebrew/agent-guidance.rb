@@ -1,17 +1,18 @@
 class AgentGuidance < Formula
   desc "Token-optimized Agent Guidance MCP Rust server for AI coding tools"
   homepage "https://github.com/JunMystery/Agent-Guidance-Rust"
-  version "1.4.2"
-  license "MIT"
+  version "1.4.3"
 
-  if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.2/agent-guidance-macos-aarch64.tar.gz"
-    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-  elsif OS.mac? && Hardware::CPU.intel?
-    url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.2/agent-guidance-macos-x86_64.tar.gz"
-    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  if OS.mac?
+    if Hardware::CPU.arm?
+      url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.3/agent-guidance-macos-aarch64.tar.gz"
+      sha256 "PLACEHOLDER_MAC_ARM_SHA256"
+    else
+      url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.3/agent-guidance-macos-x86_64.tar.gz"
+      sha256 "PLACEHOLDER_MAC_INTEL_SHA256"
+    end
   elsif OS.linux?
-    url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.2/agent-guidance-linux-x86_64.tar.gz"
+    url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.3/agent-guidance-linux-x86_64.tar.gz"
     sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   end
 
