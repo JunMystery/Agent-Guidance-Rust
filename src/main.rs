@@ -13,7 +13,7 @@ mod mcp;
 mod ml;
 mod optimizer;
 
-use mcp::config::{run_setup, run_uninstall, run_verify_setup};
+use mcp::config::{run_setup, run_uninstall, run_upgrade, run_verify_setup};
 use ml::embeddings::generate_precomputed_cache;
 
 #[cfg(not(unix))]
@@ -30,8 +30,7 @@ async fn main() -> Result<()> {
         println!("Options:");
         println!("  --setup             Install and configure MCP server across all IDE clients");
         println!("  --verify-setup      Verify MCP configuration paths in all IDE clients");
-        println!("  --update            Sync and download 3rd-party skill repositories into ~/.agent-guidance/skills");
-        println!("  --upgrade           Pull latest source from git, rebuild release binary, and update all IDE configs");
+        println!("  --upgrade           Download and install latest release package, update IDE configs");
         println!("  --self-update       Alias for --upgrade");
         println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000");
         println!("  --uninstall         Remove MCP server configurations from all IDE clients");
@@ -68,41 +67,8 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    if args.contains(&"--update".to_string()) || args.contains(&"--auto-update".to_string()) {
-        catalog::updater::run_update()?;
-        return Ok(());
-    }
-
     if args.contains(&"--upgrade".to_string()) || args.contains(&"--self-update".to_string()) {
-        println!("Checking for latest Agent Guidance MCP updates from git...");
-        let current_dir = env::current_dir()?;
-        let status = std::process::Command::new("git")
-            .args(["pull", "--ff-only"])
-            .current_dir(&current_dir)
-            .status();
-
-        match status {
-            Ok(s) if s.success() => {
-                println!("✓ Git pull completed. Rebuilding release binary with cargo...");
-                let build_status = std::process::Command::new("cargo")
-                    .args(["build", "--release"])
-                    .current_dir(&current_dir)
-                    .status();
-                if let Ok(bs) = build_status {
-                    if bs.success() {
-                        let exe_name = if cfg!(windows) { "agent-guidance.exe" } else { "agent-guidance" };
-                        let target_bin = current_dir.join("target").join("release").join(exe_name);
-                        run_setup(&target_bin)?;
-                        println!("✓ Agent Guidance MCP updated, recompiled, and configured across all IDE clients successfully!");
-                    } else {
-                        eprintln!("Cargo release build failed.");
-                    }
-                }
-            }
-            _ => {
-                println!("⚠ Git pull failed or current directory is not a git repository.");
-            }
-        }
+        run_upgrade()?;
         return Ok(());
     }
 
@@ -157,44 +123,24 @@ async fn main() -> Result<()> {
         env!("CARGO_PKG_VERSION")
     );
 
-    #[cfg(unix)]
-    {
-        if args.contains(&"--force-daemon".to_string()) {
-            daemon::daemon_main().await;
-            return Ok(());
-        }
-        if args.contains(&"--force-client".to_string()) {
-            if !daemon::try_proxy_mode().await {
-                eprintln!("No daemon socket found. Is a daemon running?");
-                std::process::exit(1);
-            }
-            return Ok(());
-        }
-
-        if daemon::try_proxy_mode().await {
-            return Ok(());
-        }
-
-        info!("No existing daemon found -- starting in daemon mode.");
+    if args.contains(&"--force-daemon".to_string()) {
         daemon::daemon_main().await;
+        return Ok(());
     }
-
-    #[cfg(not(unix))]
-    {
-        if args.contains(&"--force-daemon".to_string())
-            || args.contains(&"--force-client".to_string())
-        {
-            eprintln!("Daemon/proxy mode is not supported on this platform.");
+    if args.contains(&"--force-client".to_string()) {
+        if !daemon::try_proxy_mode().await {
+            eprintln!("No daemon socket/pipe found. Is a daemon running?");
             std::process::exit(1);
         }
-
-        info!("Running in stdio mode (Windows). Starting background VRAM residency warmup...");
-        tokio::task::spawn_blocking(|| {
-            let _ = crate::ml::embeddings::eager_vram_warmup();
-        });
-
-        handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+        return Ok(());
     }
+
+    if daemon::try_proxy_mode().await {
+        return Ok(());
+    }
+
+    info!("No existing daemon found -- starting in daemon mode.");
+    daemon::daemon_main().await;
 
     Ok(())
 }

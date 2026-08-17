@@ -178,7 +178,7 @@ try {
     $version = $latestMeta.tag_name
     Write-Host "  Latest release: $version" -ForegroundColor Gray
 } catch {
-    $version = "v1.4.3"
+    $version = "v1.4.4"
     Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
 }
 
@@ -247,6 +247,19 @@ if (-not $installedPrebuilt) {
 
         Build-AndInstall -SourceDir $globalSrc
     }
+}
+
+# ── Sync skills to ~/.agent-guidance/skills ──────────────────────────────────
+Write-Host ""
+Write-Host ">> Syncing project skills to $HOME\.agent-guidance\skills..." -ForegroundColor Magenta
+$targetSkills = Join-Path $HOME ".agent-guidance\skills"
+if (-not (Test-Path $targetSkills)) {
+    New-Item -ItemType Directory -Path $targetSkills -Force | Out-Null
+}
+$sourceSkills = if ($buildDir -and (Test-Path "$buildDir\skills")) { "$buildDir\skills" } elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "..\skills"))) { (Join-Path $PSScriptRoot "..\skills") } elseif (Test-Path ".\skills") { (Get-Item ".\skills").FullName } elseif ($globalSrc -and (Test-Path "$globalSrc\skills")) { "$globalSrc\skills" } else { "" }
+if ($sourceSkills -and (Test-Path $sourceSkills)) {
+    Copy-Item -Path "$sourceSkills\*" -Destination $targetSkills -Recurse -Force
+    Write-Host "  OK Copied project skills to $targetSkills" -ForegroundColor Green
 }
 
 # ── Register with IDEs ────────────────────────────────────────────────────────

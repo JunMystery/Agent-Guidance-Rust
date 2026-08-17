@@ -1,6 +1,6 @@
-# Agent Guidance (Rust MCP Native)
+# 🦀 Agent Guidance MCP (Rust Edition)
 
-[![Version](https://img.shields.io/badge/Version-v1.4.3-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.4.4-blue.svg)](Cargo.toml)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
 [![Role](https://img.shields.io/badge/Role-Autonomous%20Orchestrator-indigo.svg)](#-key-capabilities)
 [![Smart Skills](https://img.shields.io/badge/Smart%20Skills-279%2B%20ML%20Search-cyan.svg)](#-smart-skills-system)
@@ -157,8 +157,7 @@ agent-guidance [OPTIONS]
 Options:
   --setup             Install and configure MCP server across all IDE clients
   --verify-setup      Verify MCP configuration paths in all IDE clients
-  --update            Sync and download 3rd-party skill repositories into ~/.agent-guidance/skills
-  --upgrade           Pull latest source from git, rebuild release binary, and update all IDE configs
+  --upgrade           Download and install latest release package, update IDE configs
   --self-update       Alias for --upgrade
   --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000
   --uninstall         Remove MCP server configurations from all IDE clients

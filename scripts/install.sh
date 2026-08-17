@@ -136,7 +136,7 @@ elif command -v wget &>/dev/null; then
     VERSION="$(wget -qO- "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 fi
 if [ -z "$VERSION" ]; then
-    VERSION="v1.4.3"
+    VERSION="v1.4.4"
     echo -e "  ${YELLOW}⚠️  Could not fetch latest release tag, defaulting to ${VERSION}${NC}"
 else
     echo -e "  ${GRAY}Latest release: ${VERSION}${NC}"
@@ -255,6 +255,25 @@ if [ "$INSTALLED_PREBUILT" = false ]; then
         rm -f "$LOCAL_BIN/agent-guidance" 2>/dev/null || true
         cp "$TARGET_BIN" "$LOCAL_BIN/agent-guidance"
     fi
+fi
+
+# ── Sync skills to ~/.agent-guidance/skills ──────────────────────────────────
+echo -e ""
+echo -e "${PURPLE}▶${NC} Syncing project skills to $HOME/.agent-guidance/skills..."
+mkdir -p "$HOME/.agent-guidance/skills"
+SOURCE_SKILLS=""
+if [ -n "$BUILD_DIR" ] && [ -d "$BUILD_DIR/skills" ]; then
+    SOURCE_SKILLS="$BUILD_DIR/skills"
+elif [ -d "$(dirname "$0")/../skills" ]; then
+    SOURCE_SKILLS="$(cd "$(dirname "$0")/../skills" && pwd)"
+elif [ -d "./skills" ]; then
+    SOURCE_SKILLS="$(pwd)/skills"
+elif [ -n "$GLOBAL_SRC" ] && [ -d "$GLOBAL_SRC/skills" ]; then
+    SOURCE_SKILLS="$GLOBAL_SRC/skills"
+fi
+if [ -n "$SOURCE_SKILLS" ] && [ -d "$SOURCE_SKILLS" ]; then
+    cp -r "$SOURCE_SKILLS/"* "$HOME/.agent-guidance/skills/"
+    echo -e "  ${GREEN}✓${NC} Copied project skills to $HOME/.agent-guidance/skills"
 fi
 
 # ── Register with IDEs ────────────────────────────────────────────────────────

@@ -287,9 +287,9 @@ agent-guidance --setup
 
 | Flag | Action |
 |---|---|
-| `--setup` | Register MCP clients + pre-download models |
-| `--update` | Download updated 3rd-party skill repos |
-| `--auto-update` | Enable scheduled skill updates |
+| `--setup` | Register MCP clients + pre-download models + sync skills |
+| `--upgrade` | Download & install latest release package from GitHub |
+| `--self-update` | Alias for --upgrade |
 | `--session-start` | Pass priority gate (for hooks) |
 | `--re-gate` | Re-pass priority gate (subagent recovery) |
 | `--uninstall` | Remove all registrations + rules |

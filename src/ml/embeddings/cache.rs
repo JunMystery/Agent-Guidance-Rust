@@ -57,8 +57,13 @@ pub fn mark_warmup_complete() {
         .store(true, Ordering::Relaxed);
 }
 
+static MODEL: OnceLock<Result<RwLock<EmbeddingModel>, String>> = OnceLock::new();
+
+pub fn try_cached_model() -> Option<std::sync::RwLockReadGuard<'static, EmbeddingModel>> {
+    MODEL.get().and_then(|res| res.as_ref().ok()).and_then(|rw| rw.try_read().ok())
+}
+
 pub fn cached_model() -> Result<std::sync::RwLockReadGuard<'static, EmbeddingModel>, String> {
-    static MODEL: OnceLock<Result<RwLock<EmbeddingModel>, String>> = OnceLock::new();
     match MODEL.get_or_init(|| {
         EmbeddingModel::load_or_download()
             .map(RwLock::new)

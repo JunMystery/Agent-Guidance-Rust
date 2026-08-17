@@ -23,20 +23,12 @@ pub fn socket_path() -> PathBuf {
         .join("mcp.sock")
 }
 
-#[cfg(unix)]
+#[cfg(windows)]
+pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\agent-guidance-mcp";
+
 pub(crate) fn lock_path() -> PathBuf {
     dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .unwrap_or_else(|| PathBuf::from("."))
         .join("agent-guidance")
         .join("daemon.lock")
-}
-
-#[cfg(not(unix))]
-pub fn socket_path() -> PathBuf {
-    PathBuf::from("")
-}
-
-#[cfg(not(unix))]
-pub(crate) fn lock_path() -> PathBuf {
-    PathBuf::from("")
 }

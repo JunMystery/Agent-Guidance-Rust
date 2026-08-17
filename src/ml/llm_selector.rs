@@ -117,7 +117,13 @@ impl LLMSelector {
             .take(MAX_CROSS_ENCODER_CANDIDATES)
             .cloned()
             .collect();
-        let cross_encoder = cached_cross_encoder().ok();
+        let cross_encoder = super::cross_encoder::try_cached_cross_encoder().or_else(|| {
+            if cfg!(test) || crate::ml::embeddings::is_warmup_complete() {
+                cached_cross_encoder().ok()
+            } else {
+                None
+            }
+        });
         let mut scored: Vec<(f32, SkillItem)> = crate::ml::inference_pool().install(|| {
             bounded_candidates
                 .par_iter()

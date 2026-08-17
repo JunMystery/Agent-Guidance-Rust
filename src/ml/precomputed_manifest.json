@@ -1,7 +1,7 @@
 {
-  "catalog_fingerprint": 288565486636299022,
+  "catalog_fingerprint": 5500757520886378349,
   "count": 279,
-  "created_at": 1786955323,
+  "created_at": 1786973109,
   "dimension": 384,
   "model": "intfloat/multilingual-e5-small"
 }

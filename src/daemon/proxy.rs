@@ -1,13 +1,17 @@
 use std::fs;
-use std::path::PathBuf;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tracing::info;
 
 #[cfg(unix)]
 use tokio::net::UnixStream;
-
+#[cfg(unix)]
 use super::socket_path;
+
+#[cfg(windows)]
+use tokio::net::windows::named_pipe::ClientOptions;
+#[cfg(windows)]
+use super::WINDOWS_PIPE_NAME;
 
 #[cfg(unix)]
 pub async fn try_proxy_mode() -> bool {
@@ -16,12 +20,12 @@ pub async fn try_proxy_mode() -> bool {
         if path.exists() {
             match UnixStream::connect(&path).await {
                 Ok(stream) => {
-                    proxy_main(stream).await;
+                    let (rx, tx) = stream.into_split();
+                    proxy_stream(rx, tx).await;
                     return true;
                 }
                 Err(e) => {
                     info!("Socket connect failed ({}), retrying...", e);
-                    // Stale socket — daemon died without cleanup. Remove it.
                     if attempt == 2 {
                         let _ = fs::remove_file(&path);
                         info!("Removed stale socket: {:?}", path);
@@ -29,40 +33,39 @@ pub async fn try_proxy_mode() -> bool {
                 }
             }
         }
-        tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+        tokio::time::sleep(Duration::from_millis(150 * (attempt + 1))).await;
     }
     info!("Could not connect to existing daemon — will start new one.");
     false
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 pub async fn try_proxy_mode() -> bool {
+    let pipe_name = WINDOWS_PIPE_NAME;
+    for attempt in 0..3 {
+        match ClientOptions::new().open(pipe_name) {
+            Ok(client) => {
+                info!("Connected to background daemon via Named Pipe: {}", pipe_name);
+                let (rx, tx) = tokio::io::split(client);
+                proxy_stream(rx, tx).await;
+                return true;
+            }
+            Err(_) => {
+                tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
+            }
+        }
+    }
+    info!("Could not connect to existing Windows daemon pipe — will start new daemon.");
     false
 }
 
-#[cfg(unix)]
-async fn proxy_main(stream: UnixStream) {
-    let socket = stream;
-    let sent_connect = std::env::var("AGENT_CLIENT_NAME").is_ok();
-
-    if sent_connect {
-        if let Ok(name) = std::env::var("AGENT_CLIENT_NAME") {
-            let meta = serde_json::json!({
-                "jsonrpc": "2.0",
-                "method": "client/connect",
-                "params": { "name": name }
-            });
-            let meta_bytes = (serde_json::to_string(&meta).unwrap_or_default() + "\n").into_bytes();
-            let _ = socket.writable().await;
-            let _ = socket.try_write(&meta_bytes);
-        }
-    }
-
-    let (socket_rx, socket_tx) = socket.into_split();
-
+async fn proxy_stream<R, W>(socket_rx: R, mut socket_tx: W)
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+{
     let to_daemon = tokio::spawn(async move {
         let mut stdin = BufReader::new(tokio::io::stdin()).lines();
-        let mut socket_tx = socket_tx;
         loop {
             match stdin.next_line().await {
                 Ok(Some(line)) => {
@@ -85,10 +88,6 @@ async fn proxy_main(stream: UnixStream) {
 
     let to_stdout = tokio::spawn(async move {
         let mut reader = BufReader::new(socket_rx).lines();
-        // Skip the connect response (first line from daemon) only if we sent one
-        if sent_connect {
-            let _ = reader.next_line().await;
-        }
         let mut stdout = tokio::io::stdout();
         loop {
             match reader.next_line().await {

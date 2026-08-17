@@ -77,8 +77,13 @@ impl CrossEncoder {
     }
 }
 
+static CE: OnceLock<Result<RwLock<CrossEncoder>, String>> = OnceLock::new();
+
+pub fn try_cached_cross_encoder() -> Option<std::sync::RwLockReadGuard<'static, CrossEncoder>> {
+    CE.get().and_then(|res| res.as_ref().ok()).and_then(|rw| rw.try_read().ok())
+}
+
 pub fn cached_cross_encoder() -> Result<std::sync::RwLockReadGuard<'static, CrossEncoder>, String> {
-    static CE: OnceLock<Result<RwLock<CrossEncoder>, String>> = OnceLock::new();
     match CE.get_or_init(|| {
         CrossEncoder::load()
             .map(RwLock::new)

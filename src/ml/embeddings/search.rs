@@ -17,7 +17,13 @@ pub fn hybrid_vector_search(
     let q_lower = query.to_lowercase();
     let words: Vec<&str> = q_lower.split_whitespace().collect();
 
-    let model_res = cached_model();
+    let model_res = super::cache::try_cached_model().map(Ok).unwrap_or_else(|| {
+        if cfg!(test) || super::cache::is_warmup_complete() {
+            cached_model()
+        } else {
+            Err("Model warming up in background".to_string())
+        }
+    });
     let (q_vec, c_vecs) = match &model_res {
         Ok(model) => {
             let q = model.embed_text(query, Some("query")).ok();
@@ -120,4 +126,32 @@ pub fn hybrid_vector_search(
         .take(top_k)
         .map(|(s, i)| (s, candidates[i].clone()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::catalog::store::{SkillItem, SkillSource};
+
+    #[test]
+    fn test_fast_path_keyword_search_returns_relevant_skills() {
+        let candidates = vec![
+            SkillItem {
+                name: "rust-performance".to_string(),
+                relative_path: "rust-performance/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "High performance Rust profiling, memory allocation, and CPU optimization techniques.".to_string(),
+            },
+            SkillItem {
+                name: "react-components".to_string(),
+                relative_path: "react-components/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "Building reusable React UI components and hooks.".to_string(),
+            },
+        ];
+
+        let results = hybrid_vector_search("optimize rust CPU", &candidates, 5);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].1.name, "rust-performance");
+    }
 }

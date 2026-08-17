@@ -172,6 +172,12 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     let codex_path = home.join(".codex").join("config.toml");
     configure_codex_toml(&codex_path, &bin_str)?;
 
+    println!();
+    println!("Syncing embedded skill catalog to ~/.agent-guidance/skills...");
+    if let Ok(count) = crate::catalog::store::sync_embedded_skills_to_disk() {
+        println!("  ✓ Synced {} embedded skills to ~/.agent-guidance/skills", count);
+    }
+
     // Note: Global rules (AGENTS.md/CLAUDE.md) and skills enforcer are intentionally
     // NOT automatically written or overwritten. Users manage their rule files manually.
 
