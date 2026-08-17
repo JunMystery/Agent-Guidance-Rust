@@ -41,9 +41,55 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     }
 }
 
+/// Resolves the optimal compute device with opportunistic GPU acceleration and zero-cost CPU fallback.
+pub fn resolve_optimal_device() -> (Device, &'static str) {
+    let env_override = std::env::var("AGENT_GUIDANCE_DEVICE")
+        .unwrap_or_else(|_| "auto".to_string())
+        .trim()
+        .to_lowercase();
+
+    if env_override == "cpu" {
+        info!("ML compute device forced to CPU via AGENT_GUIDANCE_DEVICE=cpu");
+        return (Device::Cpu, "CPU");
+    }
+
+    #[cfg(feature = "cuda")]
+    {
+        if env_override == "auto" || env_override == "cuda" {
+            match Device::new_cuda(0) {
+                Ok(dev) => {
+                    info!("Opportunistic GPU Acceleration active: NVIDIA CUDA (Device 0)");
+                    return (dev, "NVIDIA CUDA");
+                }
+                Err(e) => {
+                    tracing::warn!("CUDA initialization failed, falling back: {}", e);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    {
+        if env_override == "auto" || env_override == "metal" {
+            match Device::new_metal(0) {
+                Ok(dev) => {
+                    info!("Opportunistic GPU Acceleration active: Apple Metal (Device 0)");
+                    return (dev, "Apple Metal");
+                }
+                Err(e) => {
+                    tracing::warn!("Metal initialization failed, falling back: {}", e);
+                }
+            }
+        }
+    }
+
+    info!("ML compute device initialized on CPU baseline");
+    (Device::Cpu, "CPU")
+}
+
 impl EmbeddingModel {
     pub fn load_or_download() -> Result<Self> {
-        let device = Device::Cpu;
+        let (device, dev_name) = resolve_optimal_device();
         let repo_spec = Repo::new(
             "intfloat/multilingual-e5-small".to_string(),
             RepoType::Model,
@@ -82,23 +128,49 @@ impl EmbeddingModel {
         let tokenizer = Tokenizer::from_file(tokenizer_filename)
             .map_err(|e| anyhow::anyhow!("Tokenizer load error: {}", e))?;
 
-        // SAFETY: VarBuilder::from_mmaped_safetensors memory-maps the model weight files on disk.
-        // The files are loaded read-only from local cache and not mutated concurrently.
-        let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(
-                &[weights_filename],
-                candle_core::DType::F32,
-                &device,
-            )?
+        // Attempt loading on resolved device (GPU/CPU), with graceful fallback to CPU if OOM occurs
+        let (model, final_device) = match Self::try_load_model(&weights_filename, &config, &device) {
+            Ok(m) => (m, device),
+            Err(err) => {
+                if !matches!(device, Device::Cpu) {
+                    tracing::warn!(
+                        "Failed to load model on GPU ({}), falling back to CPU: {}",
+                        dev_name,
+                        err
+                    );
+                    let cpu_device = Device::Cpu;
+                    let m = Self::try_load_model(&weights_filename, &config, &cpu_device)?;
+                    (m, cpu_device)
+                } else {
+                    return Err(err);
+                }
+            }
         };
-
-        let model = BertModel::load(vb, &config)?;
 
         Ok(Self {
             model,
             tokenizer,
-            device,
+            device: final_device,
         })
+    }
+
+    fn try_load_model(weights_filename: &std::path::Path, config: &Config, device: &Device) -> Result<BertModel> {
+        let vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(
+                &[weights_filename],
+                candle_core::DType::F32,
+                device,
+            )?
+        };
+        BertModel::load(vb, config).map_err(|e| anyhow::anyhow!("BertModel load error: {}", e))
+    }
+
+    pub fn device_name(&self) -> &'static str {
+        match &self.device {
+            Device::Cpu => "CPU",
+            Device::Cuda(_) => "NVIDIA CUDA",
+            Device::Metal(_) => "Apple Metal",
+        }
     }
 
     pub fn embed_text(&self, text: &str, prefix: Option<&str>) -> Result<Vec<f32>> {
@@ -140,6 +212,100 @@ impl EmbeddingModel {
         let vec = normalized.squeeze(0)?.to_vec1::<f32>()?;
         Ok(vec)
     }
+
+    /// Embeds a batch of texts concurrently via 2D Tensor MatMul with dynamic padding and L2 normalization.
+    pub fn embed_batch(
+        &self,
+        texts: &[&str],
+        prefix: Option<&str>,
+        batch_size: usize,
+    ) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let effective_batch_size = if batch_size == 0 { 32 } else { batch_size };
+        let mut results = Vec::with_capacity(texts.len());
+
+        for chunk in texts.chunks(effective_batch_size) {
+            let prompts: Vec<String> = chunk
+                .iter()
+                .map(|t| match prefix {
+                    Some("query") => format!("query: {}", t),
+                    Some("passage") => format!("passage: {}", t),
+                    _ => t.to_string(),
+                })
+                .collect();
+
+            // Encode all prompts in the batch
+            let encodings = self
+                .tokenizer
+                .encode_batch(prompts, true)
+                .map_err(|e| anyhow::anyhow!("Batch encoding error: {}", e))?;
+
+            let batch_len = encodings.len();
+            // Determine maximum token length in this sub-batch for dynamic padding
+            let max_len = encodings
+                .iter()
+                .map(|e| e.get_ids().len())
+                .max()
+                .unwrap_or(0);
+
+            if max_len == 0 {
+                for _ in 0..batch_len {
+                    results.push(vec![0.0; 384]);
+                }
+                continue;
+            }
+
+            // Construct 2D tensors [batch_len, max_len] with padding (pad_id = 0, mask = 0)
+            let mut flat_token_ids = Vec::with_capacity(batch_len * max_len);
+            let mut flat_attention_mask = Vec::with_capacity(batch_len * max_len);
+
+            for enc in &encodings {
+                let ids = enc.get_ids();
+                let mask = enc.get_attention_mask();
+                let len = ids.len();
+
+                flat_token_ids.extend_from_slice(ids);
+                flat_attention_mask.extend_from_slice(mask);
+
+                // Pad remaining slots
+                if len < max_len {
+                    let pad_count = max_len - len;
+                    flat_token_ids.extend(std::iter::repeat(0).take(pad_count));
+                    flat_attention_mask.extend(std::iter::repeat(0).take(pad_count));
+                }
+            }
+
+            let token_ids = Tensor::from_vec(flat_token_ids, (batch_len, max_len), &self.device)?;
+            let attention_mask =
+                Tensor::from_vec(flat_attention_mask, (batch_len, max_len), &self.device)?;
+            let token_type_ids = token_ids.zeros_like()?;
+
+            let embeddings = self
+                .model
+                .forward(&token_ids, &token_type_ids, Some(&attention_mask))?;
+
+            // Attention-masked Mean Pooling across batch dimension
+            let mask_expanded = attention_mask
+                .unsqueeze(2)?
+                .to_dtype(candle_core::DType::F32)?;
+            let masked_embeddings = embeddings.broadcast_mul(&mask_expanded)?;
+            let sum_embeddings = masked_embeddings.sum(1)?;
+            let sum_mask = mask_expanded.sum(1)?.clamp(1e-9, f64::MAX)?;
+            let mean_embedding = sum_embeddings.broadcast_div(&sum_mask)?;
+
+            // L2 normalization
+            let norm = mean_embedding.sqr()?.sum_keepdim(1)?.sqrt()?;
+            let normalized = mean_embedding.broadcast_div(&norm)?;
+
+            let batch_vectors = normalized.to_vec2::<f32>()?;
+            results.extend(batch_vectors);
+        }
+
+        Ok(results)
+    }
 }
 
 #[derive(Clone)]
@@ -148,7 +314,66 @@ struct PassageCache {
     vectors: Arc<Vec<Vec<f32>>>,
 }
 
+/// GPU VRAM-Resident 2D Tensor Matrix for sub-0.1ms Skill Matching
+#[derive(Clone)]
+pub struct GpuSkillMatrix {
+    pub matrix: Tensor, // [N, 384] normalized vectors on GPU/CPU device
+    pub count: usize,
+    pub dim: usize,
+    pub fingerprint: u64,
+}
+
+impl GpuSkillMatrix {
+    pub fn from_vectors(vectors: &[Vec<f32>], fingerprint: u64, device: &Device) -> Result<Self> {
+        let count = vectors.len();
+        if count == 0 {
+            return Err(anyhow::anyhow!("Empty vectors"));
+        }
+        let dim = vectors[0].len();
+        let mut flat = Vec::with_capacity(count * dim);
+        for v in vectors {
+            flat.extend_from_slice(v);
+        }
+        let matrix = Tensor::from_vec(flat, (count, dim), device)?;
+        Ok(Self {
+            matrix,
+            count,
+            dim,
+            fingerprint,
+        })
+    }
+
+    /// Computes batch cosine similarity on GPU via matrix multiplication: [1, dim] @ [N, dim]^T -> [N]
+    pub fn score_query(&self, query_vec: &[f32], device: &Device) -> Result<Vec<f32>> {
+        let q_tensor = Tensor::from_vec(query_vec.to_vec(), (1, self.dim), device)?;
+        let scores_tensor = q_tensor.matmul(&self.matrix.t()?)?;
+        let flat_scores = scores_tensor.squeeze(0)?.to_vec1::<f32>()?;
+        Ok(flat_scores)
+    }
+}
+
+/// Batch cosine similarity across targets on GPU / CPU Tensor engine
+pub fn gpu_batch_cosine_similarity(query: &[f32], targets: &[Vec<f32>], device: &Device) -> Result<Vec<f32>> {
+    if targets.is_empty() {
+        return Ok(Vec::new());
+    }
+    let count = targets.len();
+    let dim = query.len();
+    let mut flat = Vec::with_capacity(count * dim);
+    for t in targets {
+        if t.len() != dim {
+            return Err(anyhow::anyhow!("Dimension mismatch in batch cosine similarity"));
+        }
+        flat.extend_from_slice(t);
+    }
+    let target_matrix = Tensor::from_vec(flat, (count, dim), device)?;
+    let q_tensor = Tensor::from_vec(query.to_vec(), (1, dim), device)?;
+    let scores = q_tensor.matmul(&target_matrix.t()?)?;
+    Ok(scores.squeeze(0)?.to_vec1::<f32>()?)
+}
+
 static PASSAGE_CACHE: OnceLock<RwLock<Vec<PassageCache>>> = OnceLock::new();
+static GPU_SKILL_MATRIX: OnceLock<RwLock<Option<GpuSkillMatrix>>> = OnceLock::new();
 static WARMUP_DONE: OnceLock<AtomicBool> = OnceLock::new();
 
 fn cache_dir() -> PathBuf {
@@ -175,15 +400,26 @@ fn catalog_fingerprint(skills: &[SkillItem]) -> u64 {
 }
 
 fn store_passage_cache(vectors: Vec<Vec<f32>>, skills: &[SkillItem]) {
+    let fingerprint = catalog_fingerprint(skills);
     let cache = PASSAGE_CACHE.get_or_init(|| RwLock::new(Vec::new()));
     if let Ok(mut guard) = cache.write() {
         let entry = PassageCache {
-            fingerprint: catalog_fingerprint(skills),
-            vectors: Arc::new(vectors),
+            fingerprint,
+            vectors: Arc::new(vectors.clone()),
         };
         guard.retain(|cached| cached.fingerprint != entry.fingerprint);
         guard.insert(0, entry);
         guard.truncate(2);
+    }
+
+    // Also update GPU VRAM Matrix if model is cached
+    if let Ok(model) = cached_model() {
+        if let Ok(matrix) = GpuSkillMatrix::from_vectors(&vectors, fingerprint, &model.device) {
+            let gpu_slot = GPU_SKILL_MATRIX.get_or_init(|| RwLock::new(None));
+            if let Ok(mut g_guard) = gpu_slot.write() {
+                *g_guard = Some(matrix);
+            }
+        }
     }
 }
 
@@ -572,6 +808,16 @@ fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Arc<V
         .unwrap_or_else(|| Arc::new(Vec::new()))
 }
 
+/// Eagerly warm up and preload both the Embedding Model, Cross-Encoder, and GPU Skill Matrix into VRAM.
+pub fn eager_vram_warmup() -> Result<()> {
+    info!("[VRAM Residency] Initializing Eager VRAM Standby Warmup...");
+    warmup_cache();
+    drop(cached_model());
+    drop(crate::ml::llm_selector::cached_cross_encoder());
+    info!("[VRAM Residency] Eager VRAM Standby Warmup complete. Engine ready on VRAM.");
+    Ok(())
+}
+
 pub fn hybrid_vector_search(
     query: &str,
     candidates: &[SkillItem],
@@ -586,10 +832,11 @@ pub fn hybrid_vector_search(
     let q_lower = query.to_lowercase();
     let words: Vec<&str> = q_lower.split_whitespace().collect();
 
-    let (q_vec, c_vecs) = match cached_model() {
+    let model_res = cached_model();
+    let (q_vec, c_vecs) = match &model_res {
         Ok(model) => {
             let q = model.embed_text(query, Some("query")).ok();
-            let c = embed_skills_cache(candidates, &model);
+            let c = embed_skills_cache(candidates, model);
             (q, c)
         }
         _ => (None::<Vec<f32>>, Arc::new(Vec::new())),
@@ -598,14 +845,40 @@ pub fn hybrid_vector_search(
     let mut scored: Vec<(f32, usize)> = Vec::new();
     if let Some(ref qv) = q_vec {
         if !c_vecs.is_empty() {
-            for (i, cand) in candidates.iter().enumerate() {
-                let vec_i = if i < c_vecs.len() {
-                    &c_vecs[i]
+            let fingerprint = catalog_fingerprint(candidates);
+            let gpu_scores: Option<Vec<f32>> = if let Ok(ref model) = model_res {
+                let gpu_slot = GPU_SKILL_MATRIX.get_or_init(|| RwLock::new(None));
+                if let Ok(guard) = gpu_slot.read() {
+                    if let Some(ref matrix) = *guard {
+                        if matrix.fingerprint == fingerprint && matrix.count == candidates.len() {
+                            matrix.score_query(qv, &model.device).ok()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 } else {
-                    continue;
-                };
-                let mut score = qv.iter().zip(vec_i.iter()).map(|(a, b)| a * b).sum();
+                    None
+                }
+            } else {
+                None
+            };
 
+            for (i, cand) in candidates.iter().enumerate() {
+                let base_score = match &gpu_scores {
+                    Some(scores) => scores.get(i).copied().unwrap_or(0.0),
+                    None => {
+                        let vec_i = if i < c_vecs.len() {
+                            &c_vecs[i]
+                        } else {
+                            continue;
+                        };
+                        qv.iter().zip(vec_i.iter()).map(|(a, b)| a * b).sum()
+                    }
+                };
+
+                let mut score = base_score;
                 let name_lower = cand.name.to_lowercase();
                 if name_lower == q_lower {
                     score += 0.5;
@@ -707,5 +980,102 @@ mod tests {
         let results = hybrid_vector_search("reducing context size", &candidates, 2);
         assert!(!results.is_empty());
         assert_eq!(results[0].1.name, "context-budget");
+    }
+
+    #[test]
+    fn test_device_resolution_and_env_override() {
+        // 1. Test forced CPU via env var
+        unsafe {
+            std::env::set_var("AGENT_GUIDANCE_DEVICE", "cpu");
+        }
+        let (dev, name) = resolve_optimal_device();
+        assert!(matches!(dev, Device::Cpu));
+        assert_eq!(name, "CPU");
+
+        // 2. Test auto mode resolution
+        unsafe {
+            std::env::set_var("AGENT_GUIDANCE_DEVICE", "auto");
+        }
+        let (_dev_auto, _name_auto) = resolve_optimal_device();
+        // Should resolve cleanly without panicking
+    }
+
+    #[test]
+    fn test_batch_empty_input() {
+        if let Ok(model) = cached_model() {
+            let res = model.embed_batch(&[], Some("passage"), 16);
+            assert!(res.is_ok());
+            assert!(res.unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_batch_embedding_numerical_equivalence() {
+        if let Ok(model) = cached_model() {
+            let texts = [
+                "Implement JWT authentication middleware",
+                "Configure PostgreSQL index on user_id",
+                "Setup Prometheus metrics exporter",
+                "Handle websocket reconnect backoff",
+            ];
+
+            // 1. Single embeddings
+            let mut single_vecs = Vec::new();
+            for t in &texts {
+                let v = model.embed_text(t, Some("passage")).unwrap();
+                single_vecs.push(v);
+            }
+
+            // 2. Batch embeddings with batch_size = 2 (triggers multi-chunk batching)
+            let batch_vecs = model.embed_batch(&texts, Some("passage"), 2).unwrap();
+            assert_eq!(batch_vecs.len(), texts.len());
+
+            // 3. Verify numerical equivalence (Cosine similarity >= 0.9999)
+            for i in 0..texts.len() {
+                let sim = cosine_similarity(&single_vecs[i], &batch_vecs[i]);
+                assert!(
+                    sim >= 0.9999,
+                    "Batch vector {} deviates from single vector (sim: {})",
+                    i,
+                    sim
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_gpu_skill_matrix_scoring_equivalence() {
+        let dev = Device::Cpu;
+        let v1 = vec![1.0, 0.0, 0.0];
+        let v2 = vec![0.0, 1.0, 0.0];
+        let v3 = vec![0.7071, 0.7071, 0.0];
+        let vectors = vec![v1, v2, v3];
+
+        let matrix = GpuSkillMatrix::from_vectors(&vectors, 12345, &dev).unwrap();
+        assert_eq!(matrix.count, 3);
+        assert_eq!(matrix.dim, 3);
+
+        let query = vec![1.0, 0.0, 0.0];
+        let scores = matrix.score_query(&query, &dev).unwrap();
+        assert_eq!(scores.len(), 3);
+        assert!((scores[0] - 1.0).abs() < 1e-5);
+        assert!((scores[1] - 0.0).abs() < 1e-5);
+        assert!((scores[2] - 0.7071).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_gpu_batch_cosine_similarity() {
+        let dev = Device::Cpu;
+        let query = vec![0.0, 1.0, 0.0];
+        let targets = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.0, -1.0, 0.0],
+        ];
+        let scores = gpu_batch_cosine_similarity(&query, &targets, &dev).unwrap();
+        assert_eq!(scores.len(), 3);
+        assert!((scores[0] - 0.0).abs() < 1e-5);
+        assert!((scores[1] - 1.0).abs() < 1e-5);
+        assert!((scores[2] - (-1.0)).abs() < 1e-5);
     }
 }

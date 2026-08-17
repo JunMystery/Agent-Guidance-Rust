@@ -116,7 +116,14 @@ def main():
         f'releases/download/{v_version}/'
     )
 
-    # 7. Cargo.lock (via cargo check)
+    # 7. README.md badge
+    replace_in_file(
+        root / "README.md",
+        r'badge/Version-v[0-9\.]+-blue\.svg',
+        f'badge/Version-{v_version}-blue.svg'
+    )
+
+    # 8. Cargo.lock (via cargo check)
     print("  Running cargo check to update Cargo.lock...")
     subprocess.run(["cargo", "check"], cwd=root, check=True)
     print("  [OK] Updated Cargo.lock")

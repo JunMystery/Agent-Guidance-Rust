@@ -188,9 +188,9 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
 
-        info!("Running in stdio mode (Windows). Starting background ML model warmup...");
+        info!("Running in stdio mode (Windows). Starting background VRAM residency warmup...");
         tokio::task::spawn_blocking(|| {
-            crate::ml::embeddings::warmup_cache();
+            let _ = crate::ml::embeddings::eager_vram_warmup();
         });
 
         handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;

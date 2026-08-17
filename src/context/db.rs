@@ -634,6 +634,8 @@ impl CodeGraphDb {
         Ok(results)
     }
 
+    pub const HNSW_DISPATCH_THRESHOLD: usize = 10_000;
+
     pub fn vector_search_symbols(
         &self,
         query_vector: &[f32],
@@ -656,9 +658,40 @@ impl CodeGraphDb {
             Ok((blob, name, kind, file_path, start_line, signature))
         })?;
 
-        let mut matches = Vec::new();
+        let mut all_items = Vec::new();
         for r in rows {
-            let (blob, name, kind, file_path, start_line, signature) = r?;
+            all_items.push(r?);
+        }
+
+        // Dual-Engine: Use HNSW Graph for massive repositories (>10,000 vectors)
+        if all_items.len() > Self::HNSW_DISPATCH_THRESHOLD {
+            let mut hnsw = super::hnsw::HnswIndex::new(16, 64, 32);
+            for (blob, name, kind, file_path, start_line, signature) in all_items {
+                let vec = bytes_to_f32_vec(&blob);
+                hnsw.insert(vec, SymbolSearchResult {
+                    name,
+                    kind,
+                    file_path,
+                    start_line,
+                    signature,
+                    score: 0.0,
+                });
+            }
+
+            let hnsw_results = hnsw.search(query_vector, top_k, threshold);
+            return Ok(hnsw_results
+                .into_iter()
+                .map(|(score, payload)| {
+                    let mut item = payload.clone();
+                    item.score = score;
+                    item
+                })
+                .collect());
+        }
+
+        // Default: Fast Flat Scan for standard repositories (<=10,000 vectors)
+        let mut matches = Vec::new();
+        for (blob, name, kind, file_path, start_line, signature) in all_items {
             let vec = bytes_to_f32_vec(&blob);
             let score = cosine_similarity(query_vector, &vec);
             if score >= threshold {
@@ -698,9 +731,38 @@ impl CodeGraphDb {
             Ok((blob, file_path, start_line, end_line))
         })?;
 
-        let mut matches = Vec::new();
+        let mut all_items = Vec::new();
         for r in rows {
-            let (blob, file_path, start_line, end_line) = r?;
+            all_items.push(r?);
+        }
+
+        // Dual-Engine: Use HNSW Graph for massive repositories (>10,000 vectors)
+        if all_items.len() > Self::HNSW_DISPATCH_THRESHOLD {
+            let mut hnsw = super::hnsw::HnswIndex::new(16, 64, 32);
+            for (blob, file_path, start_line, end_line) in all_items {
+                let vec = bytes_to_f32_vec(&blob);
+                hnsw.insert(vec, ChunkSearchResult {
+                    file_path,
+                    start_line,
+                    end_line,
+                    score: 0.0,
+                });
+            }
+
+            let hnsw_results = hnsw.search(query_vector, top_k, threshold);
+            return Ok(hnsw_results
+                .into_iter()
+                .map(|(score, payload)| {
+                    let mut item = payload.clone();
+                    item.score = score;
+                    item
+                })
+                .collect());
+        }
+
+        // Default: Fast Flat Scan for standard repositories (<=10,000 vectors)
+        let mut matches = Vec::new();
+        for (blob, file_path, start_line, end_line) in all_items {
             let vec = bytes_to_f32_vec(&blob);
             let score = cosine_similarity(query_vector, &vec);
             if score >= threshold {
@@ -968,6 +1030,31 @@ mod tests {
         let chunk_hits = db.vector_search_chunks(&query_vec, 5, 0.9)?;
         assert_eq!(chunk_hits.len(), 1);
         assert_eq!(chunk_hits[0].file_path, "src/auth.rs");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        Ok(())
+    }
+
+    #[test]
+    fn test_hnsw_dispatch_threshold_vector_search() -> Result<()> {
+        let temp_dir = std::env::temp_dir().join(format!("hnsw_dispatch_test_{}", std::process::id()));
+        let db_path = temp_dir.join("test_hnsw.db");
+        let db = CodeGraphDb::open(&db_path)?;
+
+        // Insert mock symbols
+        db.upsert_file("src/jwt.rs", "h1", 100, 100)?;
+        db.insert_symbol("src/jwt.rs::fn::verify::L1", "verify_token", "function", "src/jwt.rs", None, 1, 10, Some("fn verify_token()"))?;
+        db.store_symbol_vector("src/jwt.rs::fn::verify::L1", &[0.95, 0.05, 0.0], "v1")?;
+
+        // Test direct HNSW indexer search
+        let mut hnsw = super::super::hnsw::HnswIndex::new(16, 64, 32);
+        hnsw.insert(vec![0.95, 0.05, 0.0], "verify_token");
+        hnsw.insert(vec![0.0, 0.95, 0.05], "other_func");
+
+        let results = hnsw.search(&[0.99, 0.01, 0.0], 1, 0.8);
+        assert_eq!(results.len(), 1);
+        assert_eq!(*results[0].1, "verify_token");
+        assert!(results[0].0 > 0.9);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
         Ok(())

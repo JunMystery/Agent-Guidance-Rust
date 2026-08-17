@@ -1,6 +1,6 @@
 [package]
 name = "agent-guidance"
-version = "1.4.1"
+version = "1.4.2"
 edition = "2024"
 
 [dependencies]
@@ -32,6 +32,8 @@ ndarray = "0.15"
 [features]
 default = []
 accelerate = ["candle-core/accelerate", "candle-nn/accelerate"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 candle-core = { version = "0.8", features = ["accelerate"] }

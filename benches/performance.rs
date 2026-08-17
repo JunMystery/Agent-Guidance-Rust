@@ -1,9 +1,14 @@
 #![allow(warnings, unused_imports, dead_code)]
 
-#[path = "../src/context/db.rs"]
-mod db;
-#[path = "../src/context/scanner.rs"]
-mod scanner;
+#[path = "../src/context"]
+mod context {
+    pub mod hnsw;
+    pub mod db;
+    pub mod scanner;
+}
+
+use context::db;
+use context::scanner;
 
 use std::hint::black_box;
 use std::path::Path;

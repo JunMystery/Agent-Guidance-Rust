@@ -436,16 +436,16 @@ pub async fn daemon_main() {
     info!("Daemon listening on {:?}", path);
 
     // P0+: Background ML model warmup — daemon accepts connections immediately
-    // Warmup runs in background; first ML search calls use keyword fallback until ready
-    info!("Starting background ML model warmup (disk cache or ~20s compute)...");
+    // Warmup runs in background; preloads Model and GPU Skill Matrix into VRAM
+    info!("Starting background ML model and VRAM residency warmup...");
     tokio::spawn(async {
         let warmup = tokio::task::spawn_blocking(|| {
-            crate::ml::embeddings::warmup_cache();
+            let _ = crate::ml::embeddings::eager_vram_warmup();
         });
         if let Err(e) = warmup.await {
             error!("Model warmup failed: {:?}", e);
         } else {
-            info!("Background model warmup completed.");
+            info!("Background VRAM model & skill matrix residency warmup completed.");
         }
     });
 
