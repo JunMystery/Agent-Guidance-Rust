@@ -2,207 +2,144 @@
 
 [Back to README](../README.md)
 
-The `agent-guidance-mcp_project_context` grouped tool gives AI agents a bounded, repeatable way to inspect a project before editing code. It is intentionally lightweight: no database, no GraphRAG, no UI, and no LLM calls.
-
-## Why These Tools Exist
-
-Agents often waste tokens by reading unrelated files or guessing the project structure. These tools encourage a narrower workflow:
-
-1. Inspect the tree.
-2. Search for relevant files.
-3. Read the current target file.
-4. Export a snapshot only when reusable context is useful.
-
-The tools skip common dependency/cache folders, binary files, and generated snapshot output.
-
-## Agent Instruction Policy
-
-At the start of each coding session, call `agent-guidance-mcp_task_pipeline(task, project_path)`. It includes recommendations and can include the bounded project tree.
-
-For large refactors, upgrades, audits, or unfamiliar code, also use `agent-guidance-mcp_project_context(operation="search", project_path=..., query=...)` and `agent-guidance-mcp_project_context(operation="snapshot", project_path=...)` when a reusable overview is useful.
-
-Before editing any file, inspect the current target file with `agent-guidance-mcp_project_context(operation="read", project_path=..., relative_path=...)` or an equivalent file-read tool.
-
-Avoid repeated broad scans during the same session unless the project changed significantly.
-
-## `agent-guidance-mcp_project_context(operation="tree")`
-
-Returns a bounded source tree for a project.
-
-Example:
-
-```json
-{
-  "operation": "tree",
-  "project_path": "/absolute/path/to/project",
-  "max_depth": 3
-}
-```
-
-Use this at the beginning of a coding session or when entering an unfamiliar repository.
-
-The result includes entries with:
-
-- `path`
-- `type`
-- `language_hint` for files
-- `size_bytes` for files
-
-## `agent-guidance-mcp_project_context(operation="search")`
-
-Searches source files and returns ranked snippets.
-
-Example:
-
-```json
-{
-  "operation": "search",
-  "project_path": "/absolute/path/to/project",
-  "query": "auth refresh token",
-  "limit": 10
-}
-```
-
-Use this to find relevant symbols, feature names, error messages, endpoints, or configuration keys.
-
-The result includes:
-
-- `path`
-- `language_hint`
-- `score`
-- `line`
-- `snippet`
-
-## `agent-guidance-mcp_project_context(operation="read")`
-
-Reads a bounded range from one text file inside the project.
-
-Example:
-
-```json
-{
-  "operation": "read",
-  "project_path": "/absolute/path/to/project",
-  "relative_path": "src/auth/token_service.rs",
-  "start_line": 1,
-  "max_lines": 160
-}
-```
-
-Use this immediately before editing a file. It validates that the requested file stays inside the project root.
-
-## `agent-guidance-mcp_project_context(operation="snapshot")`
-
-Writes a bounded JSON snapshot to the project.
-
-Example:
-
-```json
-{
-  "operation": "snapshot",
-  "project_path": "/absolute/path/to/project"
-}
-```
-
-Default output:
-
-```text
-.agent-context/code-snapshot.json
-```
-
-The snapshot contains:
-
-- `project_root`
-- `generated_at`
-- `limits`
-- `tree`
-- `files`
-
-Each file entry includes:
-
-- `path`
-- `language_hint`
-- `size_bytes`
-- `truncated`
-- `content`
-
-## CodeGraph Semantic Operations (SQLite Indexer)
-
-For large and complex codebases, `agent-guidance-mcp_project_context` has built-in CodeGraph-like AST parsing and SQLite-based caching. These operations are fast, incremental, and do not consume LLM tokens:
-
-### `agent-guidance-mcp_project_context(operation="symbols")`
-Extracts class, method, and function declarations from a file (using AST `tree-sitter` queries).
-- **Parameters:** `relative_path` (required).
-- **Returns:** List of symbol items with their scopes, signatures, and start/end lines.
-
-### `agent-guidance-mcp_project_context(operation="references")`
-Finds all occurrences/references of a symbol (class name, function name, etc.) across the codebase.
-- **Parameters:** `query` (symbol name, required).
-
-### `agent-guidance-mcp_project_context(operation="structure")`
-Returns a hierarchical method-level structure map of a specific source file.
-- **Parameters:** `relative_path` (required).
-
-### `agent-guidance-mcp_project_context(operation="callers")`
-Traces what functions/methods call the target function.
-- **Parameters:** `query` (fully-qualified Symbol ID, e.g. `path/to/file.rs::ClassName::method_name`, required).
-
-### `agent-guidance-mcp_project_context(operation="callees")`
-Traces what functions/methods the target function calls.
-- **Parameters:** `query` (fully-qualified Symbol ID, required).
+The `agent-guidance-mcp_project_context` tool provides a token-budgeted, persistent, and intelligent code exploration engine. It replaces slow raw-disk traversals with a local **SQLite + Tree-sitter + BERT Vector Search** cascade (<100ms) isolated per-project at `<project_root>/.agent-context/code_graph.db`.
 
 ---
 
-## Snapshot Freshness
+## ⚡ 5-Phase Instant Search Cascade (<100ms)
 
-Treat snapshots as cached overview context, not the source of truth.
+When `operation="search"` is invoked, the engine processes queries through a 5-tier cascade:
 
-Before editing a file, the agent should still use `agent-guidance-mcp_project_context(operation="read", ...)` or an equivalent current file-read tool. This avoids making changes from stale snapshot content.
+```
+Query: "xử lý timeout khi gọi API bên thứ 3"
+  │
+  ├── Phase 1: ALIAS CACHE (<1ms) ─────────── Direct lookup of learned natural language terms
+  ├── Phase 2: SYMBOL FTS5 (<5ms) ─────────── Full-text match on function, class, struct names
+  ├── Phase 3: SYMBOL VECTORS (<50ms) ─────── Multilingual-E5 semantic similarity on signatures
+  ├── Phase 4: CONTENT FTS5 (<5ms) ────────── Full-text search across 50-line code chunks
+  └── Phase 5: RAG CONTENT VECTORS (<100ms) ─ Semantic similarity on actual chunk logic
+```
 
-Use `agent-guidance-mcp_project_context(operation="snapshot", ...)` when:
+### Adaptive Alias Learning & Decay
+- Successful searches and manual `learn_alias` calls are automatically saved with an initial confidence of `0.80`.
+- Repeated hits increase confidence up to `1.0`.
+- **Decay Policy**: Inactive aliases have their confidence halved after 30 days and are automatically purged after 90 days.
 
-- onboarding into a larger project,
-- preparing an audit,
-- handing context to another agent,
-- working across multiple related tasks,
-- summarizing a project for later retrieval.
+---
 
-Avoid exporting snapshots for every small prompt.
+## 🛠️ Operations Reference
 
-## Token Guidance
-
-Recommended defaults:
-
+### 1. `operation="search"`
+Executes the 5-phase search cascade across symbols, code content, and learned aliases.
 ```json
 {
-  "max_depth": 3,
-  "limit": 10,
-  "max_lines": 120
+  "operation": "search",
+  "project_path": "/path/to/project",
+  "query": "process_payment"
 }
 ```
 
-Use larger values only when the task requires it.
-
-`agent-guidance-mcp_project_context(operation="snapshot", ...)` has byte limits:
-
+### 2. `operation="navigate"`
+Comprehensive code graph traversal returning all matching layers simultaneously (aliases, symbols, content chunks, vectors, and DAG call/import edges).
 ```json
 {
-  "max_file_bytes": 200000,
-  "max_total_bytes": 2000000
+  "operation": "navigate",
+  "project_path": "/path/to/project",
+  "query": "PaymentService",
+  "scope": "all"
+}
+```
+*`scope` options*: `"all"`, `"symbols"`, `"content"`, `"edges"`.
+
+### 3. `operation="learn_alias"`
+Explicitly maps a natural language phrase or query to a file and symbol.
+```json
+{
+  "operation": "learn_alias",
+  "project_path": "/path/to/project",
+  "alias_term": "tính năng thanh toán",
+  "relative_path": "src/payment/service.rs",
+  "resolved_symbol": "PaymentService",
+  "resolved_line": 42
 }
 ```
 
-These limits protect the agent context window, but a snapshot can still be much larger than a targeted search/read workflow.
+### 4. `operation="reindex"`
+Forces a full re-scan and AST re-indexing of the project code graph, spawning background threads for BERT vector embedding.
+```json
+{
+  "operation": "reindex",
+  "project_path": "/path/to/project"
+}
+```
 
-## Safety Rules
+### 5. `operation="read"`
+Reads a bounded file range (enforcing the hard 300 LOC cap).
+```json
+{
+  "operation": "read",
+  "project_path": "/path/to/project",
+  "relative_path": "src/main.rs"
+}
+```
 
-- Pass an explicit absolute `project_path` whenever possible.
-- Do not rely on the MCP process current working directory for multi-project workflows.
-- Do not edit code based only on snapshot content.
-- Prefer `agent-guidance-mcp_project_context(operation="search", ...)` and `agent-guidance-mcp_project_context(operation="read", ...)` for focused task work.
+### 6. `operation="symbols"` / `operation="structure"`
+Extracts top-level function, struct, enum, and class declarations from a specific file.
+```json
+{
+  "operation": "symbols",
+  "project_path": "/path/to/project",
+  "relative_path": "src/main.rs"
+}
+```
+
+### 7. `operation="references"`
+Finds all occurrences and usages of a target symbol across the repository.
+```json
+{
+  "operation": "references",
+  "project_path": "/path/to/project",
+  "query": "PaymentService"
+}
+```
+
+### 8. `operation="tree"`
+Returns a top-level directory and file overview (capped at depth 2).
+```json
+{
+  "operation": "tree",
+  "project_path": "/path/to/project"
+}
+```
+
+---
+
+## 🔄 Proactive Background File Watcher
+
+The engine automatically runs an OS-level inotify/file watcher in the background:
+- **5s Debounce**: File edits are buffered for 5 seconds before triggering incremental indexing.
+- **Incremental Indexing**: Uses SHA256 hashes to only re-parse modified files.
+- **Safe Filtering**: Automatically excludes `.git`, `.agent-context`, `target`, `node_modules`, `build`, `__pycache__`, `dist`, `.next`, and binary files.
+
+---
+
+## 🔒 Per-Project Storage Isolation
+
+All code graph databases, FTS5 virtual tables, and vector embeddings are stored locally within the project directory:
+```
+<project_root>/
+└── .agent-context/
+    ├── architecture.json      # Detected architectural pattern
+    ├── code_graph.db          # SQLite DB (symbols, edges, vectors, chunks, aliases)
+    └── sessions/              # Multi-session continuity state
+```
+No data is shared between different repositories.
+
+---
 
 ## Related Docs
 
 - [Usage Guide](../usage.md)
 - [MCP Surface](mcp-surface.md)
-- [Repo Map For Agents](repo-map-for-agents.md)
+- [Architecture Overview](../ARCHITECTURE.md)
+

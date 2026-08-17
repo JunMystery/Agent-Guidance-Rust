@@ -1,3 +1,5 @@
+#![allow(warnings, unused_imports, dead_code)]
+
 #[path = "../src/context/db.rs"]
 mod db;
 #[path = "../src/context/scanner.rs"]

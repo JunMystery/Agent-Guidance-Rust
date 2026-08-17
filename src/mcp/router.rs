@@ -202,6 +202,10 @@ pub fn handle_request(
                                 "items": { "type": "string" },
                                 "description": "Skill names to load (e.g. ['android-clean-architecture', 'error-handling']). Pass empty array [] to proceed without loading skills."
                             },
+                            "task": {
+                                "type": "string",
+                                "description": "Optional active task description to trigger semantic slicing and extract top relevant skill sections (saving ~70% tokens)"
+                            },
                             "project_path": {
                                 "type": "string",
                                 "description": "Absolute path of active repository workspace"
@@ -232,36 +236,42 @@ pub fn handle_request(
                 },
                 {
                     "name": "project_context",
-                    "description": "Read, search, and extract code symbols across project files with built-in 300 LOC token budgets. Use this tool instead of raw grep_search, list_dir, or view_file.",
+                    "description": "Read, search, navigate code graph, and extract symbols across project files with built-in 300 LOC token budgets. Use this tool instead of raw grep_search, list_dir, or view_file.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["search", "read", "symbols", "structure", "references", "architecture", "tree"],
-                                "description": "Operation to perform: 'search' (keyword/pattern search across codebase), 'read' (read file bounded to 300 LOC or extract specific symbol), 'symbols'/'structure' (list functions/classes/methods in file), 'references' (find all usages of symbol), 'architecture' (detect/memorize project architectural pattern), 'tree' (top-level project structure)"
+                                "enum": ["search", "navigate", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex"],
+                                "description": "Operation: 'search' (5-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (structure), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh)"
                             },
-                            "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
-                            "query": { "type": "string", "description": "Search keyword, symbol name, or pattern (required for 'search' and 'references')" },
-                            "relative_path": { "type": "string", "description": "Relative file path within project (required for 'read', 'symbols', and 'structure', e.g. 'src/main.rs')" },
-                            "target_symbol": { "type": "string", "description": "Specific function/class/struct/enum symbol to extract precisely for token-saving read (optional for 'read')" },
-                            "layer": { "type": "string", "enum": ["ui", "domain", "data", "infrastructure"], "description": "Architecture domain layer of the target file" }
+                            "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
+                            "query": { "type": "string", "description": "Search keyword, symbol name, natural language query, or pattern" },
+                            "relative_path": { "type": "string", "description": "Relative file path within project (e.g. 'src/main.rs')" },
+                            "target_symbol": { "type": "string", "description": "Specific function/class/struct/enum symbol to extract precisely" },
+                            "layer": { "type": "string", "enum": ["ui", "domain", "data", "infrastructure"], "description": "Architecture domain layer of the target file" },
+                            "alias_term": { "type": "string", "description": "The natural language term to learn as alias (for learn_alias)" },
+                            "resolved_symbol": { "type": "string", "description": "The symbol name resolved from grep (for learn_alias)" },
+                            "resolved_line": { "type": "integer", "description": "Line number of resolved symbol (for learn_alias)" },
+                            "scope": { "type": "string", "enum": ["symbols", "files", "edges", "content"], "description": "Scope filter for navigate operation" },
+                            "view_mode": { "type": "string", "enum": ["full", "skeleton"], "description": "View mode for 'read' operation: 'full' (capped 300 LOC) or 'skeleton' (AST structural outline with function bodies collapsed to line ranges)" }
                         },
                         "required": ["operation", "project_path"]
                     }
                 },
                 {
                     "name": "workflow_gate",
-                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'set_architecture', 'advance') or authorize code edit permissions ('authorize_edit').",
+                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'set_architecture', 'advance'), authorize code edit permissions with diff impact guard ('authorize_edit'), or restore snapshots ('rollback').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', or 'advance' (composite check + transition + authorize)" },
+                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance", "rollback"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', 'advance', or 'rollback' (restore pre-edit session snapshot)" },
                             "target_stage": { "type": "string", "description": "Target workflow stage to transition into: 'Context', 'Plan', 'Ask_Revise', 'Build', 'Test_Recheck', 'Fix', 'Proposal', or 'Review'" },
                             "user_message": { "type": "string" },
-                            "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance)" },
+                            "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance / rollback)" },
+                            "relative_path": { "type": "string", "description": "Specific file relative path to authorize edit on (triggers Code Graph Diff Impact Guard)" },
                             "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit / advance)" },
-                            "justification": { "type": "string", "description": "Reason for edits (for authorize_edit / advance)" },
+                            "justification": { "type": "string", "description": "Reason and test mitigation plan for edits (Mandatory for High Risk / Critical Hub files)" },
                             "architecture_pattern": { "type": "string", "enum": ["Auto", "Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator", "CLI_Pipeline", "Flat_Library"], "description": "Declared architecture pattern (for authorize_edit / advance). Default is 'Auto' (auto-detects project architecture)." }
                         },
                         "required": ["action"]
@@ -269,18 +279,31 @@ pub fn handle_request(
                 },
                 {
                     "name": "session_continuity",
-                    "description": "Persist, restore, or clear task session states and token metrics across multi-turn workflows.",
+                    "description": "Persist, restore, or clear task session states, record project learnings into .agent-context/learnings.md, or generate cross-agent handoff summaries.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["save", "load", "clear"],
-                                "description": "Operation to perform: 'save' (snapshot current session state to disk), 'load' (restore most recent session state and token metrics), 'clear' (erase all saved session snapshots)"
+                                "enum": ["save", "load", "clear", "learn", "handoff"],
+                                "description": "Operation to perform: 'save' (snapshot current session state), 'load' (restore most recent session state), 'clear' (erase all saved snapshots), 'learn' (record distilled project rule/knowledge), 'handoff' (generate cross-agent handoff protocol file)"
                             },
                             "project_path": {
                                 "type": "string",
-                                "description": "Absolute path of active repository workspace (e.g. 'E:/Github/Agent-Guidance-Rust')"
+                                "description": "Absolute path of active repository workspace"
+                            },
+                            "learning": {
+                                "type": "string",
+                                "description": "The specific knowledge, insight, or rule to memorize (for 'learn' operation)"
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": ["build_test", "environment", "architecture", "domain_rule", "general"],
+                                "description": "Category tag for the learning item (for 'learn' operation)"
+                            },
+                            "next_action": {
+                                "type": "string",
+                                "description": "Recommended next action for incoming agent taking over the project (for 'handoff' operation)"
                             }
                         },
                         "required": ["operation"]

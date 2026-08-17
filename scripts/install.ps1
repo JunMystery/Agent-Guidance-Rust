@@ -178,7 +178,7 @@ try {
     $version = $latestMeta.tag_name
     Write-Host "  Latest release: $version" -ForegroundColor Gray
 } catch {
-    $version = "v1.3.7"
+    $version = "v1.4.0"
     Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
 }
 
@@ -265,6 +265,8 @@ Write-Host "+--------------------------------------------------------------+" -F
 Write-Host "|         OK  Agent Guidance Installed / Updated!              |" -ForegroundColor Green
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Binary:    $localBin\agent-guidance.exe" -ForegroundColor Cyan
-Write-Host "  Dashboard: agent-guidance --dashboard   (serves updated HTML/JS embedded in binary)" -ForegroundColor Cyan
+Write-Host "  Binary:       $localBin\agent-guidance.exe" -ForegroundColor Cyan
+Write-Host "  Dashboard:    agent-guidance --dashboard   (serves updated HTML/JS embedded in binary)" -ForegroundColor Cyan
+Write-Host "  MCP Config:   Automatic across all detected IDE clients" -ForegroundColor Green
+Write-Host "  Rules/Skills: Preserved under manual user control (no automatic overwrites)" -ForegroundColor DarkGray
 Write-Host ""

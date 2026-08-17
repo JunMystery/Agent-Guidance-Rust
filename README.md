@@ -1,6 +1,6 @@
 # Agent Guidance (Rust MCP Server)
 
-[![Version](https://img.shields.io/badge/Version-v1.3.7-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.4.0-blue.svg)](Cargo.toml)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
 [![Role](https://img.shields.io/badge/Role-Autonomous%20Orchestrator-indigo.svg)](#-key-capabilities)
 [![Smart Skills](https://img.shields.io/badge/Smart%20Skills-279%2B%20ML%20Search-cyan.svg)](#-smart-skills-system)
@@ -48,12 +48,12 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 
 | Tool Name | Role / Action | Mandatory Arguments | Key Capabilities |
 | :--- | :--- | :--- | :--- |
-| **`task_pipeline`** | **Entrypoint Orchestrator** | `task`, `project_path`, `phase` | CALL FIRST. Scans project, unlocks priority gate, proposes deduplicated skills, and returns upfront architecture guidance. |
-| **`select_skills`** | **Skill Context Loader** | `skills` | Loads compressed skill instructions into context. Supports pre-baked embedded catalog, direct name lookup, and local workspace skills. |
-| **`workflow_gate`** | **Stage & Edit Gate** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`). Blocks code editing until plan is approved. |
-| **`project_context`** | **Bounded Code Inspector** | `operation` (`tree` / `read` / `search` / `symbols` / `references` / `architecture`) | Token-bounded code search, symbol AST extraction, hard 300 LOC clamping, and decomposition blueprints. |
-| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify`) | 2-stage vector search, language-specific precode safety rules (Kotlin, Go, Rust, TS), and empirical verification contracts. |
-| **`session_continuity`** | **State Persistence** | `operation` (`save` / `load` / `clear`) | Persists active task states and workflow gates across agent turns with 30-day automatic garbage collection. |
+| **`task_pipeline`** | **Entrypoint Orchestrator** | `task`, `project_path`, `phase` | CALL FIRST. Scans project, unlocks priority gate, proposes skills, synthesizes **Dynamic Split Blueprints** (detects $\ge 200$ LOC files) and **Skill Recipes**, and injects **Memorized Learnings**. |
+| **`select_skills`** | **Semantic Skill Loader** | `skills` | Loads skill instructions into context with **Semantic Slicing** (Top-3 sections via Multilingual-E5 saving ~70% tokens) and injects language safety micro-guidance. |
+| **`workflow_gate`** | **Stage & Impact Guard** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`, `rollback`). Features **Zero-Turn Advance**, **Code Graph Impact Risk Gating**, and **Pre-edit Snapshot Rollback**. |
+| **`project_context`** | **Code Graph & AST Skeleton** | `operation` (`search` / `navigate` / `read` / `symbols` / `references` / `architecture` / `tree` / `learn_alias` / `reindex`) | 5-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, alias learning with 30/90d decay, realtime file watcher, and **AST Structural Skeletonization** (`view_mode="skeleton"`, saving 90-95% tokens on files >300 LOC). |
+| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify`) | 2-stage vector search, language-specific precode safety rules (Kotlin, Go, Rust, TS, Python), and empirical verification contracts. |
+| **`session_continuity`** | **Memory & Handoff** | `operation` (`save` / `load` / `clear` / `learn` / `handoff`) | Persists active task states, records **Categorized Project Learnings** in `.agent-context/learnings.md` (30-item FIFO cap), and generates **Cross-Agent Handoff** summaries in `.agent-context/handoff.md`. |
 
 ---
 
@@ -63,15 +63,25 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 - Governs the complete AI agent lifecycle through `task_pipeline`. The MCP server inspects the workspace, unlocks priority gates, selects skills, and dynamically directs next steps.
 - Enforces enterprise architecture styles (**Clean Architecture**, **Layered Architecture**, **Package-by-Feature**, **CLI Pipeline**, **Flat Library**, **Orchestrator**) with cross-session persistence in `.agent-context/architecture.json`.
 
-### 2. Hardened 300 LOC Cap & Upfront Decomposition
+### 2. High-Speed 5-Phase Search Cascade (<100ms)
+- Replaces slow raw disk scans with an instant multi-tier cascade stored in `<project_root>/.agent-context/code_graph.db`:
+  1. **Phase 1: Alias Cache (<1ms)**: Instant lookup for learned natural language queries.
+  2. **Phase 2: Symbol FTS5 (<5ms)**: SQLite FTS5 index on all functions, structs, enums, classes, and traits.
+  3. **Phase 3: Symbol Vectors (<50ms)**: BERT semantic similarity on symbol signatures.
+  4. **Phase 4: Content FTS5 (<5ms)**: Full-text search across 50-line code chunks.
+  5. **Phase 5: RAG Content Vectors (<100ms)**: Multilingual-E5 semantic search on actual code chunks.
+- **Adaptive Alias Learning**: Automatically learns successful queries, increasing confidence with reuse and decaying inactive mappings (50% reduction after 30 days, purged after 90 days).
+- **Proactive Background File Watcher**: Uses OS-level file monitoring (`notify`) with a 5s debounce to incrementally update AST symbols, DAG edges, and RAG chunks before the agent even issues a query.
+
+### 3. Hardened 300 LOC Cap & Upfront Decomposition
 - Physically clamps file reads at 300 lines max and automatically injects architectural decomposition mandates on large files.
 - Generates concrete Upfront Split Blueprints per pattern during pre-code guidance.
 
-### 3. Universal In-Engine Token Compression
+### 4. Universal In-Engine Token Compression
 - Automatically intercepts and compresses all outgoing MCP tool responses, stripping HTML comments, badges, and redundant whitespace.
 - Reduces context payload size by **30–50%** while logging real-time token savings to SQLite (`~/.agent-guidance/usage.db`).
 
-### 4. Multi-Session & Multi-IDE Isolation
+### 5. Multi-Session & Multi-IDE Isolation
 - Assigns process-isolated Session IDs (`session_{PID}_{ClientName}`) to eliminate state collisions across concurrent IDEs (VS Code, Cursor, Antigravity) or CLI tools in the same codebase.
 
 ---

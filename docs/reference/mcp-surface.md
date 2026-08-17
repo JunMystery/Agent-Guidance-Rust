@@ -85,23 +85,22 @@ guidance(operation="docs", query="jsonwebtoken sign options", identifier="node-j
 
 ---
 
-### 3. `agent-guidance-mcp_project_context` -- Bounded File Operations
+### 3. `agent-guidance-mcp_project_context` -- Code Graph & Semantic Search Engine
 
-Read, search, and explore project files with built-in token budgets. Supports 10 operations.
+Read, search, navigate code graphs, and explore project files with built-in token budgets and persistent SQLite storage.
 
 ```
 project_context(
     operation: str,                    # required — see operations below
     project_path: str = ".",
-    query: str | None = None,          # search query / symbol name / symbol ID
-    relative_path: str | None = None,  # file path for read/symbols/structure
-    start_line: int = 1,               # line offset for read
-    max_lines: int = 300,              # max lines to read
-    max_depth: int = 8,                # directory tree depth
-    output_path: str = ".agent-context/code-snapshot.json",
-    max_file_bytes: int = 200000,      # per-file cap for snapshot
-    max_total_bytes: int = 2000000,    # total cap for snapshot
-    limit: int = 20,                   # max search/reference results
+    query: str | None = None,          # search query / natural language / symbol name
+    relative_path: str | None = None,  # file path for read/symbols/structure/learn_alias
+    target_symbol: str | None = None,  # precise symbol extraction for read
+    alias_term: str | None = None,     # natural language term for learn_alias
+    resolved_symbol: str | None = None,# symbol name for learn_alias
+    resolved_line: int | None = None,  # line number for learn_alias
+    scope: str = "all",                # scope for navigate: "all" | "symbols" | "content" | "edges"
+    view_mode: str = "auto",           # view mode for read: "auto" (default skeleton if >300 LOC) | "full" | "skeleton"
 ) -> dict
 ```
 
@@ -109,27 +108,25 @@ project_context(
 
 | Operation | Required Args | Description |
 |---|---|---|
-| `tree` | -- | Directory tree with file metadata (path, type, language_hint, size_bytes) |
-| `search` | `query` | Codebase text search with 3-tier fallback: FTS5 (SQLite full-text) → docs/manifests → structural/config files → general code (capped 300). |
-| `read` | `relative_path` | Bounded file read (300 line cap). Path traversal protected. |
-| `snapshot` | -- | Export bounded JSON snapshot to `.agent-context/`. Must be within `.agent-context/` directory. |
-| `symbols` | `relative_path` | Extract classes, functions, methods from a file. Tree-sitter AST (7 langs) or regex fallback (13 langs). |
-| `references` | `query` | Find all usages of a symbol name across the codebase. |
-| `structure` | `relative_path` | Hierarchical file overview: classes with nested methods, standalone functions. |
-| `callers` | `query` | Get all callers of a symbol (from SQLite CodeGraph DB). `query` is the fully-qualified symbol ID. |
-| `callees` | `query` | Get all callees of a symbol (from SQLite CodeGraph DB). |
-| `diff` | -- | Git diff of workspace changes (staged + unstaged). Token-optimized. |
-| `architecture` | -- | Detailed project architecture mapping (tech stack, modules, core hubs). |
+| `search` | `query` | 5-Phase Instant Cascade (<100ms): Alias Cache (<1ms) → Symbol FTS5 (<5ms) → Symbol Vectors (<50ms) → Content FTS5 (<5ms) → RAG Content Vectors (<100ms). |
+| `navigate` | `query` | Comprehensive code graph traversal gathering aliases, symbols, RAG code chunks, and DAG call/import edges simultaneously. |
+| `learn_alias` | `alias_term`, `relative_path` | Explicitly record natural language query mappings with auto-decay (30/90 days). |
+| `reindex` | -- | Force full AST re-parse and queue background Multilingual-E5 vector embedding for symbols and chunks. |
+| `read` | `relative_path` | Bounded file read with 300 line cap and auto-skeletonization for large files (`view_mode="skeleton"`). Target symbol extraction supported. |
+| `symbols` | `relative_path` | Extract functions, structs, enums, classes, and traits across 6+ languages. |
+| `references` | `query` | Find all usages of a symbol across the codebase. |
+| `structure` | `relative_path` | Method-level hierarchical structure map of a specific source file. |
+| `architecture` | -- | Detects and persists architectural style in `.agent-context/architecture.json`. |
+| `tree` | -- | Top-level repository structure overview (capped at depth 2). |
 
 **Examples:**
 ```
-project_context(operation="read", relative_path="src/auth.js", max_lines=160)
-project_context(operation="search", query="JWT middleware")
-project_context(operation="symbols", relative_path="src/server.rs")
-project_context(operation="references", query="build_catalog")
-project_context(operation="structure", relative_path="src/parallel.rs")
-project_context(operation="callers", query="src/parallel.rs::parallel_map::1")
-project_context(operation="diff")
+project_context(operation="search", query="xử lý timeout API")
+project_context(operation="navigate", query="PaymentService", scope="all")
+project_context(operation="learn_alias", alias_term="thanh toán", relative_path="src/payment.rs", resolved_symbol="PaymentGateway")
+project_context(operation="read", relative_path="src/main.rs", target_symbol="main")
+project_context(operation="read", relative_path="src/large_service.rs", view_mode="skeleton")
+project_context(operation="reindex")
 ```
 
 ---
@@ -167,41 +164,54 @@ ui_ux(operation="slides", query="pitch deck", domain="landing")
 
 ---
 
-### 5. `agent-guidance-mcp_session_continuity` -- Task State Persistence
+### 5. `agent-guidance-mcp_session_continuity` -- State Persistence & Handoff
 
-Persist or recover task session state for continuity across interruptions.
+Persist or recover task session state, store categorized project learnings into `.agent-context/learnings.md` (FIFO 30 items), and generate cross-agent handoff summaries.
 
 ```
 session_continuity(
-    operation: str,                    # required — save|load|clear
+    operation: str,                    # required — save | load | clear | learn | handoff
     project_path: str = ".",
-    task: str | None = None,           # required for save
-    checklist: list[dict] | None = None,  # [{"title": "...", "status": "todo"|"done"}]
-    current_step_index: int = 0,
-    metadata: dict | None = None,      # optional context variables
+    learning: str | None = None,       # required for learn
+    category: str | None = None,       # "build_test" | "environment" | "architecture" | "domain_rule" | "general"
+    next_action: str | None = None,    # recommended next action for handoff
 ) -> dict
 ```
 
 | Operation | Description |
 |---|---|
-| `save` | Save task + checklist to `.agent-context/session.json` (atomic write via tempfile + rename) |
-| `load` | Load persisted session state. Returns `session_active: True/False`. |
-| `clear` | Delete session file |
+| `save` | Save active session snapshot to `.agent-context/sessions/{session_id}.json` |
+| `load` | Load persisted session state and token metrics |
+| `clear` | Delete all session snapshot files |
+| `learn` | Record distilled project learning into `.agent-context/learnings.md` with category tag and 30-item FIFO cap |
+| `handoff` | Generate `.agent-context/handoff.md` summary for seamless multi-IDE / multi-agent handover |
 
 ---
 
-### 6. `agent-guidance-mcp_workflow_gate` -- Stage Enforcement
+### 6. `agent-guidance-mcp_workflow_gate` -- Stage Enforcement & Impact Guard
 
-Manage and validate the active workflow stage. Supports 3 actions.
+Manage workflow stages, authorize code edits with Code Graph dependency risk checks, and restore pre-edit snapshots.
 
 ```
 workflow_gate(
-    action: str,                       # required — status|check|set_stage
+    action: str,                       # required — status | check | set_stage | advance | authorize_edit | rollback
     project_path: str = ".",
-    user_message: str | None = None,   # required for check — user's approval text
-    target_stage: str | None = None,   # required for set_stage — valid target
+    relative_path: str | None = None,  # target file for authorize_edit (checks incoming dependency edges)
+    architecture_pattern: str | None = None, # target architecture pattern for authorize_edit
+    justification: str | None = None,  # mandatory explanation when editing High Risk / Critical Hub files (>8 deps)
+    user_message: str | None = None,   # user's approval text for check
+    target_stage: str | None = None,   # valid target stage for set_stage
 ) -> dict
 ```
+
+| Action | Description |
+|---|---|
+| `check` | Check current stage and evaluate user message for plan approvals |
+| `status` | Display full workflow state, plan approval, and token metrics |
+| `set_stage` | Manually transition workflow stage |
+| `advance` | Composite check, approval, and transition in a single step |
+| `authorize_edit` | Evaluate target file risk via Code Graph, trigger zero-turn transition (Plan → Build), auto-create pre-edit snapshot, and grant edit permission |
+| `rollback` | Restore pre-edit file snapshot from `.agent-context/snapshots/{session_id}/` |
 
 | Action | Description |
 |---|---|

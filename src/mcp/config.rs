@@ -170,8 +170,8 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     let codex_path = home.join(".codex").join("config.toml");
     configure_codex_toml(&codex_path, &bin_str)?;
 
-    configure_global_rules(&home)?;
-    configure_skills_enforcer(&home)?;
+    // Note: Global rules (AGENTS.md/CLAUDE.md) and skills enforcer are intentionally
+    // NOT automatically written or overwritten. Users manage their rule files manually.
 
     println!();
     println!("Pre-downloading ML models for skill search...");
@@ -648,13 +648,6 @@ fn configure_opencode(opencode_path: &Path, bin_path: &str) -> Result<()> {
             "environment": {}
         }),
     );
-
-    let instructions = obj.entry("instructions").or_insert_with(|| json!([]));
-    if let Some(arr) = instructions.as_array_mut()
-        && !arr.contains(&json!("AGENTS.md"))
-    {
-        arr.push(json!("AGENTS.md"));
-    }
 
     if let Some(parent) = opencode_path.parent() {
         fs::create_dir_all(parent)?;
