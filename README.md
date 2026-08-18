@@ -183,6 +183,17 @@ Comprehensive guides, architecture deep-dives, and client setup instructions are
 
 ---
 
+## 🙏 Credits & Acknowledgments
+
+This project references and acknowledges the following third-party security resources:
+
+| Resource | Description | Repository |
+| :--- | :--- | :--- |
+| **ECC** | Elliptic Curve Cryptography reference implementation | [affaan-m/ECC](https://github.com/affaan-m/ECC) |
+| **OWASP CheatSheetSeries** | Collection of high-value security cheat sheets for application security | [OWASP/CheatSheetSeries](https://github.com/OWASP/CheatSheetSeries) |
+
+---
+
 ## 📄 License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for details.
