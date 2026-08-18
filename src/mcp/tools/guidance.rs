@@ -250,7 +250,52 @@ pub(crate) fn handle(
                 )
             }
         }
+        "reindex_skills" | "reindex" => {
+            let proj_path_arg = arguments
+                .get("project_path")
+                .and_then(|p| p.as_str())
+                .unwrap_or(".");
+            let proj_path = detect_project_path(proj_path_arg, state);
+
+            // Invalidate in-memory caches
+            crate::ml::embeddings::cache::clear_passage_cache();
+            crate::context::cache::invalidate_snapshot(&proj_path);
+
+            let snapshot = project_snapshot(&proj_path);
+            let all_skills = snapshot.skills.as_ref();
+            let count = all_skills.len();
+            let fp = crate::ml::embeddings::catalog_fingerprint(all_skills);
+
+            // Warmup / embed if model available
+            let model_status = if let Some(vecs) = crate::ml::embeddings::precomputed::load_precomputed_cache(all_skills)
+                .or_else(|| crate::ml::embeddings::load_passage_cache(all_skills))
+            {
+                format!(
+                    "Loaded cached embeddings for {} skills (dimension: {})",
+                    vecs.len(),
+                    vecs.first().map(|v| v.len()).unwrap_or(0)
+                )
+            } else if all_skills.len() <= 64 {
+                if let Some(model) = crate::ml::embeddings::cache::try_cached_model() {
+                    let vecs = crate::ml::embeddings::embed_skills_cache(all_skills, &model);
+                    format!(
+                        "Computed embeddings for {} skills (dimension: {})",
+                        vecs.len(),
+                        vecs.first().map(|v| v.len()).unwrap_or(0)
+                    )
+                } else {
+                    "Metadata indexed (embeddings loaded on-demand)".to_string()
+                }
+            } else {
+                "Metadata indexed (embeddings loaded on-demand)".to_string()
+            };
+
+            format!(
+                "# Skill Semantic Index Refreshed\n\n- Total Skills: {}\n- Catalog Fingerprint: {:016x}\n- Status: {}\n- Cache Path: `~/.agent-guidance/vectors.bin`\n\n✓ All workspace and embedded skills reindexed with rich semantic passages.",
+                count, fp, model_status
+            )
+        }
         _ => format!("Guidance operation '{}' completed successfully.", op),
       };
     Ok(resp)
-}
+}

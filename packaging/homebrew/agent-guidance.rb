@@ -1,20 +1,20 @@
 class AgentGuidance < Formula
   desc "Token-optimized Agent Guidance MCP Rust server for AI coding tools"
   homepage "https://github.com/JunMystery/Agent-Guidance-Rust"
-  version "1.4.4"
+  version "1.4.5"
 
-  if OS.mac?
+  on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.4/agent-guidance-macos-aarch64.tar.gz"
-      sha256 "PLACEHOLDER_MAC_ARM_SHA256"
+      url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.5/agent-guidance-macos-aarch64.tar.gz"
     else
-      url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.4/agent-guidance-macos-x86_64.tar.gz"
-      sha256 "PLACEHOLDER_MAC_INTEL_SHA256"
+      url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.5/agent-guidance-macos-x86_64.tar.gz"
     end
-  elsif OS.linux?
-    url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.4/agent-guidance-linux-x86_64.tar.gz"
-    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   end
+
+  on_linux do
+    url "https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.4.5/agent-guidance-linux-x86_64.tar.gz"
+  end
+  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
 
   def install
     bin.install "agent-guidance"

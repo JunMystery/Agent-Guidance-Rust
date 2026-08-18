@@ -100,13 +100,7 @@ pub fn generate_precomputed_cache() -> Result<()> {
     let model = EmbeddingModel::load_or_download()?;
     let texts: Vec<String> = candidates
         .iter()
-        .map(|c| {
-            format!(
-                "{} {}",
-                c.name,
-                c.content.chars().take(300).collect::<String>()
-            )
-        })
+        .map(|c| c.to_search_passage())
         .collect();
 
     let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();

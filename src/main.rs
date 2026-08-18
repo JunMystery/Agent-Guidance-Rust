@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
         println!("  --upgrade           Download and install latest release package, update IDE configs");
         println!("  --self-update       Alias for --upgrade");
         println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000");
+        println!("  --reindex-skills    Precompute and build rich semantic vector index for all skills");
         println!("  --uninstall         Remove MCP server configurations from all IDE clients");
         println!("  --help, -h          Print this help message");
         println!();
@@ -84,15 +85,25 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    if args.contains(&"--generate-passage-cache".to_string()) {
+    if args.contains(&"--reindex-skills".to_string())
+        || args.contains(&"--generate-passage-cache".to_string())
+    {
         tracing_subscriber::fmt()
             .with_env_filter("info".parse::<tracing_subscriber::EnvFilter>().unwrap())
             .with_writer(std::io::stderr)
             .init();
+        let start = std::time::Instant::now();
+        println!("============================================================");
+        println!("  Agent Guidance — Semantic Skill Indexer & RAG DB Builder  ");
+        println!("============================================================");
         generate_precomputed_cache()?;
-        println!("✓ Precomputed passage cache written to src/ml/");
+        let elapsed = start.elapsed();
+        println!();
+        println!("✓ Semantic skill indexing complete in {:.2?}", elapsed);
+        println!("✓ Vector database & manifest saved to ~/.agent-guidance/");
         return Ok(());
     }
+
 
     if args.contains(&"--session-start".to_string()) || args.contains(&"--re-gate".to_string()) {
         let mut state = mcp::state::ServerState::new();

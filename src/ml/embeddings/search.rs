@@ -18,7 +18,7 @@ pub fn hybrid_vector_search(
     let words: Vec<&str> = q_lower.split_whitespace().collect();
 
     let model_res = super::cache::try_cached_model().map(Ok).unwrap_or_else(|| {
-        if cfg!(test) || super::cache::is_warmup_complete() {
+        if super::cache::is_warmup_complete() {
             cached_model()
         } else {
             Err("Model warming up in background".to_string())
@@ -97,6 +97,10 @@ pub fn hybrid_vector_search(
 
     for (i, cand) in candidates.iter().enumerate() {
         let name_lower = cand.name.to_lowercase();
+        let doc = cand.to_semantic_doc();
+        let desc_lower = doc.description.to_lowercase();
+        let triggers_lower: String = doc.triggers.join(" ").to_lowercase();
+        let keywords_lower: String = doc.keywords.join(" ").to_lowercase();
         let content_lower = cand.content.to_lowercase();
         let mut score = 0.0f32;
 
@@ -106,12 +110,28 @@ pub fn hybrid_vector_search(
             score += 0.7;
         }
 
+        if !desc_lower.is_empty() && desc_lower.contains(&q_lower) {
+            score += 0.4;
+        }
+        if !triggers_lower.is_empty() && triggers_lower.contains(&q_lower) {
+            score += 0.5;
+        }
+
         for w in &words {
             if name_lower.contains(w) {
                 score += 0.4;
             }
+            if triggers_lower.contains(w) {
+                score += 0.25;
+            }
+            if desc_lower.contains(w) {
+                score += 0.15;
+            }
+            if keywords_lower.contains(w) {
+                score += 0.2;
+            }
             if content_lower.contains(w) {
-                score += 0.1;
+                score += 0.05;
             }
         }
 
@@ -127,6 +147,7 @@ pub fn hybrid_vector_search(
         .map(|(s, i)| (s, candidates[i].clone()))
         .collect()
 }
+
 
 #[cfg(test)]
 mod tests {

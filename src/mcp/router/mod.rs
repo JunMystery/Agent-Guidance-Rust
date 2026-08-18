@@ -85,8 +85,8 @@ pub fn handle_request(
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["search", "get", "list", "precode", "verify", "workflow", "ui_ux", "docs"],
-                                "description": "Operation to perform: 'search' (2-stage BERT + Cross-Encoder vector search over skills), 'get' (retrieve skill content by identifier), 'list' (list registered skills catalog), 'precode' (generate upfront 300 LOC architecture blueprint), 'verify' (register empirical verification contract), 'workflow' (retrieve stage workflow guidelines), 'ui_ux' (modern UI/UX design standards), 'docs' (technical documentation search)"
+                                "enum": ["search", "get", "list", "precode", "verify", "workflow", "ui_ux", "docs", "reindex_skills"],
+                                "description": "Operation to perform: 'search' (2-stage BERT + Cross-Encoder vector search over skills), 'get' (retrieve skill content by identifier), 'list' (list registered skills catalog), 'precode' (generate upfront 300 LOC architecture blueprint), 'verify' (register empirical verification contract), 'workflow' (retrieve stage workflow guidelines), 'ui_ux' (modern UI/UX design standards), 'docs' (technical documentation search), 'reindex_skills' (force refresh semantic vector index for skills)"
                             },
                             "query": { "type": "string", "description": "Search query or keyword for 'search', 'docs', 'ui_ux', or 'precode'" },
                             "identifier": { "type": "string", "description": "Skill name/path for 'get' / 'docs', or workflow stage name for 'workflow'" },

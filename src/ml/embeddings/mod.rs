@@ -11,10 +11,11 @@ pub use device::{cosine_similarity, resolve_optimal_device};
 pub use model::EmbeddingModel;
 pub use gpu::{GpuSkillMatrix, gpu_batch_cosine_similarity, eager_vram_warmup};
 pub use cache::{
-    cached_model, is_warmup_complete, mark_warmup_complete, warmup_cache,
+    cached_model, clear_passage_cache, embed_skills_cache, is_warmup_complete,
+    mark_warmup_complete, warmup_cache,
 };
 pub use precomputed::{
-    generate_precomputed_cache, load_passage_cache, save_passage_cache,
+    catalog_fingerprint, generate_precomputed_cache, load_passage_cache, save_passage_cache,
 };
 pub use search::hybrid_vector_search;
 

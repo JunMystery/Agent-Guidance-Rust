@@ -75,6 +75,15 @@ pub fn project_snapshot(root: &Path) -> Arc<ProjectSnapshot> {
     snapshot
 }
 
+pub fn invalidate_snapshot(root: &Path) {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let cache = PROJECT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(mut guard) = cache.lock() {
+        guard.remove(&canonical_root);
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

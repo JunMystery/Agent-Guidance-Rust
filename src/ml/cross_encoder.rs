@@ -2,7 +2,7 @@ use anyhow::Result;
 use candle_core::{Device, Module, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
-use hf_hub::{Repo, RepoType, api::sync::ApiBuilder};
+use super::embeddings::model::resolve_repo_paths;
 use std::sync::{OnceLock, RwLock};
 use tokenizers::Tokenizer;
 
@@ -16,16 +16,13 @@ pub(crate) struct CrossEncoder {
 impl CrossEncoder {
     fn load() -> Result<Self> {
         let device = Device::Cpu;
-        let repo = Repo::new(
-            "cross-encoder/ms-marco-MiniLM-L-6-v2".to_string(),
-            RepoType::Model,
-        );
-        let api = ApiBuilder::new().with_progress(false).build()?;
-        let r = api.repo(repo);
-
-        let config_path = r.get("config.json")?;
-        let tokenizer_path = r.get("tokenizer.json")?;
-        let weights_path = r.get("model.safetensors")?;
+        let paths = resolve_repo_paths(
+            "cross-encoder/ms-marco-MiniLM-L-6-v2",
+            &["config.json", "tokenizer.json", "model.safetensors"],
+        )?;
+        let config_path = &paths[0];
+        let tokenizer_path = &paths[1];
+        let weights_path = &paths[2];
 
         let config_str = std::fs::read_to_string(config_path)?;
         let config: Config = serde_json::from_str(&config_str)?;

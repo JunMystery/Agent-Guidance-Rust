@@ -118,13 +118,7 @@ pub fn warmup_cache() {
     );
     let texts: Vec<String> = candidates
         .iter()
-        .map(|c| {
-            format!(
-                "{} {}",
-                c.name,
-                c.content.chars().take(300).collect::<String>()
-            )
-        })
+        .map(|c| c.to_search_passage())
         .collect();
 
     let model_guard = cached_model().ok();
@@ -155,6 +149,17 @@ pub fn eager_load_embedding_model() {
     drop(crate::ml::llm_selector::cached_cross_encoder());
 }
 
+pub fn clear_passage_cache() {
+    let cache = PASSAGE_CACHE.get_or_init(|| RwLock::new(Vec::new()));
+    if let Ok(mut guard) = cache.write() {
+        guard.clear();
+    }
+    let gpu_slot = GPU_SKILL_MATRIX.get_or_init(|| RwLock::new(None));
+    if let Ok(mut g_guard) = gpu_slot.write() {
+        *g_guard = None;
+    }
+}
+
 pub fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> Arc<Vec<Vec<f32>>> {
     let fingerprint = catalog_fingerprint(candidates);
     let cache = PASSAGE_CACHE.get_or_init(|| RwLock::new(Vec::new()));
@@ -174,11 +179,7 @@ pub fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> A
         candidates
             .par_iter()
             .filter_map(|cand| {
-                let text = format!(
-                    "{} {}",
-                    cand.name,
-                    cand.content.chars().take(300).collect::<String>()
-                );
+                let text = cand.to_search_passage();
                 model.embed_text(&text, Some("passage")).ok()
             })
             .collect()
@@ -195,3 +196,4 @@ pub fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> A
         })
         .unwrap_or_else(|| Arc::new(Vec::new()))
 }
+

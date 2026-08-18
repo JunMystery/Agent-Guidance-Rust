@@ -118,7 +118,7 @@ impl LLMSelector {
             .cloned()
             .collect();
         let cross_encoder = super::cross_encoder::try_cached_cross_encoder().or_else(|| {
-            if cfg!(test) || crate::ml::embeddings::is_warmup_complete() {
+            if crate::ml::embeddings::is_warmup_complete() {
                 cached_cross_encoder().ok()
             } else {
                 None
@@ -128,11 +128,7 @@ impl LLMSelector {
             bounded_candidates
                 .par_iter()
                 .filter_map(|(_score, skill)| {
-                    let text = format!(
-                        "{} {}",
-                        skill.name,
-                        skill.content.chars().take(200).collect::<String>()
-                    );
+                    let text = skill.to_search_passage();
                     cross_encoder.as_ref().and_then(|ce| {
                         ce.score(task, &text).ok().map(|logit| {
                             let mut prob = 1.0 / (1.0 + (-logit).exp());
@@ -187,12 +183,11 @@ impl LLMSelector {
             .enumerate()
             .map(|(i, (base_score, skill))| {
                 let name_lower = skill.name.to_lowercase();
-                let content_snippet_lower: String = skill
-                    .content
-                    .chars()
-                    .take(300)
-                    .collect::<String>()
-                    .to_lowercase();
+                let doc = skill.to_semantic_doc();
+                let desc_lower = doc.description.to_lowercase();
+                let triggers_lower = doc.triggers.join(" ").to_lowercase();
+                let keywords_lower = doc.keywords.join(" ").to_lowercase();
+                let content_lower = skill.content.to_lowercase();
                 let mut bonus = 0.0f32;
 
                 for kw in &task_keywords {
@@ -201,8 +196,17 @@ impl LLMSelector {
                     } else if name_lower.contains(kw) {
                         bonus += 0.15;
                     }
-                    if content_snippet_lower.contains(kw) {
-                        bonus += 0.05;
+                    if triggers_lower.contains(kw) {
+                        bonus += 0.15;
+                    }
+                    if desc_lower.contains(kw) {
+                        bonus += 0.1;
+                    }
+                    if keywords_lower.contains(kw) {
+                        bonus += 0.1;
+                    }
+                    if content_lower.contains(kw) {
+                        bonus += 0.03;
                     }
                 }
 

@@ -2,11 +2,40 @@ use anyhow::Result;
 use candle_core::{Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
-use hf_hub::{Repo, RepoType, api::sync::ApiBuilder};
+use hf_hub::{Cache, Repo, RepoType, api::sync::ApiBuilder};
 use tokenizers::Tokenizer;
 use tracing::info;
 
 use super::device::resolve_optimal_device;
+
+pub(crate) fn resolve_repo_paths(
+    model_id: &str,
+    files: &[&str],
+) -> Result<Vec<std::path::PathBuf>> {
+    let repo = Repo::new(model_id.to_string(), RepoType::Model);
+    let cache_repo = Cache::from_env().repo(repo.clone());
+    let mut paths = Vec::with_capacity(files.len());
+    let mut all_cached = true;
+    for f in files {
+        match cache_repo.get(f) {
+            Some(p) => paths.push(p),
+            None => {
+                all_cached = false;
+                break;
+            }
+        }
+    }
+    if all_cached {
+        return Ok(paths);
+    }
+    let api = ApiBuilder::new().with_progress(false).build()?;
+    let remote = api.repo(repo);
+    let mut remote_paths = Vec::with_capacity(files.len());
+    for f in files {
+        remote_paths.push(remote.get(f)?);
+    }
+    Ok(remote_paths)
+}
 
 pub struct EmbeddingModel {
     pub(crate) model: BertModel,
@@ -17,37 +46,24 @@ pub struct EmbeddingModel {
 impl EmbeddingModel {
     pub fn load_or_download() -> Result<Self> {
         let (device, dev_name) = resolve_optimal_device();
-        let repo_spec = Repo::new(
-            "intfloat/multilingual-e5-small".to_string(),
-            RepoType::Model,
-        );
-
-        let repo = ApiBuilder::new()
-            .with_progress(false)
-            .build()
-            .map_err(|e| anyhow::anyhow!("Failed to initialize HuggingFace Hub client: {}", e))?
-            .repo(repo_spec);
-
-        let config_filename = repo
-            .get("config.json")
-            .map_err(|e| anyhow::anyhow!("Failed to download/locate model config: {}", e))?;
-        let tokenizer_filename = repo
-            .get("tokenizer.json")
-            .map_err(|e| anyhow::anyhow!("Failed to download/locate tokenizer: {}", e))?;
-        let weights_filename = repo
-            .get("model.safetensors")
-            .map_err(|e| anyhow::anyhow!("Failed to download/locate weights: {}", e))?;
+        let paths = resolve_repo_paths(
+            "intfloat/multilingual-e5-small",
+            &["config.json", "tokenizer.json", "model.safetensors"],
+        )?;
+        let config_filename = &paths[0];
+        let tokenizer_filename = &paths[1];
+        let weights_filename = &paths[2];
 
         let config: Config = serde_json::from_str(
-            &std::fs::read_to_string(&config_filename)
-                .map_err(|e| anyhow::anyhow!("Failed to read model config: {}", e))?,
+            &std::fs::read_to_string(config_filename)
+            .map_err(|e| anyhow::anyhow!("Failed to read model config: {}", e))?,
         )
         .map_err(|e| anyhow::anyhow!("Failed to parse model config JSON: {}", e))?;
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_filename)
+        let tokenizer = Tokenizer::from_file(tokenizer_filename)
             .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
 
-        let model = Self::try_load_model(&weights_filename, &config, &device)
+        let model = Self::try_load_model(weights_filename, &config, &device)
             .map_err(|e| anyhow::anyhow!("Failed to load BertModel: {}", e))?;
 
         info!("EmbeddingModel loaded successfully on {}.", dev_name);

@@ -21,9 +21,23 @@ pub struct SkillItem {
     pub content: String,
 }
 
+impl SkillItem {
+    /// Extracts structured semantic document for this skill.
+    pub fn to_semantic_doc(&self) -> super::indexer::SkillSemanticDocument {
+        super::indexer::SkillSemanticDocument::extract(&self.name, &self.content)
+    }
+
+    /// Returns a structured, high-density search passage (~1,500 chars) for vector embedding and scoring.
+    pub fn to_search_passage(&self) -> String {
+        self.to_semantic_doc().to_passage(1500)
+    }
+}
+
+
 pub fn list_embedded_skills() -> Vec<String> {
     SkillAssets::iter()
         .map(|path| path.as_ref().to_string())
+        .filter(|path| path.ends_with("SKILL.md"))
         .collect()
 }
 

@@ -1052,3 +1052,34 @@
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_guidance_reindex_skills_operation() {
+        let temp_dir = std::env::temp_dir().join(format!("reindex_skills_test_{}", std::process::id()));
+        let skill_dir = temp_dir.join(".agents").join("skills").join("my-custom-skill");
+        let _ = std::fs::create_dir_all(&skill_dir);
+        let skill_file = skill_dir.join("SKILL.md");
+        std::fs::write(
+            &skill_file,
+            "---\nname: my-custom-skill\ndescription: A test custom skill\n---\n# My Custom Skill\n## When to Activate\n- Trigger when testing reindex\n",
+        ).unwrap();
+
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "guidance",
+            json!({
+                "operation": "reindex_skills",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Skill Semantic Index Refreshed"));
+        assert!(text.contains("Catalog Fingerprint:"));
+        assert!(text.contains("reindexed with rich semantic passages"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+
