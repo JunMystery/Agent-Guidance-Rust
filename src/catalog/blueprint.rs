@@ -8,22 +8,24 @@ use crate::context::db::CodeGraphDb;
 pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &str) -> String {
     let mut large_files = Vec::new();
 
-    // Query CodeGraphDb if available to inspect files related to the task
-    if let Ok(db) = CodeGraphDb::open_for_project(proj_path) {
-        // Extract keywords from task for relevance lookup
-        let words: Vec<&str> = task
-            .split_whitespace()
-            .filter(|w| w.len() > 3)
-            .collect();
+    let db_path = proj_path.join(".agent-context").join("code_graph.db");
+    if db_path.exists() {
+        if let Ok(db) = CodeGraphDb::open_read_only(&db_path) {
+            // Extract keywords from task for relevance lookup
+            let words: Vec<&str> = task
+                .split_whitespace()
+                .filter(|w| w.len() > 3)
+                .collect();
 
-        for word in words {
-            if let Ok(syms) = db.search_symbols(word, 5) {
-                for (file_path, sym_name, _line) in syms {
-                    let full = proj_path.join(&file_path);
-                    if let Ok(content) = std::fs::read_to_string(&full) {
-                        let loc = content.lines().count();
-                        if loc >= 200 && !large_files.iter().any(|(p, _, _)| p == &file_path) {
-                            large_files.push((file_path, sym_name, loc));
+            for word in words {
+                if let Ok(syms) = db.search_symbols(word, 5) {
+                    for (file_path, sym_name, _line) in syms {
+                        let full = proj_path.join(&file_path);
+                        if let Ok(content) = std::fs::read_to_string(&full) {
+                            let loc = content.lines().count();
+                            if loc >= 200 && !large_files.iter().any(|(p, _, _)| p == &file_path) {
+                                large_files.push((file_path, sym_name, loc));
+                            }
                         }
                     }
                 }

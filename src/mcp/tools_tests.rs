@@ -116,10 +116,23 @@
             ),
         ];
 
-        // 1. Select valid skill
-        let res = handle_tool_call(
+        // 1. Unconfirmed selection while proposals exist is BLOCKED
+        let blocked_res = handle_tool_call(
             "select_skills",
             json!({ "skills": ["agent-guidance"] }),
+            &mut state,
+        );
+        assert!(blocked_res.is_ok());
+        let blocked_text = blocked_res.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(blocked_text.contains("USER_CONFIRMATION_REQUIRED"));
+
+        // 2. Confirmed selection succeeds
+        let res = handle_tool_call(
+            "select_skills",
+            json!({ "skills": ["agent-guidance"], "user_confirmed": true }),
             &mut state,
         );
         assert!(res.is_ok());
@@ -130,10 +143,10 @@
         assert!(text.contains("# Skill Selection Confirmed"));
         assert!(text.contains("agent-guidance"));
 
-        // 2. State cleared after selection
+        // 3. State cleared after selection
         assert!(state.pending_skill_proposals.is_empty());
 
-        // 3. Select with empty array when no proposals remain
+        // 4. Select with empty array when no proposals remain
         let empty_res = handle_tool_call("select_skills", json!({ "skills": [] }), &mut state);
         assert!(empty_res.is_ok());
         let empty_text = empty_res.unwrap()["content"][0]["text"]
@@ -287,16 +300,25 @@
         let mut state = ServerState::new();
         assert!(!state.plan_approved);
 
-        // 1. Calling workflow_gate approve_plan action sets plan_approved=true
-        let res = handle_tool_call(
+        // 1. Unconfirmed approve_plan without user_message is BLOCKED
+        let blocked_res = handle_tool_call(
             "workflow_gate",
             json!({ "action": "approve_plan" }),
+            &mut state,
+        );
+        assert!(blocked_res.is_ok());
+        assert!(!state.plan_approved);
+
+        // 2. Calling workflow_gate approve_plan with user_confirmed=true sets plan_approved=true
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({ "action": "approve_plan", "user_confirmed": true }),
             &mut state,
         );
         assert!(res.is_ok());
         assert!(state.plan_approved);
 
-        // 2. set_stage to Build now succeeds
+        // 3. set_stage to Build now succeeds
         let stage_res = handle_tool_call(
             "workflow_gate",
             json!({ "action": "set_stage", "target_stage": "Build" }),
@@ -912,6 +934,7 @@
             "workflow_gate",
             json!({
                 "action": "approve",
+                "user_confirmed": true,
                 "project_path": temp_dir.to_str().unwrap()
             }),
             &mut state,
@@ -1078,6 +1101,37 @@
         assert!(text.contains("Skill Semantic Index Refreshed"));
         assert!(text.contains("Catalog Fingerprint:"));
         assert!(text.contains("reindexed with rich semantic passages"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_task_pipeline_enriched_recommendations_formatting() {
+        let temp_dir = std::env::temp_dir().join(format!("pipeline_enrich_test_{}", std::process::id()));
+        let skill_dir = temp_dir.join(".agents").join("skills").join("sql-safety");
+        let _ = std::fs::create_dir_all(&skill_dir);
+        let skill_file = skill_dir.join("SKILL.md");
+        std::fs::write(
+            &skill_file,
+            "---\nname: sql-safety\ndescription: SQL safety and injection defense rules for database queries.\n---\n# SQL Safety\n## Guidelines\n- Always use parameterized queries\n- Never concatenate raw strings\n",
+        ).unwrap();
+
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "task_pipeline",
+            json!({
+                "task": "Fix sql injection in database queries",
+                "project_path": temp_dir.to_str().unwrap(),
+                "phase": "implement"
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Recommendations"));
+        assert!(text.contains("sql-safety"));
+        assert!(text.contains("*Intent*:"));
+        assert!(text.contains("*Key Rules*:"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

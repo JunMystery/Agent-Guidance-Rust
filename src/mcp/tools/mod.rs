@@ -94,7 +94,6 @@ fn handle_tool_call_internal(
                 .get("query")
                 .and_then(|q| q.as_str())
                 .unwrap_or("general");
-            state.record_call(800, 200);
             Ok(format!(
                 "# UI/UX Guidelines for '{}'\n\n- Styling: Modern CSS, Glassmorphism, Dynamic Animations\n- Color Palette: Dark mode default, curated HSL gradients\n- Typography: Inter/Outfit via Google Fonts\n- Accessibility: Semantic HTML5, unique IDs",
                 query

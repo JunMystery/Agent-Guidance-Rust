@@ -55,11 +55,21 @@ pub(crate) fn handle(
         .and_then(|f| f.as_str())
         .map(|f| f.trim())
         .filter(|f| !f.is_empty() && *f != "general");
-    let search_query = if let Some(f) = focus {
+    let mut search_query = if let Some(f) = focus {
         format!("{} {}", task, f)
     } else {
         task.to_string()
     };
+
+    // Contextual Phase & Intent Expansion
+    let q_lower = search_query.to_lowercase();
+    if phase == "test" && !q_lower.contains("test") {
+        search_query.push_str(" test testing unit mock");
+    } else if phase == "debug" && !q_lower.contains("debug") {
+        search_query.push_str(" debug error recovery exception");
+    } else if phase == "plan" && !q_lower.contains("plan") {
+        search_query.push_str(" architecture standards modular design");
+    }
 
     let snapshot = project_snapshot(&proj_path);
     ensure_not_cancelled(state)?;
@@ -93,7 +103,18 @@ pub(crate) fn handle(
 
     let rec_skills: Vec<String> = deduped_results
         .iter()
-        .map(|(score, item)| format!("- {} (Score: {:.2})", item.name, score))
+        .map(|(score, item)| {
+            let doc = item.to_semantic_doc();
+            let mut s = format!("- **{}** (Score: {:.2})", item.name, score);
+            if !doc.intent.is_empty() {
+                s.push_str(&format!("\n  ↳ *Intent*: {}", doc.intent));
+            }
+            if !doc.micro_rules.is_empty() {
+                let rules_summary = doc.micro_rules.iter().take(2).cloned().collect::<Vec<_>>().join("; ");
+                s.push_str(&format!("\n  ↳ *Key Rules*: {}", rules_summary));
+            }
+            s
+        })
         .collect();
 
     let execution_seq = "- Step 1: Context & Specification\n- Step 2: Architecture & Implementation Plan\n- Step 3: Code Implementation (Build stage)\n- Step 4: Verification & Testing\n- Step 5: Post-Code Review & Documentation";
@@ -105,9 +126,9 @@ pub(crate) fn handle(
         .collect();
 
     let next_step_prompt = if rec_skills.is_empty() {
-        "-> CODEBASE EXPLORATION: Use `project_context(operation=\"search\", query=\"...\")` to locate code and `project_context(operation=\"read\", relative_path=\"...\")` to inspect functions. Do NOT use raw grep_search, list_dir, or view_file."
+        "-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning."
     } else {
-        "-> SKILL_PROPOSAL: Trigger IDE/CLI `ask_question` tool to present recommended skills interactively to user, then call `select_skills(skills=[...])` with chosen skills (or `select_skills(skills=[])` if skipped).\n-> MANDATORY NEXT STEP: Use `project_context(operation=\"search\", query=\"...\")` to find files and `project_context(operation=\"read\", relative_path=\"...\")` to inspect code. Avoid raw filesystem tools."
+        "-> SKILL_PROPOSAL: MANDATORY USER INTERACTION REQUIRED. Do NOT call `select_skills` automatically. You MUST trigger the IDE/CLI `ask_question` tool with the proposed skills so the user chooses which to activate, then call `select_skills(skills=[...])` with their choices (or `select_skills(skills=[])` if skipped).\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed with planning."
     };
 
     let detected_arch = detect_project_architecture(&proj_path);

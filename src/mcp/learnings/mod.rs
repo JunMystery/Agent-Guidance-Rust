@@ -136,7 +136,7 @@ pub fn record_project_learning(
 
     // 2. Semantic Deduplication check via ML vector similarity (Cosine >= 0.92 for recent category items)
     if !duplicate_found {
-        if let Ok(model) = crate::ml::embeddings::cached_model() {
+        if let Some(model) = crate::ml::embeddings::try_cached_model() {
             if let Ok(new_vec) = model.embed_text(clean_learning, Some("passage")) {
                 for existing in items.iter_mut().rev().take(10) {
                     if existing.category == clean_cat {

@@ -18,13 +18,41 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
         Err(_) => return entries,
     };
 
+    const MAX_SCAN_ENTRIES: usize = 5000;
+
     let walker = WalkBuilder::new(&target_root)
         .max_depth(Some(max_depth))
         .hidden(true)
         .git_ignore(true)
+        .filter_entry(|entry| {
+            if entry.depth() == 0 {
+                return true;
+            }
+            let name = entry.file_name().to_string_lossy();
+            !matches!(
+                name.as_ref(),
+                ".git"
+                    | ".agent-context"
+                    | "target"
+                    | "node_modules"
+                    | ".gradle"
+                    | "build"
+                    | "dist"
+                    | ".next"
+                    | "vendor"
+                    | ".venv"
+                    | ".cache"
+                    | "__pycache__"
+                    | ".turbo"
+                    | "out"
+            )
+        })
         .build();
 
     for result in walker {
+        if entries.len() >= MAX_SCAN_ENTRIES {
+            break;
+        }
         if let Ok(entry) = result {
             if entry.depth() == 0 {
                 continue;
@@ -33,25 +61,12 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             let relative = path.strip_prefix(&target_root).unwrap_or(path);
             let rel_str = relative.to_string_lossy().to_string();
 
-            let normalized = rel_str.replace('\\', "/");
-            if normalized == ".git"
-                || normalized.starts_with(".git/")
-                || normalized == ".agent-context"
-                || normalized.starts_with(".agent-context/")
-                || normalized == "target"
-                || normalized.starts_with("target/")
-                || normalized == "node_modules"
-                || normalized.starts_with("node_modules/")
-                || normalized == ".gradle"
-                || normalized.starts_with(".gradle/")
-                || normalized == "build"
-                || normalized.starts_with("build/")
-            {
-                continue;
-            }
-
             let file_type = if path.is_dir() { "directory" } else { "file" };
-            let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            let size_bytes = if path.is_file() {
+                entry.metadata().map(|m| m.len()).unwrap_or(0)
+            } else {
+                0
+            };
 
             entries.push(FileEntry {
                 path: rel_str,

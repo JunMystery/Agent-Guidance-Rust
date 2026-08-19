@@ -200,9 +200,9 @@ impl IncrementalIndexer {
             return Ok(0);
         }
 
-        let model = match crate::ml::embeddings::EmbeddingModel::load_or_download() {
-            Ok(m) => m,
-            Err(_) => return Ok(0), // Graceful fallback if model files not yet present
+        let model_guard = match crate::ml::embeddings::try_cached_model() {
+            Some(m) => m,
+            None => return Ok(0), // Graceful zero-latency fallback if model not currently resident in memory
         };
 
         let mut count = 0;
@@ -213,7 +213,7 @@ impl IncrementalIndexer {
                 file_path,
                 sig.as_deref().unwrap_or(&name)
             );
-            if let Ok(vec) = model.embed_text(&passage, Some("passage")) {
+            if let Ok(vec) = model_guard.embed_text(&passage, Some("passage")) {
                 let _ = self.db.store_symbol_vector(&id, &vec, "multilingual-e5-small");
                 count += 1;
             }
@@ -229,16 +229,16 @@ impl IncrementalIndexer {
             return Ok(0);
         }
 
-        let model = match crate::ml::embeddings::EmbeddingModel::load_or_download() {
-            Ok(m) => m,
-            Err(_) => return Ok(0),
+        let model_guard = match crate::ml::embeddings::try_cached_model() {
+            Some(m) => m,
+            None => return Ok(0),
         };
 
         let mut count = 0;
         for (chunk_id, file_path, start, end, text) in unindexed {
             let truncated: String = text.chars().take(512).collect();
             let passage = format!("code in {} lines {}-{}: {}", file_path, start, end, truncated);
-            if let Ok(vec) = model.embed_text(&passage, Some("passage")) {
+            if let Ok(vec) = model_guard.embed_text(&passage, Some("passage")) {
                 let _ = self.db.store_chunk_vector(chunk_id, &vec, "multilingual-e5-small");
                 count += 1;
             }

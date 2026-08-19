@@ -24,7 +24,26 @@ pub(crate) fn handle(
         })
         .unwrap_or_default();
 
+    let user_confirmed = arguments
+        .get("user_confirmed")
+        .or_else(|| arguments.get("confirmed"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let user_msg = arguments.get("user_message").and_then(|u| u.as_str());
+    if let Some(msg) = user_msg {
+        state.process_user_message(msg);
+    }
+
     let proposals = std::mem::take(&mut state.pending_skill_proposals);
+
+    // Hardened Guard: If skills are requested while proposals were pending, require explicit user confirmation
+    if !requested_skills.is_empty() && !proposals.is_empty() && !user_confirmed && user_msg.is_none() {
+        // Restore pending proposals so user choice can still be applied
+        state.pending_skill_proposals = proposals;
+        return Ok("# Skill Selection Gate: [select_skills]\n\nStatus: BLOCKED | Error: USER_CONFIRMATION_REQUIRED: You must NEVER auto-select skills on behalf of the user. Trigger the IDE/CLI `ask_question` tool so the user selects which skills to inject. Once the user submits their choice, re-invoke `select_skills(skills=[...], user_confirmed=true)`.".to_string());
+    }
+
     let proj_path_arg = arguments
         .get("project_path")
         .and_then(|p| p.as_str())
@@ -38,7 +57,7 @@ pub(crate) fn handle(
 
     let resp = if requested_skills.is_empty() {
         state.record_call(100, 50);
-        "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.\n\n-> MANDATORY NEXT STEP: Use `project_context(operation=\"search\", query=\"...\")` to search keywords/symbols or `project_context(operation=\"read\", relative_path=\"...\", target_symbol=\"...\")` to inspect code."
+        "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning."
             .to_string()
     } else {
         let mut loaded_sections = Vec::new();
@@ -131,7 +150,7 @@ pub(crate) fn handle(
             ));
         }
 
-        resp.push_str("\n\n-> MANDATORY NEXT STEP: Use `project_context(operation=\"search\", query=\"...\")` to locate functions/symbols or `project_context(operation=\"read\", relative_path=\"...\")` to view source code.");
+        resp.push_str("\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.");
         resp
       };
     Ok(resp)

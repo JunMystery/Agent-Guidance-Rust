@@ -72,6 +72,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
     let _ = conn.execute("CREATE TABLE IF NOT EXISTS embed_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, query_text TEXT NOT NULL, queried_at INTEGER NOT NULL)", []);
     let _ = conn.execute("CREATE TABLE IF NOT EXISTS llm_queries (id INTEGER PRIMARY KEY AUTOINCREMENT, query_text TEXT NOT NULL, queried_at INTEGER NOT NULL)", []);
     let _ = conn.execute("CREATE TABLE IF NOT EXISTS daily_summaries (day TEXT PRIMARY KEY, tool_calls INTEGER DEFAULT 0, skills_loaded INTEGER DEFAULT 0, embed_queries INTEGER DEFAULT 0, llm_queries INTEGER DEFAULT 0, tokens_original INTEGER DEFAULT 0, tokens_optimized INTEGER DEFAULT 0)", []);
+    let _ = conn.execute("DELETE FROM tool_calls WHERE tool_name = 'mcp_tool'", []);
 
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
     let cutoff_24h = now - 86400;
@@ -80,7 +81,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
         "SELECT tool_name, operation, COUNT(*) AS cnt,
                 COALESCE(SUM(tokens_original), 0) AS tok_orig,
                 COALESCE(SUM(tokens_optimized), 0) AS tok_opt
-         FROM tool_calls WHERE started_at >= ?
+         FROM tool_calls WHERE started_at >= ? AND tool_name != 'mcp_tool'
          GROUP BY tool_name, operation ORDER BY cnt DESC LIMIT 50",
     )?;
     let tool_breakdown: Vec<serde_json::Value> = stmt
@@ -123,7 +124,7 @@ fn query_usage_stats(db_path: &PathBuf, proj_dir: &str) -> Result<serde_json::Va
 
     let mut stmt = conn.prepare(
         "SELECT tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, error_message
-         FROM tool_calls WHERE started_at >= ? ORDER BY started_at DESC LIMIT 50"
+         FROM tool_calls WHERE started_at >= ? AND tool_name != 'mcp_tool' ORDER BY started_at DESC LIMIT 50"
     )?;
     let recent_actions: Vec<serde_json::Value> = stmt
         .query_map([cutoff_24h], |row| {

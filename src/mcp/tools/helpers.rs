@@ -205,8 +205,13 @@ pub fn detect_project_path(explicit_path: &str, state: &ServerState) -> PathBuf 
 pub fn ensure_indexed(proj_path: &Path) -> Option<CodeGraphDb> {
     if let Ok(mut indexer) = IncrementalIndexer::new(proj_path) {
         let _ = indexer.incremental_index();
-        let _ = indexer.embed_symbols();
-        let _ = indexer.embed_chunks();
+        let path = proj_path.to_path_buf();
+        std::thread::spawn(move || {
+            if let Ok(idx) = IncrementalIndexer::new(&path) {
+                let _ = idx.embed_symbols();
+                let _ = idx.embed_chunks();
+            }
+        });
     }
     if !is_watching(proj_path) {
         start_watching(proj_path);
@@ -215,8 +220,7 @@ pub fn ensure_indexed(proj_path: &Path) -> Option<CodeGraphDb> {
 }
 
 pub fn embed_query(query: &str) -> Option<Vec<f32>> {
-    match crate::ml::embeddings::EmbeddingModel::load_or_download() {
-        Ok(model) => model.embed_text(query, Some("query")).ok(),
-        Err(_) => None,
-    }
+    crate::ml::embeddings::try_cached_model().and_then(|model| {
+        model.embed_text(query, Some("query")).ok()
+    })
 }

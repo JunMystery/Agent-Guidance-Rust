@@ -38,7 +38,7 @@ fn get_today_string(now_secs: i64) -> String {
 
 fn prune_old_records(conn: &Connection, cutoff_secs: i64) {
     let _ = conn.execute(
-        "DELETE FROM tool_calls WHERE started_at < ?",
+        "DELETE FROM tool_calls WHERE started_at < ? OR tool_name = 'mcp_tool'",
         params![cutoff_secs],
     );
     let _ = conn.execute(
@@ -290,6 +290,8 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
         )",
         [],
     )?;
+
+    let _ = conn.execute("DELETE FROM tool_calls WHERE tool_name = 'mcp_tool'", []);
 
     Ok(())
 }

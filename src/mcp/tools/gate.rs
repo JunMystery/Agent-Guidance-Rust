@@ -18,6 +18,11 @@ pub(crate) fn handle(
         .get("target_stage")
         .or_else(|| arguments.get("stage"))
         .and_then(|s| s.as_str());
+    let user_confirmed = arguments
+        .get("user_confirmed")
+        .or_else(|| arguments.get("confirmed"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let user_msg = arguments.get("user_message").and_then(|u| u.as_str());
 
     if let Some(msg) = user_msg {
@@ -28,12 +33,19 @@ pub(crate) fn handle(
 
     let resp = match action {
         "approve" | "approve_plan" => {
-            state.approve_plan();
             let proj_path_arg = arguments
                 .get("project_path")
                 .and_then(|p| p.as_str())
                 .unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
+
+            if !user_confirmed && !state.plan_approved && user_msg.is_none() {
+                return Ok(format!(
+                    "# Workflow Gate: [approve_plan]\n\nStatus: BLOCKED | Error: USER_APPROVAL_REQUIRED: Plan approval cannot be self-granted by AI agents. Trigger the IDE/CLI `ask_question` tool to request user approval on the implementation plan. Re-invoke `workflow_gate(action=\"approve_plan\", user_confirmed=true)` once approved."
+                ));
+            }
+
+            state.approve_plan();
             let _ = state.auto_checkpoint(&proj_path);
             format!(
                 "# Workflow Gate: [approve_plan]\n\nStatus: PASSED | Plan Approved: true | Stage: {}",

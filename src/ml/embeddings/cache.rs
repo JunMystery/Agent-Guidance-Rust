@@ -30,17 +30,16 @@ pub fn store_passage_cache(vectors: Vec<Vec<f32>>, skills: &[SkillItem]) {
         });
     }
 
-    if let Ok(guard) = cached_model() {
-        if let Ok(gpu_matrix) = GpuSkillMatrix::from_vectors(&vectors, fingerprint, &guard.device) {
-            let gpu_slot = GPU_SKILL_MATRIX.get_or_init(|| RwLock::new(None));
-            if let Ok(mut g_guard) = gpu_slot.write() {
-                *g_guard = Some(gpu_matrix);
-                info!(
-                    "[VRAM Residency] GpuSkillMatrix populated with {} skill vectors on {}.",
-                    vectors.len(),
-                    guard.device_name()
-                );
-            }
+    let (device, dev_name) = super::device::resolve_optimal_device();
+    if let Ok(gpu_matrix) = GpuSkillMatrix::from_vectors(&vectors, fingerprint, &device) {
+        let gpu_slot = GPU_SKILL_MATRIX.get_or_init(|| RwLock::new(None));
+        if let Ok(mut g_guard) = gpu_slot.write() {
+            *g_guard = Some(gpu_matrix);
+            info!(
+                "[VRAM Residency] GpuSkillMatrix populated with {} skill vectors on {}.",
+                vectors.len(),
+                dev_name
+            );
         }
     }
 }
@@ -95,7 +94,6 @@ pub fn warmup_cache() {
             "Loaded precomputed passage cache ({} skills).",
             candidates.len()
         );
-        eager_load_embedding_model();
         return;
     }
 
@@ -107,7 +105,6 @@ pub fn warmup_cache() {
             "Loaded passage cache from disk ({} skills).",
             candidates.len()
         );
-        eager_load_embedding_model();
         return;
     }
 

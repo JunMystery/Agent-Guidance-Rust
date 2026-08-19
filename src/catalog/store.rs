@@ -74,23 +74,9 @@ pub fn get_skills_target_dir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from(".agent-guidance-skills"))
 }
 
-/// Extracts all embedded skills from the binary directly to disk in ~/.agent-guidance/skills/
+/// Skills are embedded directly into the binary; no disk copy required.
 pub fn sync_embedded_skills_to_disk() -> anyhow::Result<usize> {
-    let target_dir = get_skills_target_dir();
-    fs::create_dir_all(&target_dir)?;
-
-    let mut count = 0;
-    for path in SkillAssets::iter() {
-        if let Some(file) = SkillAssets::get(path.as_ref()) {
-            let target_file = target_dir.join(path.as_ref());
-            if let Some(parent) = target_file.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(&target_file, file.data.as_ref())?;
-            count += 1;
-        }
-    }
-    Ok(count)
+    Ok(0)
 }
 
 pub fn scan_workspace_skills(proj_path: &Path) -> Vec<SkillItem> {

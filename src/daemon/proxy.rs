@@ -16,6 +16,9 @@ use super::WINDOWS_PIPE_NAME;
 #[cfg(unix)]
 pub async fn try_proxy_mode() -> bool {
     let path = socket_path();
+    if !path.exists() {
+        return false;
+    }
     for attempt in 0..3 {
         if path.exists() {
             match UnixStream::connect(&path).await {
@@ -33,7 +36,7 @@ pub async fn try_proxy_mode() -> bool {
                 }
             }
         }
-        tokio::time::sleep(Duration::from_millis(150 * (attempt + 1))).await;
+        tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
     }
     info!("Could not connect to existing daemon — will start new one.");
     false

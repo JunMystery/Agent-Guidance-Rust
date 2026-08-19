@@ -117,13 +117,7 @@ impl LLMSelector {
             .take(MAX_CROSS_ENCODER_CANDIDATES)
             .cloned()
             .collect();
-        let cross_encoder = super::cross_encoder::try_cached_cross_encoder().or_else(|| {
-            if crate::ml::embeddings::is_warmup_complete() {
-                cached_cross_encoder().ok()
-            } else {
-                None
-            }
-        });
+        let cross_encoder = super::cross_encoder::try_cached_cross_encoder();
         let mut scored: Vec<(f32, SkillItem)> = crate::ml::inference_pool().install(|| {
             bounded_candidates
                 .par_iter()
@@ -184,9 +178,12 @@ impl LLMSelector {
             .map(|(i, (base_score, skill))| {
                 let name_lower = skill.name.to_lowercase();
                 let doc = skill.to_semantic_doc();
+                let intent_lower = doc.intent.to_lowercase();
                 let desc_lower = doc.description.to_lowercase();
                 let triggers_lower = doc.triggers.join(" ").to_lowercase();
+                let actions_lower = doc.action_triggers.join(" ").to_lowercase();
                 let keywords_lower = doc.keywords.join(" ").to_lowercase();
+                let rules_lower = doc.micro_rules.join(" ").to_lowercase();
                 let content_lower = skill.content.to_lowercase();
                 let mut bonus = 0.0f32;
 
@@ -196,8 +193,17 @@ impl LLMSelector {
                     } else if name_lower.contains(kw) {
                         bonus += 0.15;
                     }
+                    if actions_lower.contains(kw) {
+                        bonus += 0.2;
+                    }
+                    if intent_lower.contains(kw) {
+                        bonus += 0.15;
+                    }
                     if triggers_lower.contains(kw) {
                         bonus += 0.15;
+                    }
+                    if rules_lower.contains(kw) {
+                        bonus += 0.1;
                     }
                     if desc_lower.contains(kw) {
                         bonus += 0.1;
@@ -215,23 +221,11 @@ impl LLMSelector {
             .collect();
 
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        let mut candidates_vec = candidates;
-        let mut results = Vec::new();
-        for (_, i) in scored.into_iter().take(limit) {
-            results.push(std::mem::replace(
-                &mut candidates_vec[i],
-                (
-                    0.0,
-                    SkillItem {
-                        name: String::new(),
-                        relative_path: String::new(),
-                        source: crate::catalog::store::SkillSource::Embedded,
-                        content: String::new(),
-                    },
-                ),
-            ));
-        }
-        results
+        scored
+            .into_iter()
+            .take(limit)
+            .map(|(score, i)| (score, candidates[i].1.clone()))
+            .collect()
     }
 }
 

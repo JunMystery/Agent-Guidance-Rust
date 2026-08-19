@@ -66,23 +66,24 @@ Write-Host "Stopping any running agent-guidance processes..." -ForegroundColor Y
 Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
-# ── Ensure Rust/Cargo is available ───────────────────────────────────────────
-Write-Host "Checking Rust toolchain (cargo)..." -ForegroundColor White
-if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Path "$HOME\.cargo\bin\cargo.exe")) {
-    Write-Host "  Rust toolchain not found. Installing rustup..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
-    Start-Process -FilePath "$env:TEMP\rustup-init.exe" -ArgumentList "-y" -Wait
-    $env:Path += ";$HOME\.cargo\bin"
-} else {
-    $env:Path += ";$HOME\.cargo\bin"
-    Write-Host "  OK Found Cargo in PATH" -ForegroundColor Green
-}
-
 # ── Prepare binary output directory ──────────────────────────────────────────
 # Use %LOCALAPPDATA%\Programs\agent-guidance\bin to satisfy Windows AppLocker / WDAC policies
 $localBin = Join-Path $env:LOCALAPPDATA "Programs\agent-guidance\bin"
 if (-not (Test-Path $localBin)) {
     New-Item -ItemType Directory -Path $localBin -Force | Out-Null
+}
+
+function Ensure-Cargo {
+    Write-Host "Checking Rust toolchain (cargo)..." -ForegroundColor White
+    if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Path "$HOME\.cargo\bin\cargo.exe")) {
+        Write-Host "  Rust toolchain not found. Installing rustup..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
+        Start-Process -FilePath "$env:TEMP\rustup-init.exe" -ArgumentList "-y" -Wait
+        $env:Path += ";$HOME\.cargo\bin"
+    } else {
+        $env:Path += ";$HOME\.cargo\bin"
+        Write-Host "  OK Found Cargo in PATH" -ForegroundColor Green
+    }
 }
 
 # ── Spinner helper ────────────────────────────────────────────────────────────
@@ -178,7 +179,7 @@ try {
     $version = $latestMeta.tag_name
     Write-Host "  Latest release: $version" -ForegroundColor Gray
 } catch {
-    $version = "v1.4.5"
+    $version = "v1.4.6"
     Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
 }
 
@@ -220,6 +221,7 @@ if (-not $buildDir) {
 }
 
 if (-not $installedPrebuilt) {
+    Ensure-Cargo
     if ($buildDir) {
         Write-Host ""
         Write-Host "Building from local source: $buildDir" -ForegroundColor Cyan
@@ -249,28 +251,10 @@ if (-not $installedPrebuilt) {
     }
 }
 
-# ── Sync skills to ~/.agent-guidance/skills ──────────────────────────────────
-Write-Host ""
-Write-Host ">> Syncing project skills to $HOME\.agent-guidance\skills..." -ForegroundColor Magenta
-$targetSkills = Join-Path $HOME ".agent-guidance\skills"
-if (-not (Test-Path $targetSkills)) {
-    New-Item -ItemType Directory -Path $targetSkills -Force | Out-Null
-}
-$sourceSkills = if ($buildDir -and (Test-Path "$buildDir\skills")) { "$buildDir\skills" } elseif ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "..\skills"))) { (Join-Path $PSScriptRoot "..\skills") } elseif (Test-Path ".\skills") { (Get-Item ".\skills").FullName } elseif ($globalSrc -and (Test-Path "$globalSrc\skills")) { "$globalSrc\skills" } else { "" }
-if ($sourceSkills -and (Test-Path $sourceSkills)) {
-    Copy-Item -Path "$sourceSkills\*" -Destination $targetSkills -Recurse -Force
-    Write-Host "  OK Copied project skills to $targetSkills" -ForegroundColor Green
-}
-
 # ── Register with IDEs ────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host ">> Registering server with detected IDE clients..." -ForegroundColor Magenta
 & "$localBin\agent-guidance.exe" --setup
-
-# ── Precompute embedding cache ────────────────────────────────────────────────
-Write-Host ""
-Write-Host ">> Precomputing skill passage embedding cache..." -ForegroundColor Magenta
-& "$localBin\agent-guidance.exe" --generate-passage-cache
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host ""

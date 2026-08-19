@@ -61,20 +61,21 @@ echo -e ""
 echo -e "${YELLOW}⚡ Stopping any running agent-guidance processes...${NC}"
 killall agent-guidance &>/dev/null || pkill -f agent-guidance &>/dev/null || true
 
-# ── Check Rust/Cargo ──────────────────────────────────────────────────────────
-echo -e "${BOLD}Checking Rust toolchain (cargo)...${NC}"
-if ! command -v cargo &>/dev/null && [ ! -f "$HOME/.cargo/bin/cargo" ]; then
-    echo -e "  ${YELLOW}⚡${NC} Rust not found. Installing rustup..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    export PATH="$HOME/.cargo/bin:$PATH"
-else
-    export PATH="$HOME/.cargo/bin:$PATH"
-    echo -e "  ${GREEN}✓${NC} Found Cargo in PATH"
-fi
-
 # ── Prepare ~/.local/bin ──────────────────────────────────────────────────────
 mkdir -p "$HOME/.local/bin"
 LOCAL_BIN="$HOME/.local/bin"
+
+# ── Ensure Cargo helper (only needed if building from source) ─────────────────
+ensure_cargo() {
+    if ! command -v cargo &>/dev/null && [ ! -f "$HOME/.cargo/bin/cargo" ]; then
+        echo -e "  ${YELLOW}⚡${NC} Rust toolchain not found. Installing rustup..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        export PATH="$HOME/.cargo/bin:$PATH"
+    else
+        export PATH="$HOME/.cargo/bin:$PATH"
+        echo -e "  ${GREEN}✓${NC} Found Cargo in PATH"
+    fi
+}
 
 # ── Detect build source (local dev or remote clone) ───────────────────────────
 BUILD_DIR=""
@@ -136,7 +137,7 @@ elif command -v wget &>/dev/null; then
     VERSION="$(wget -qO- "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 fi
 if [ -z "$VERSION" ]; then
-    VERSION="v1.4.5"
+    VERSION="v1.4.6"
     echo -e "  ${YELLOW}⚠️  Could not fetch latest release tag, defaulting to ${VERSION}${NC}"
 else
     echo -e "  ${GRAY}Latest release: ${VERSION}${NC}"
@@ -227,6 +228,7 @@ if [ -z "$BUILD_DIR" ]; then
 fi
 
 if [ "$INSTALLED_PREBUILT" = false ]; then
+    ensure_cargo
     if [ -n "$BUILD_DIR" ]; then
         echo -e ""
         echo -e "${CYAN}⚙️  Building release binary from local source (${BUILD_DIR})...${NC}"
@@ -257,34 +259,10 @@ if [ "$INSTALLED_PREBUILT" = false ]; then
     fi
 fi
 
-# ── Sync skills to ~/.agent-guidance/skills ──────────────────────────────────
-echo -e ""
-echo -e "${PURPLE}▶${NC} Syncing project skills to $HOME/.agent-guidance/skills..."
-mkdir -p "$HOME/.agent-guidance/skills"
-SOURCE_SKILLS=""
-if [ -n "$BUILD_DIR" ] && [ -d "$BUILD_DIR/skills" ]; then
-    SOURCE_SKILLS="$BUILD_DIR/skills"
-elif [ -d "$(dirname "$0")/../skills" ]; then
-    SOURCE_SKILLS="$(cd "$(dirname "$0")/../skills" && pwd)"
-elif [ -d "./skills" ]; then
-    SOURCE_SKILLS="$(pwd)/skills"
-elif [ -n "$GLOBAL_SRC" ] && [ -d "$GLOBAL_SRC/skills" ]; then
-    SOURCE_SKILLS="$GLOBAL_SRC/skills"
-fi
-if [ -n "$SOURCE_SKILLS" ] && [ -d "$SOURCE_SKILLS" ]; then
-    cp -r "$SOURCE_SKILLS/"* "$HOME/.agent-guidance/skills/"
-    echo -e "  ${GREEN}✓${NC} Copied project skills to $HOME/.agent-guidance/skills"
-fi
-
 # ── Register with IDEs ────────────────────────────────────────────────────────
 echo -e ""
 echo -e "${PURPLE}▶${NC} Registering server with detected IDE clients..."
 "$LOCAL_BIN/agent-guidance" --setup
-
-# ── Precompute skill embedding cache ──────────────────────────────────────────
-echo -e ""
-echo -e "${PURPLE}▶${NC} Precomputing skill passage embedding cache..."
-"$LOCAL_BIN/agent-guidance" --generate-passage-cache
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo -e ""

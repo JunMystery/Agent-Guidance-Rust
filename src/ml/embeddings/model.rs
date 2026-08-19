@@ -28,13 +28,7 @@ pub(crate) fn resolve_repo_paths(
     if all_cached {
         return Ok(paths);
     }
-    let api = ApiBuilder::new().with_progress(false).build()?;
-    let remote = api.repo(repo);
-    let mut remote_paths = Vec::with_capacity(files.len());
-    for f in files {
-        remote_paths.push(remote.get(f)?);
-    }
-    Ok(remote_paths)
+    anyhow::bail!("Model '{}' not locally cached in ~/.cache/huggingface. Using rich embedded manifest.", model_id)
 }
 
 pub struct EmbeddingModel {

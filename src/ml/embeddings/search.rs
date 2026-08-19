@@ -17,13 +17,7 @@ pub fn hybrid_vector_search(
     let q_lower = query.to_lowercase();
     let words: Vec<&str> = q_lower.split_whitespace().collect();
 
-    let model_res = super::cache::try_cached_model().map(Ok).unwrap_or_else(|| {
-        if super::cache::is_warmup_complete() {
-            cached_model()
-        } else {
-            Err("Model warming up in background".to_string())
-        }
-    });
+    let model_res = super::cache::try_cached_model().ok_or_else(|| "Model warming up in background".to_string());
     let (q_vec, c_vecs) = match &model_res {
         Ok(model) => {
             let q = model.embed_text(query, Some("query")).ok();
@@ -71,15 +65,27 @@ pub fn hybrid_vector_search(
 
                 let mut score = base_score;
                 let name_lower = cand.name.to_lowercase();
+                let doc = cand.to_semantic_doc();
+                let intent_lower = doc.intent.to_lowercase();
+                let actions_lower: String = doc.action_triggers.join(" ").to_lowercase();
+
                 if name_lower == q_lower {
                     score += 0.5;
                 } else if name_lower.contains(&q_lower) {
                     score += 0.3;
-                } else {
-                    for w in &words {
-                        if name_lower.contains(w) {
-                            score += 0.1;
-                        }
+                } else if !intent_lower.is_empty() && intent_lower.contains(&q_lower) {
+                    score += 0.25;
+                }
+
+                for w in &words {
+                    if name_lower.contains(w) {
+                        score += 0.1;
+                    }
+                    if actions_lower.contains(w) {
+                        score += 0.12;
+                    }
+                    if intent_lower.contains(w) {
+                        score += 0.08;
                     }
                 }
 
@@ -98,9 +104,12 @@ pub fn hybrid_vector_search(
     for (i, cand) in candidates.iter().enumerate() {
         let name_lower = cand.name.to_lowercase();
         let doc = cand.to_semantic_doc();
+        let intent_lower = doc.intent.to_lowercase();
         let desc_lower = doc.description.to_lowercase();
         let triggers_lower: String = doc.triggers.join(" ").to_lowercase();
+        let actions_lower: String = doc.action_triggers.join(" ").to_lowercase();
         let keywords_lower: String = doc.keywords.join(" ").to_lowercase();
+        let rules_lower: String = doc.micro_rules.join(" ").to_lowercase();
         let content_lower = cand.content.to_lowercase();
         let mut score = 0.0f32;
 
@@ -110,19 +119,34 @@ pub fn hybrid_vector_search(
             score += 0.7;
         }
 
+        if !intent_lower.is_empty() && intent_lower.contains(&q_lower) {
+            score += 0.6;
+        }
         if !desc_lower.is_empty() && desc_lower.contains(&q_lower) {
             score += 0.4;
         }
         if !triggers_lower.is_empty() && triggers_lower.contains(&q_lower) {
             score += 0.5;
         }
+        if !actions_lower.is_empty() && actions_lower.contains(&q_lower) {
+            score += 0.6;
+        }
 
         for w in &words {
             if name_lower.contains(w) {
                 score += 0.4;
             }
+            if actions_lower.contains(w) {
+                score += 0.35;
+            }
+            if intent_lower.contains(w) {
+                score += 0.25;
+            }
             if triggers_lower.contains(w) {
                 score += 0.25;
+            }
+            if rules_lower.contains(w) {
+                score += 0.2;
             }
             if desc_lower.contains(w) {
                 score += 0.15;
@@ -174,5 +198,28 @@ mod tests {
         let results = hybrid_vector_search("optimize rust CPU", &candidates, 5);
         assert!(!results.is_empty());
         assert_eq!(results[0].1.name, "rust-performance");
+    }
+
+    #[test]
+    fn test_implicit_intent_and_action_matching() {
+        let candidates = vec![
+            SkillItem {
+                name: "sql-injection-prevention-cheat-sheet".to_string(),
+                relative_path: "sql-injection-prevention-cheat-sheet/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "# SQL Injection Prevention\n\nDefense in depth against SQL injection.\n\n## Primary Defenses\n- Use Parameterized Queries".to_string(),
+            },
+            SkillItem {
+                name: "docker-security".to_string(),
+                relative_path: "docker-security/SKILL.md".to_string(),
+                source: SkillSource::Embedded,
+                content: "# Docker Security\n\nContainer hardening guidelines.".to_string(),
+            },
+        ];
+
+        // Prompt without naming "sql-injection-prevention-cheat-sheet"
+        let results = hybrid_vector_search("refactor database query execution", &candidates, 5);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].1.name, "sql-injection-prevention-cheat-sheet");
     }
 }

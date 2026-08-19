@@ -80,7 +80,41 @@ pub fn assess_file_risk(proj_path: &Path, rel_path: &str) -> RiskAssessment {
     }
 }
 
+/// Automatically ensures `.agent-context/` is added to `.gitignore` to prevent Git tracking of local metadata.
+pub fn ensure_agent_context_gitignored(proj_path: &Path) {
+    if !proj_path.exists() || !proj_path.is_dir() {
+        return;
+    }
+    let gitignore_path = proj_path.join(".gitignore");
+    if gitignore_path.exists() {
+        if let Ok(content) = fs::read_to_string(&gitignore_path) {
+            let lines: Vec<&str> = content.lines().map(|l| l.trim()).collect();
+            let already_ignored = lines.iter().any(|&l| {
+                l == ".agent-context"
+                    || l == ".agent-context/"
+                    || l == "/.agent-context"
+                    || l == "/.agent-context/"
+                    || l.starts_with(".agent-context")
+            });
+            if !already_ignored {
+                let mut updated = content;
+                if !updated.ends_with('\n') && !updated.is_empty() {
+                    updated.push('\n');
+                }
+                updated.push_str("\n# Agent Guidance local metadata & rollback snapshots\n.agent-context/\n");
+                let _ = fs::write(&gitignore_path, updated);
+                info!("Automatically added .agent-context/ to {:?}", gitignore_path);
+            }
+        }
+    } else if proj_path.join(".git").exists() {
+        let content = "# Agent Guidance local metadata & rollback snapshots\n.agent-context/\n";
+        let _ = fs::write(&gitignore_path, content);
+        info!("Created .gitignore with .agent-context/ in {:?}", proj_path);
+    }
+}
+
 fn get_session_snapshot_dir(proj_path: &Path, session_id: &str) -> PathBuf {
+    ensure_agent_context_gitignored(proj_path);
     let clean_session = session_id.replace(['/', '\\', ':', '.'], "_");
     proj_path.join(".agent-context").join("snapshots").join(clean_session)
 }
@@ -146,4 +180,52 @@ pub fn restore_session_snapshots(proj_path: &Path, session_id: &str) -> Result<V
     visit_dirs(&snapshot_dir, &snapshot_dir, proj_path, &mut restored)?;
     info!("Restored {} files from session '{}' snapshot", restored.len(), session_id);
     Ok(restored)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ensure_agent_context_gitignored_appends_to_existing() {
+        let temp_dir = std::env::temp_dir().join(format!("impact_gitignore_test1_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let gitignore = temp_dir.join(".gitignore");
+        fs::write(&gitignore, "target/\n*.log\n").unwrap();
+
+        ensure_agent_context_gitignored(&temp_dir);
+
+        let content = fs::read_to_string(&gitignore).unwrap();
+        assert!(content.contains(".agent-context/"));
+        assert!(content.contains("target/"));
+
+        // Idempotency check: calling again shouldn't duplicate
+        ensure_agent_context_gitignored(&temp_dir);
+        let content_after = fs::read_to_string(&gitignore).unwrap();
+        let count = content_after.matches(".agent-context/").count();
+        assert_eq!(count, 1);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_ensure_agent_context_gitignored_creates_when_in_git_repo() {
+        let temp_dir = std::env::temp_dir().join(format!("impact_gitignore_test2_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let git_dir = temp_dir.join(".git");
+        fs::create_dir(&git_dir).unwrap();
+
+        ensure_agent_context_gitignored(&temp_dir);
+
+        let gitignore = temp_dir.join(".gitignore");
+        assert!(gitignore.exists());
+        let content = fs::read_to_string(&gitignore).unwrap();
+        assert!(content.contains(".agent-context/"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }

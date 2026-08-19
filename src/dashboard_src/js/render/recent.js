@@ -28,10 +28,11 @@ function drawRecentCalls() {
       const statusClass = r.error_message ? 'badge red' : 'badge green';
       const statusText = r.error_message ? 'error' : 'ok';
       const statusTitle = r.error_message ? ' title="' + r.error_message.replace(/"/g, '&quot;') + '"' : '';
+      const opText = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
       body.innerHTML += '<tr>' +
         '<td>' + timeAgo(r.started_at) + '</td>' +
-        '<td>' + r.tool_name + '</td>' +
-        '<td>' + (r.operation || '--') + '</td>' +
+        '<td><code>' + r.tool_name + '</code></td>' +
+        '<td><span class="badge">' + opText + '</span></td>' +
         '<td>' + fmtTokens(r.tokens_original) + '</td>' +
         '<td>' + fmtTokens(r.tokens_optimized) + '</td>' +
         '<td><span class="' + badgeClass + '">' + pct + '%</span></td>' +

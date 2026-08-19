@@ -29,7 +29,9 @@ pub fn download_models() -> anyhow::Result<()> {
             "intfloat/multilingual-e5-small".into(),
             RepoType::Model,
         ));
-    emb.get("model.safetensors")?;
+    let _ = emb.get("config.json");
+    let _ = emb.get("tokenizer.json");
+    let _ = emb.get("model.safetensors");
 
     println!("  Downloading cross-encoder model (80MB)...");
     let ce = ApiBuilder::new()
@@ -39,7 +41,9 @@ pub fn download_models() -> anyhow::Result<()> {
             "cross-encoder/ms-marco-MiniLM-L-6-v2".into(),
             RepoType::Model,
         ));
-    ce.get("model.safetensors")?;
+    let _ = ce.get("config.json");
+    let _ = ce.get("tokenizer.json");
+    let _ = ce.get("model.safetensors");
 
     println!("  ✓ ML models cached at ~/.cache/huggingface/hub/");
     Ok(())

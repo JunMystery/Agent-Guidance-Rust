@@ -21,10 +21,10 @@ impl CodeGraphDb {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(db_path)?;
-        let _mode: String = conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get(0))?;
-        conn.busy_timeout(std::time::Duration::from_millis(5000))?;
-        conn.pragma_update(None, "synchronous", "NORMAL")?;
-        conn.pragma_update(None, "foreign_keys", "ON")?;
+        let _ = conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0));
+        let _ = conn.busy_timeout(std::time::Duration::from_millis(2000));
+        let _ = conn.pragma_update(None, "synchronous", "NORMAL");
+        let _ = conn.pragma_update(None, "foreign_keys", "ON");
 
         let mut db = Self { conn };
         db.init_schema()?;
@@ -32,6 +32,7 @@ impl CodeGraphDb {
     }
 
     pub fn open_for_project(project_path: &Path) -> Result<Self> {
+        crate::mcp::impact::ensure_agent_context_gitignored(project_path);
         let db_path = project_path.join(".agent-context").join("code_graph.db");
         Self::open(&db_path)
     }

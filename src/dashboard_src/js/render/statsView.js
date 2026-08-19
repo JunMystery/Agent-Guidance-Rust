@@ -125,7 +125,8 @@ function drawActionsTable() {
     rows.forEach(r => {
       const saved = r.savings;
       const { pct, badgeClass } = savingsBadge(saved, r.tok_orig);
-      body.innerHTML += '<tr><td>' + r.tool_name + '</td><td>' + (r.operation || '--') + '</td><td>' + r.cnt + '</td><td>' + fmtTokens(r.tok_orig) + '</td><td>' + fmtTokens(r.tok_opt) + '</td><td><span class="' + badgeClass + '">' + pct + '%</span></td></tr>';
+      const opText = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
+      body.innerHTML += '<tr><td><code>' + r.tool_name + '</code></td><td><span class="badge">' + opText + '</span></td><td>' + r.cnt + '</td><td>' + fmtTokens(r.tok_orig) + '</td><td>' + fmtTokens(r.tok_opt) + '</td><td><span class="' + badgeClass + '">' + pct + '%</span></td></tr>';
     });
   } else {
     emptyState('actions-body', 6, 'No matching tool calls.');

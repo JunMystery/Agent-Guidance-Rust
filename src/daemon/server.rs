@@ -52,7 +52,14 @@ pub async fn daemon_main() {
     let _lock = match acquire_daemon_lock() {
         Some(l) => l,
         None => {
-            error!("Daemon lock held by another process. Exiting.");
+            info!("Daemon lock held by another process. Attempting client proxy connection...");
+            for _ in 0..5 {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if super::try_proxy_mode().await {
+                    return;
+                }
+            }
+            error!("Daemon lock held and could not proxy. Exiting.");
             std::process::exit(1);
         }
     };
@@ -161,7 +168,14 @@ pub async fn daemon_main() {
     let _lock = match acquire_daemon_lock() {
         Some(l) => l,
         None => {
-            error!("Daemon lock held by another process. Exiting.");
+            info!("Daemon lock held by another process. Attempting client proxy connection...");
+            for _ in 0..5 {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if super::try_proxy_mode().await {
+                    return;
+                }
+            }
+            error!("Daemon lock held and could not proxy. Exiting.");
             std::process::exit(1);
         }
     };

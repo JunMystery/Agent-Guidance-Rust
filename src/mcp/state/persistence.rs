@@ -42,6 +42,7 @@ impl ServerState {
     }
 
     pub fn save_to_dir(&self, proj_path: &Path) -> Result<(), String> {
+        crate::mcp::impact::ensure_agent_context_gitignored(proj_path);
         let dir = proj_path.join(".agent-context").join("sessions");
         if let Err(e) = fs::create_dir_all(&dir) {
             return Err(format!("Failed to create directory: {}", e));

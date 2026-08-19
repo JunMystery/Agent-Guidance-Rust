@@ -104,7 +104,21 @@ pub fn generate_precomputed_cache() -> Result<()> {
         .collect();
 
     let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
-    let vecs: Vec<Vec<f32>> = model.embed_batch(&text_refs, Some("passage"), 32)?;
+    let total = text_refs.len();
+    let mut vecs = Vec::with_capacity(total);
+    for (batch_idx, chunk) in text_refs.chunks(32).enumerate() {
+        let chunk_vecs = model.embed_batch(chunk, Some("passage"), 32)?;
+        vecs.extend(chunk_vecs);
+        let processed = vecs.len();
+        let percent = (processed as f32 / total as f32) * 100.0;
+        println!(
+            "  [Batch {:02}] Processed {}/{} skills ({:.1}%)",
+            batch_idx + 1,
+            processed,
+            total,
+            percent
+        );
+    }
 
     if vecs.len() != candidates.len() {
         anyhow::bail!(
@@ -126,6 +140,22 @@ pub fn generate_precomputed_cache() -> Result<()> {
     }
 
     let fp = catalog_fingerprint(&candidates);
+    let skills_metadata: Vec<serde_json::Value> = candidates
+        .iter()
+        .map(|c| {
+            let doc = c.to_semantic_doc();
+            serde_json::json!({
+                "name": doc.name,
+                "title": doc.title,
+                "intent": doc.intent,
+                "micro_rules": doc.micro_rules,
+                "action_triggers": doc.action_triggers,
+                "file_patterns": doc.file_patterns,
+                "applicable_phases": doc.applicable_phases,
+            })
+        })
+        .collect();
+
     let manifest = serde_json::json!({
         "catalog_fingerprint": fp,
         "count": candidates.len(),
@@ -135,6 +165,7 @@ pub fn generate_precomputed_cache() -> Result<()> {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
+        "skills": skills_metadata,
     });
 
     let manifest_bytes = serde_json::to_vec_pretty(&manifest)?;
@@ -161,6 +192,64 @@ pub fn generate_precomputed_cache() -> Result<()> {
     Ok(())
 }
 
+pub fn generate_manifest_only() -> Result<()> {
+    let candidates: Vec<SkillItem> = list_embedded_skills()
+        .iter()
+        .filter_map(|path| {
+            get_embedded_skill(path).map(|content| SkillItem {
+                name: path.split('/').next().unwrap_or(path).to_string(),
+                relative_path: path.clone(),
+                source: SkillSource::Embedded,
+                content,
+            })
+        })
+        .collect();
+
+    let fp = catalog_fingerprint(&candidates);
+    let skills_metadata: Vec<serde_json::Value> = candidates
+        .iter()
+        .map(|c| {
+            let doc = c.to_semantic_doc();
+            serde_json::json!({
+                "name": doc.name,
+                "title": doc.title,
+                "intent": doc.intent,
+                "micro_rules": doc.micro_rules,
+                "action_triggers": doc.action_triggers,
+                "file_patterns": doc.file_patterns,
+                "applicable_phases": doc.applicable_phases,
+            })
+        })
+        .collect();
+
+    let manifest = serde_json::json!({
+        "catalog_fingerprint": fp,
+        "count": candidates.len(),
+        "dimension": 384,
+        "model": "intfloat/multilingual-e5-small",
+        "created_at": SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        "skills": skills_metadata,
+    });
+
+    let manifest_bytes = serde_json::to_vec_pretty(&manifest)?;
+    let src_ml = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ml");
+    if src_ml.exists() {
+        let man_out = src_ml.join("precomputed_manifest.json");
+        std::fs::write(&man_out, &manifest_bytes)?;
+        println!(
+            "Indexed {} skills into {} (fingerprint: {:016x}) in <50ms.",
+            candidates.len(),
+            man_out.display(),
+            fp
+        );
+    }
+
+    Ok(())
+}
+
 pub fn save_passage_cache(vectors: &[Vec<f32>], skills: &[SkillItem]) {
     if vectors.is_empty() {
         return;
@@ -170,6 +259,22 @@ pub fn save_passage_cache(vectors: &[Vec<f32>], skills: &[SkillItem]) {
     let _ = std::fs::create_dir_all(&dir);
 
     let fp = catalog_fingerprint(skills);
+    let skills_metadata: Vec<serde_json::Value> = skills
+        .iter()
+        .map(|c| {
+            let doc = c.to_semantic_doc();
+            serde_json::json!({
+                "name": doc.name,
+                "title": doc.title,
+                "intent": doc.intent,
+                "micro_rules": doc.micro_rules,
+                "action_triggers": doc.action_triggers,
+                "file_patterns": doc.file_patterns,
+                "applicable_phases": doc.applicable_phases,
+            })
+        })
+        .collect();
+
     let manifest = serde_json::json!({
         "catalog_fingerprint": fp,
         "count": skills.len(),
@@ -177,6 +282,7 @@ pub fn save_passage_cache(vectors: &[Vec<f32>], skills: &[SkillItem]) {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
+        "skills": skills_metadata,
     });
 
     if let Ok(manifest_str) = serde_json::to_string(&manifest) {

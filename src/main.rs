@@ -85,6 +85,12 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    if args.contains(&"--build-manifest".to_string()) {
+        println!("Building semantic skill index manifest...");
+        crate::ml::embeddings::precomputed::generate_manifest_only()?;
+        return Ok(());
+    }
+
     if args.contains(&"--reindex-skills".to_string())
         || args.contains(&"--generate-passage-cache".to_string())
     {
@@ -134,11 +140,11 @@ async fn main() -> Result<()> {
         env!("CARGO_PKG_VERSION")
     );
 
-    if args.contains(&"--force-daemon".to_string()) {
+    if args.contains(&"--daemon".to_string()) || args.contains(&"--force-daemon".to_string()) {
         daemon::daemon_main().await;
         return Ok(());
     }
-    if args.contains(&"--force-client".to_string()) {
+    if args.contains(&"--proxy".to_string()) || args.contains(&"--force-client".to_string()) {
         if !daemon::try_proxy_mode().await {
             eprintln!("No daemon socket/pipe found. Is a daemon running?");
             std::process::exit(1);
@@ -146,12 +152,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    if daemon::try_proxy_mode().await {
-        return Ok(());
-    }
-
-    info!("No existing daemon found -- starting in daemon mode.");
-    daemon::daemon_main().await;
-
+    // Direct, instant, zero-overhead stdio MCP server for all IDEs
+    daemon::handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
     Ok(())
 }

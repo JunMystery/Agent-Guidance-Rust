@@ -103,7 +103,7 @@ pub fn get_semantic_relevant_learnings(
     let total = items.len();
 
     // Tier 1: Try ML Embeddings Vector Search (Multilingual-E5 / ONNX)
-    if let Ok(model) = crate::ml::embeddings::cached_model() {
+    if let Some(model) = crate::ml::embeddings::try_cached_model() {
         if let Ok(task_vec) = model.embed_text(task, Some("query")) {
             let mut scored: Vec<(f32, &LearningItem)> = Vec::new();
 

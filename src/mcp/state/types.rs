@@ -139,8 +139,9 @@ impl ServerState {
     }
 
     pub fn set_roots_from_initialize(&mut self, params: &Value) {
+        let mut parsed_roots = Vec::new();
+
         if let Some(roots) = params.get("roots").and_then(|r| r.as_array()) {
-            let mut parsed_roots = Vec::new();
             for r in roots {
                 if let Some(uri) = r.get("uri").and_then(|u| u.as_str()) {
                     let path_str = parse_file_uri(uri);
@@ -149,12 +150,43 @@ impl ServerState {
                     }
                 }
             }
-            if !parsed_roots.is_empty() {
-                info!(
-                    "Captured workspace roots from initialize: {:?}",
-                    parsed_roots
-                );
-                self.workspace_roots = parsed_roots;
+        }
+
+        if let Some(folders) = params.get("workspaceFolders").and_then(|f| f.as_array()) {
+            for f in folders {
+                if let Some(uri) = f.get("uri").and_then(|u| u.as_str()) {
+                    let path_str = parse_file_uri(uri);
+                    if !path_str.is_empty() && !parsed_roots.contains(&path_str) {
+                        parsed_roots.push(path_str);
+                    }
+                }
+            }
+        }
+
+        if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
+            let path_str = parse_file_uri(root_uri);
+            if !path_str.is_empty() && !parsed_roots.contains(&path_str) {
+                parsed_roots.push(path_str);
+            }
+        }
+
+        if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
+            let path_str = root_path.trim().to_string();
+            if !path_str.is_empty() && !parsed_roots.contains(&path_str) {
+                parsed_roots.push(path_str);
+            }
+        }
+
+        if !parsed_roots.is_empty() {
+            info!("Captured workspace roots from initialize: {:?}", parsed_roots);
+            self.workspace_roots = parsed_roots.clone();
+
+            // Background pre-warm workspace snapshot and skills before user sends first action
+            for root in parsed_roots {
+                let r_path = std::path::PathBuf::from(root);
+                tokio::task::spawn_blocking(move || {
+                    let _ = crate::context::cache::project_snapshot(&r_path);
+                });
             }
         }
     }
@@ -211,7 +243,6 @@ impl ServerState {
         self.tool_calls += 1;
         self.tokens_original += orig_tokens;
         self.tokens_optimized += opt_tokens;
-        crate::mcp::db::log_tool_call("mcp_tool", None, orig_tokens, opt_tokens, 0, None);
     }
 
     pub fn set_cancellation(&mut self, cancellation: Arc<AtomicBool>) {
