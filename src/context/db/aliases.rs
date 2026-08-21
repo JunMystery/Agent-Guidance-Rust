@@ -141,7 +141,7 @@ impl CodeGraphDb {
         let thirty_days = 30 * 24 * 3600;
         let ninety_days = 90 * 24 * 3600;
 
-        // Phase 1: Giảm confidence cho aliases > 30 ngày không dùng
+        // Phase 1: Decay confidence for aliases unused > 30 days
         self.conn.execute(
             "UPDATE aliases 
              SET confidence = MAX(0.1, confidence * 0.5) 
@@ -149,7 +149,7 @@ impl CodeGraphDb {
             params![now, thirty_days],
         )?;
 
-        // Phase 2: Xóa aliases > 90 ngày không dùng
+        // Phase 2: Delete stale aliases unused > 90 days
         let deleted = self.conn.execute(
             "DELETE FROM aliases WHERE (?1 - last_used_at) > ?2",
             params![now, ninety_days],

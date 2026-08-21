@@ -43,7 +43,28 @@ pub(crate) fn handle_authorize_edit(
             crate::mcp::impact::RiskLevel::Medium => "MEDIUM".to_string(),
             crate::mcp::impact::RiskLevel::Low => "LOW".to_string(),
         });
-    state.last_risk_level = Some(declared_risk.clone());
+    // Check existing target file LOC for 300 LOC architectural hard-block
+    let full_target_path = proj_path.join(rel_path);
+    let target_loc = if full_target_path.exists() && full_target_path.is_file() {
+        std::fs::read_to_string(&full_target_path)
+            .map(|c| c.lines().count())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
+    let is_refactoring_justification = {
+        let j_lower = justification.to_lowercase();
+        j_lower.contains("refactor")
+            || j_lower.contains("decompose")
+            || j_lower.contains("decomposition")
+            || j_lower.contains("extract")
+            || j_lower.contains("split")
+            || j_lower.contains("thin dispatcher")
+            || j_lower.contains("reduce loc")
+            || j_lower.contains("tách file")
+            || j_lower.contains("rút gọn")
+    };
 
     if !matches!(
         arch_pattern.as_str(),
@@ -62,6 +83,13 @@ pub(crate) fn handle_authorize_edit(
             } else {
                 &arch_pattern
             }
+        )
+    } else if target_loc >= 300 && !is_refactoring_justification {
+        // Hard-block adding new logic to files >= 300 LOC
+        crate::catalog::blueprint::format_decomposition_guidance(
+            rel_path,
+            target_loc,
+            &arch_pattern,
         )
     } else if impact.risk_level == crate::mcp::impact::RiskLevel::High && (justification.trim().len() < 10 || justification == "No justification provided") {
         // Strict Gate for Critical Hub: mandatory explanation
@@ -89,7 +117,8 @@ pub(crate) fn handle_authorize_edit(
         let _ = state.auto_checkpoint(&proj_path);
 
         let mut resp = format!(
-            "# Edit Approval Gate Authorization\n\n- Status: PASSED\n- Project Path: {}\n- Target File: {}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
+            "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: {}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
+            if target_loc >= 300 { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
             proj_path.display(),
             if rel_path.is_empty() { "—" } else { rel_path },
             impact.risk_level,
@@ -99,6 +128,13 @@ pub(crate) fn handle_authorize_edit(
             state.workflow_stage,
             arch_pattern
         );
+
+        if target_loc >= 300 {
+            resp.push_str(&format!(
+                "\n\n⚡ **Decomposition / Refactor Mode**: Target file has {} lines (>= 300 LOC). Edits are authorized strictly to extract logic into sub-modules and reduce file length.",
+                target_loc
+            ));
+        }
 
         if let Some(warn) = impact.warning {
             resp.push_str(&format!("\n\n⚠️ **Impact Guard**: {}", warn));

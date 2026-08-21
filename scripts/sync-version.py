@@ -78,13 +78,6 @@ def main():
         f'VERSION="{v_version}"'
     )
 
-    # 3. scripts/package-release.ps1
-    replace_in_file(
-        root / "scripts" / "package-release.ps1",
-        r'\[string\]\$Version\s*=\s*"v[^"]+"',
-        f'[string]$Version = "{v_version}"'
-    )
-
     # 4. packaging/winget/JunMystery.AgentGuidance.locale.en-US.yaml
     replace_in_file(
         root / "packaging" / "winget" / "JunMystery.AgentGuidance.locale.en-US.yaml",

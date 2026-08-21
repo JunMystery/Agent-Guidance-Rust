@@ -5,7 +5,7 @@ CRITICAL OVERRIDE: This repository is managed by the `agent-guidance` MCP Server
 ## Strict Rules
 1. Turn 1 Initialization: Start every task/turn by calling `task_pipeline(task="...", project_path="<abs_path>", phase="plan")` FIRST.
 2. Token-Bounded File Reads: Do not dump full files. Use `project_context(operation="read", relative_path="...", target_symbol="...")` or `project_context(operation="search", query="...")` (300 LOC cap).
-3. Edit Authorization Gate: Always call `workflow_gate(action="authorize_edit", project_path="...", relative_path="...", risk_level="LOW", justification="...", architecture_pattern="Auto")` before modifying files.
+3. Edit Authorization Gate: Always call `workflow_gate(action="authorize_edit", project_path="...", relative_path="...", risk_level="LOW", justification="...", architecture_pattern="Auto")` before modifying files. Files >= 300 LOC are hard-blocked from adding new code; decompose into architecture-aligned sub-modules.
 4. Mandatory User Skill Selection: When `task_pipeline` returns `-> SKILL_PROPOSAL`, NEVER auto-select skills or call `select_skills` immediately. You MUST trigger the IDE/CLI `ask_question` tool to let the user select skills. ONLY THEN call `select_skills(skills=[...])` with the user's chosen skills (or `select_skills(skills=[])` if skipped).
 5. Background Tasks: Stop tool calling immediately when a background command is launched and wait for system reactive wakeup. Do not poll or loop `manage_task(action="status")`.
 
@@ -29,5 +29,11 @@ CRITICAL OVERRIDE: This repository is managed by the `agent-guidance` MCP Server
 2. Context Retrieval: Call `project_context(operation="search" | "read" | "symbols", ...)`. Verify symbols and architecture pattern.
 3. Plan & Design: Create/update `implementation_plan.md` if complex.
 4. Authorize Edit Gate: Call `workflow_gate(action="authorize_edit", project_path="...", risk_level="LOW", justification="...", architecture_pattern="Auto")`.
-5. Apply Changes: Apply targeted edits respecting 300 LOC limit per file.
+5. Apply Changes: Apply surgical changes respecting 300 LOC limit per file.
 6. Empirical Verification: Call `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` and run tests.
+
+## Core Engineering Principles (Karpathy-Aligned)
+- **Think Before Coding**: State assumptions explicitly. If uncertain or ambiguous, surface tradeoffs and ask rather than guess.
+- **Simplicity First**: Write the minimum code that solves the problem. No speculative abstractions or unrequested configurability.
+- **Surgical Changes**: Touch only what you must. Every modified line must trace to request. Do not edit unrelated code/formatting.
+- **Goal-Driven Execution**: Define verifiable criteria per step. Validate empirically via tests before claiming completion.

@@ -85,6 +85,80 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
     blueprint
 }
 
+/// Formats a strict architectural decomposition mandate when a file exceeds 300 LOC.
+/// Provides precise sub-module location and structure guidance based on the active architecture pattern.
+pub fn format_decomposition_guidance(rel_path: &str, loc: usize, arch_pattern: &str) -> String {
+    let mut guidance = format!(
+        "# Edit Approval Gate: BLOCKED (300_LOC_CAP_EXCEEDED)\n\n\
+        - Target File: `{}`\n\
+        - Current Length: **{} lines** (hard limit: 300 lines)\n\
+        - Architecture Pattern: **{}**\n\n\
+        ⚠️ **Error: 300_LOC_LIMIT_EXCEEDED**: Adding new logic directly into a file that has reached or exceeded 300 LOC is strictly forbidden to prevent monolithic degradation.\n\n\
+        ### 📐 Mandatory Architectural Decomposition Guide for [{}]\n",
+        rel_path, loc, arch_pattern, arch_pattern
+    );
+
+    match arch_pattern {
+        "Clean_Architecture" => {
+            guidance.push_str(
+                "- Extract data models & interfaces into `domain/` (< 150 LOC)\n\
+                - Extract specific business logic into single-responsibility use cases in `usecase/` (< 200 LOC each)\n\
+                - Extract external I/O & database calls into `infrastructure/` (< 200 LOC)\n\
+                - Keep the entry file as a thin dispatcher coordinator (< 80 LOC)\n"
+            );
+        }
+        "Layered_Architecture" => {
+            guidance.push_str(
+                "- Extract routing and request/input handling into `controllers/` (< 100 LOC)\n\
+                - Extract domain workflow orchestration into focused `services/` (< 200 LOC each)\n\
+                - Extract schemas, queries, and data mapping into `models/` (< 150 LOC)\n"
+            );
+        }
+        "Package_By_Feature" => {
+            guidance.push_str(
+                "- Split the feature into cohesive components:\n\
+                - `<feature>/handlers.*`: Flow control & entry points (< 120 LOC)\n\
+                - `<feature>/service.*`: Core business computations (< 180 LOC)\n\
+                - `<feature>/types.*`: Domain entities & error types (< 100 LOC)\n"
+            );
+        }
+        "CLI_Pipeline" => {
+            guidance.push_str(
+                "- Keep `main.*` strictly as an argument parser and command dispatcher (< 80 LOC)\n\
+                - Extract each sub-command implementation into `commands/<command_name>.*` (< 150 LOC each)\n\
+                - Extract reusable engine pipelines into `core/` (< 200 LOC)\n"
+            );
+        }
+        "Orchestrator" => {
+            guidance.push_str(
+                "- Keep the orchestrator file as a high-level state machine coordinator (< 100 LOC)\n\
+                - Extract pipeline stages or workers into dedicated sub-modules in `steps/` or `workers/` (< 150 LOC each)\n\
+                - Extract pipeline state models and configs into `types.*` (< 80 LOC)\n"
+            );
+        }
+        "Flat_Library" => {
+            guidance.push_str(
+                "- Keep `lib.*` strictly as a public API facade & re-exporter (< 100 LOC)\n\
+                - Extract internal logic into single-responsibility modules under `internal/` (< 200 LOC each)\n"
+            );
+        }
+        _ => {
+            guidance.push_str(
+                "- Decompose logic into cohesive sub-modules (< 180 LOC each)\n\
+                - Keep the primary file as a thin dispatcher (< 80 LOC)\n"
+            );
+        }
+    }
+
+    guidance.push_str(
+        "\n**Action Required**:\n\
+        1. Create the new sub-module file(s) aligned with the structure above.\n\
+        2. To modify the existing file for decomposition (delegating to sub-modules), pass `justification: \"Refactor/Decompose: [explanation]\"`.\n"
+    );
+
+    guidance
+}
+
 /// Synthesizes top recommended skills into an actionable, unified step-by-step checklist.
 pub fn generate_skill_recipe(skills: &[(f32, SkillItem)], task: &str) -> String {
     if skills.is_empty() {

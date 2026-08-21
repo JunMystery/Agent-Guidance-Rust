@@ -179,7 +179,7 @@ try {
     $version = $latestMeta.tag_name
     Write-Host "  Latest release: $version" -ForegroundColor Gray
 } catch {
-    $version = "v1.4.6"
+    $version = "v1.4.7"
     Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
 }
 

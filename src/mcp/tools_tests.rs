@@ -1136,4 +1136,98 @@
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
+    #[test]
+    fn test_workflow_gate_hardblocks_300_loc_files() {
+        let temp_dir = std::env::temp_dir().join(format!("loc300_block_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // Create a 350-line file
+        let target_file = temp_dir.join("LargeService.kt");
+        let lines: Vec<String> = (1..=350).map(|i| format!("// Line {}", i)).collect();
+        std::fs::write(&target_file, lines.join("\n")).unwrap();
+
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        // 1. General edit without refactoring justification is strictly BLOCKED
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "authorize_edit",
+                "relative_path": "LargeService.kt",
+                "justification": "Add new user authentication logic",
+                "architecture_pattern": "Clean_Architecture",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("BLOCKED (300_LOC_CAP_EXCEEDED)"));
+        assert!(text.contains("350 lines"));
+        assert!(text.contains("Clean_Architecture"));
+        assert!(text.contains("domain/"));
+        assert!(text.contains("usecase/"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_workflow_gate_allows_300_loc_refactoring() {
+        let temp_dir = std::env::temp_dir().join(format!("loc300_refactor_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // Create a 320-line file
+        let target_file = temp_dir.join("MainController.rs");
+        let lines: Vec<String> = (1..=320).map(|i| format!("// Line {}", i)).collect();
+        std::fs::write(&target_file, lines.join("\n")).unwrap();
+
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        // 2. Edit with explicit refactoring/decomposition justification is PASSED
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "authorize_edit",
+                "relative_path": "MainController.rs",
+                "justification": "Refactor and decompose handler logic into sub-modules",
+                "architecture_pattern": "CLI_Pipeline",
+                "project_path": temp_dir.to_str().unwrap()
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("PASSED (DECOMPOSITION / REFACTOR MODE)"));
+        assert!(text.contains("CLI_Pipeline Architecture"));
+        assert!(text.contains("320 lines"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_architectural_decomposition_pattern_guidance() {
+        let clean = crate::catalog::blueprint::format_decomposition_guidance("Service.rs", 310, "Clean_Architecture");
+        assert!(clean.contains("Clean_Architecture"));
+        assert!(clean.contains("domain/"));
+        assert!(clean.contains("usecase/"));
+
+        let layered = crate::catalog::blueprint::format_decomposition_guidance("Controller.rs", 350, "Layered_Architecture");
+        assert!(layered.contains("Layered_Architecture"));
+        assert!(layered.contains("controllers/"));
+        assert!(layered.contains("services/"));
+
+        let pbf = crate::catalog::blueprint::format_decomposition_guidance("Feature.rs", 400, "Package_By_Feature");
+        assert!(pbf.contains("Package_By_Feature"));
+        assert!(pbf.contains("<feature>/handlers"));
+        assert!(pbf.contains("<feature>/service"));
+
+        let cli = crate::catalog::blueprint::format_decomposition_guidance("main.rs", 305, "CLI_Pipeline");
+        assert!(cli.contains("CLI_Pipeline"));
+        assert!(cli.contains("commands/"));
+    }
+
 

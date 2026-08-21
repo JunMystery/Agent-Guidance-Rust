@@ -55,10 +55,14 @@ pub(crate) fn handle(
         .and_then(|t| t.as_str())
         .unwrap_or("");
 
+    let core_rules = crate::catalog::rules::format_skill_load_rules();
+
     let resp = if requested_skills.is_empty() {
         state.record_call(100, 50);
-        "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning."
-            .to_string()
+        format!(
+            "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.\n\n{}\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.",
+            core_rules
+        )
     } else {
         let mut loaded_sections = Vec::new();
         let mut not_found = Vec::new();
@@ -137,9 +141,10 @@ pub(crate) fn handle(
 
         state.record_call(1500, 500);
         let mut resp = format!(
-            "# Skill Selection Confirmed ({})\n\nLoaded Skills Content:\n\n{}\n\n## 🛡️ Language Safety Rules\n{}",
+            "# Skill Selection Confirmed ({})\n\nLoaded Skills Content:\n\n{}\n\n{}\n\n## 🛡️ Language Safety Rules\n{}",
             loaded_sections.len(),
             loaded_sections.join("\n\n---\n\n"),
+            core_rules,
             safety_rules
         );
 

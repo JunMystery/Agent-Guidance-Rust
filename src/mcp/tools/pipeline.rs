@@ -134,7 +134,7 @@ pub(crate) fn handle(
     let detected_arch = detect_project_architecture(&proj_path);
     state.active_architecture_pattern = Some(detected_arch.clone());
 
-    let core_rules_checklist = "## Mandatory Agent Execution Mandates (9 Core Rules)\n1. **Context First**: Always run `task_pipeline` or `project_context` before reading files or modifying code.\n2. **Fast Edit Authorization**: Must call `workflow_gate(action=\"authorize_edit\")` before editing.\n3. **Token Budget**: Max 300 lines per read, use symbol extraction over full-file dumps.\n4. **No Direct FS**: Prioritize MCP tools over raw filesystem access.\n5. **Ground & Plan**: Verify codebase facts via search before proposing changes.\n6. **Upfront Architecture & 300 LOC Cap**: Enforce 300 LOC limit from line 1. Split entry dispatchers from sub-module handlers upfront.\n7. **Intent Gate**: Classify request type before acting.\n8. **Delegation First**: Decompose and delegate multi-step tasks when applicable.\n9. **Phase Progression**: Complete Context -> Plan -> Build -> Test -> Review sequence.";
+    let core_rules_checklist = crate::catalog::rules::get_phase_rules(phase);
 
     let dynamic_blueprint = crate::catalog::blueprint::generate_dynamic_blueprint(&proj_path, task, &detected_arch);
     let skill_recipe = crate::catalog::blueprint::generate_skill_recipe(&deduped_results, task);

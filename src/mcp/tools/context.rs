@@ -55,7 +55,7 @@ pub(crate) fn handle(
                     let resolved_line = arguments.get("resolved_line").and_then(|l| l.as_u64()).map(|l| l as usize);
 
                     if alias_term.is_empty() || rel_path.is_empty() {
-                        "Error: alias_term and relative_path are required for learn_alias. Example: project_context(operation=\"learn_alias\", project_path=\"...\", alias_term=\"đăng nhập\", relative_path=\"src/auth/service.rs\")".to_string()
+                        "Error: alias_term and relative_path are required for learn_alias. Example: project_context(operation=\"learn_alias\", project_path=\"...\", alias_term=\"login\", relative_path=\"src/auth/service.rs\")".to_string()
                     } else {
                         match CodeGraphDb::open_for_project(&proj_path) {
                             Ok(db) => match db.upsert_alias(alias_term, rel_path, resolved_symbol, resolved_line) {
