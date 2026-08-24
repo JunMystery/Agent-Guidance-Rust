@@ -16,7 +16,8 @@ pub(crate) fn handle_authorize_edit(
     let rel_path = arguments
         .get("relative_path")
         .and_then(|r| r.as_str())
-        .unwrap_or("");
+        .unwrap_or("")
+        .trim();
     let justification = arguments
         .get("justification")
         .and_then(|j| j.as_str())
@@ -26,6 +27,18 @@ pub(crate) fn handle_authorize_edit(
         .and_then(|a| a.as_str())
         .unwrap_or("Auto");
     let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path, state);
+
+    if rel_path.is_empty() {
+        return format!(
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (RELATIVE_PATH_REQUIRED)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ **Error: RELATIVE_PATH_REQUIRED**: `workflow_gate(action=\"authorize_edit\")` is file-scoped and strictly requires the target `relative_path` (e.g. `relative_path: \"src/services/order_service.rs\"` or `relative_path: \"frontend/src/views/ProcurementView.tsx\"`).\n\nBlanket or global edit authorizations without a specific target file are prohibited to enforce:\n1. **< 300 LOC Cap & Decomposition**: Preventing monolithic files from being created or expanded.\n2. **Code Graph Diff Impact Guard**: Evaluating module blast radius and incoming dependencies.\n3. **Pre-Edit Rollback Snapshot**: Creating safe checkpoints for rollback protection.\n4. **Scanned Architecture Alignment**: Guiding modular sub-module placement from line 1.\n\n👉 **Action**: Call `workflow_gate(action=\"authorize_edit\", project_path=\"...\", relative_path=\"<path>\", risk_level=\"LOW\", justification=\"...\", architecture_pattern=\"Auto\")` for EACH individual file before modifying or creating it.",
+            proj_path.display(),
+            if arch_pattern.is_empty() {
+                "Auto"
+            } else {
+                &arch_pattern
+            }
+        );
+    }
 
     // Zero-Turn Predictive Transition: if plan approved and in Plan stage, auto-advance to Build
     if state.plan_approved && state.workflow_stage == "Plan" {
@@ -45,6 +58,7 @@ pub(crate) fn handle_authorize_edit(
         });
     // Check existing target file LOC for 300 LOC architectural hard-block
     let full_target_path = proj_path.join(rel_path);
+    let is_new_file = !full_target_path.exists();
     let target_loc = if full_target_path.exists() && full_target_path.is_file() {
         std::fs::read_to_string(&full_target_path)
             .map(|c| c.lines().count())
@@ -117,10 +131,11 @@ pub(crate) fn handle_authorize_edit(
         let _ = state.auto_checkpoint(&proj_path);
 
         let mut resp = format!(
-            "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: {}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
+            "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: `{}`{}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
             if target_loc >= 300 { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
             proj_path.display(),
-            if rel_path.is_empty() { "—" } else { rel_path },
+            rel_path,
+            if is_new_file { " [NEW FILE]" } else { "" },
             impact.risk_level,
             impact.dependent_count,
             arch_pattern,
@@ -129,7 +144,12 @@ pub(crate) fn handle_authorize_edit(
             arch_pattern
         );
 
-        if target_loc >= 300 {
+        if is_new_file {
+            resp.push_str(&format!(
+                "\n\n📐 **Upfront Modular Architecture Mandate for New File**:\n- **Hard Limit**: This new file MUST remain strictly < 300 LOC (target < 150 LOC for high cohesion).\n- **Decomposition Mandate**: Do NOT build monolithic files. Decompose complex logic (modals, tables, adapters, sub-services) into separate sub-modules from line 1 under `{}` Architecture.",
+                arch_pattern
+            ));
+        } else if target_loc >= 300 {
             resp.push_str(&format!(
                 "\n\n⚡ **Decomposition / Refactor Mode**: Target file has {} lines (>= 300 LOC). Edits are authorized strictly to extract logic into sub-modules and reduce file length.",
                 target_loc

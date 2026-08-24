@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance Rust (MCP)
 
-[![Version](https://img.shields.io/badge/Version-v1.4.7-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.4.8-blue.svg)](Cargo.toml)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
 [![Role](https://img.shields.io/badge/Role-Autonomous%20Orchestrator-indigo.svg)](#-key-capabilities)
 [![Smart Skills](https://img.shields.io/badge/Smart%20Skills-279%2B%20ML%20Search-cyan.svg)](#-smart-skills-system)

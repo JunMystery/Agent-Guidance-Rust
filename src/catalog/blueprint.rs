@@ -53,14 +53,19 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
     match arch_pattern {
         "Clean_Architecture" => {
             blueprint.push_str("- `domain/`: Pure data models and trait definitions (< 150 LOC)\n");
-            blueprint.push_str("- `usecase/`: Business application logic and workflow engines (< 200 LOC)\n");
-            blueprint.push_str("- `infrastructure/`: Database, external API, and driver implementations (< 200 LOC)\n");
-            blueprint.push_str("- `entrypoint/`: Thin dispatch controller (< 80 LOC)\n");
+            blueprint.push_str("- `usecase/` or `service/`: Business application logic and workflow engines (< 200 LOC)\n");
+            blueprint.push_str("- `infrastructure/` or `repository/`: Database, storage, and driver adapters (< 200 LOC)\n");
+            blueprint.push_str("- `entrypoint/` or `handler/`: Thin dispatch controllers & REST routers (< 100 LOC)\n");
+            blueprint.push_str("- Frontend `views/`: Thin presentation coordinator (< 120 LOC)\n");
+            blueprint.push_str("- Frontend `components/`: Focused sub-components, modals, & tables (< 120 LOC each)\n");
         }
         "Layered_Architecture" => {
-            blueprint.push_str("- `controllers/`: Input parsing, parameter validation, and routing (< 100 LOC)\n");
+            blueprint.push_str("- `controllers/` or `handler/`: Input parsing, parameter validation, and routing (< 100 LOC)\n");
             blueprint.push_str("- `services/`: Core business workflows and orchestration (< 200 LOC)\n");
-            blueprint.push_str("- `models/`: Data structures, schemas, and queries (< 150 LOC)\n");
+            blueprint.push_str("- `models/` or `domain/`: Data structures, schemas, and queries (< 150 LOC)\n");
+            blueprint.push_str("- `repository/`: Data access layer and database queries (< 200 LOC)\n");
+            blueprint.push_str("- Frontend `views/`: Layout and route coordinators (< 120 LOC)\n");
+            blueprint.push_str("- Frontend `components/`: Reusable widgets, forms, dialogs (< 120 LOC each)\n");
         }
         "CLI_Pipeline" => {
             blueprint.push_str("- `main.rs`: Argument parsing & sub-command dispatcher (< 80 LOC)\n");
@@ -68,9 +73,10 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
             blueprint.push_str("- `core/`: Pure business engine and processing pipelines (< 200 LOC)\n");
         }
         "Package_By_Feature" => {
-            blueprint.push_str("- `<feature>/handlers.rs`: Request handling and flow control (< 120 LOC)\n");
-            blueprint.push_str("- `<feature>/service.rs`: Feature business logic (< 180 LOC)\n");
-            blueprint.push_str("- `<feature>/types.rs`: Feature-scoped models and errors (< 100 LOC)\n");
+            blueprint.push_str("- `<feature>/handlers.*`: Request handling and flow control (< 120 LOC)\n");
+            blueprint.push_str("- `<feature>/service.*`: Feature business logic (< 180 LOC)\n");
+            blueprint.push_str("- `<feature>/types.*`: Feature-scoped models and errors (< 100 LOC)\n");
+            blueprint.push_str("- `<feature>/components/*`: Feature-scoped UI components (< 120 LOC each)\n");
         }
         "Flat_Library" => {
             blueprint.push_str("- `lib.rs`: Public API facade and re-exports (< 100 LOC)\n");
@@ -79,8 +85,10 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
         _ => {
             blueprint.push_str("- Entry Dispatcher: Thin main coordinator (< 100 LOC)\n");
             blueprint.push_str("- Feature Modules: Cohesive sub-modules (< 200 LOC each)\n");
+            blueprint.push_str("- UI Components: Dedicated sub-components for dialogs/tables (< 120 LOC each)\n");
         }
     }
+    blueprint.push_str("\n⚠️ **Hard Constraint**: Every new or modified file MUST remain < 300 LOC. Decompose complex views or services into sub-components/sub-modules from line 1.\n");
 
     blueprint
 }

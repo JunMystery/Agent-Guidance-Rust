@@ -196,9 +196,9 @@ Manage workflow stages, authorize code edits with Code Graph dependency risk che
 workflow_gate(
     action: str,                       # required — status | check | set_stage | advance | authorize_edit | rollback
     project_path: str = ".",
-    relative_path: str | None = None,  # target file for authorize_edit (checks incoming dependency edges)
-    architecture_pattern: str | None = None, # target architecture pattern for authorize_edit
-    justification: str | None = None,  # mandatory explanation when editing High Risk / Critical Hub files (>8 deps)
+    relative_path: str | None = None,  # required for authorize_edit — target file to create or modify (enforces < 300 LOC cap and blast radius analysis)
+    architecture_pattern: str | None = None, # target architecture pattern for authorize_edit (default: "Auto")
+    justification: str | None = None,  # explanation/mitigation plan when editing files or decomposing monoliths
     user_message: str | None = None,   # user's approval text for check
     target_stage: str | None = None,   # valid target stage for set_stage
 ) -> dict
@@ -210,7 +210,7 @@ workflow_gate(
 | `status` | Display full workflow state, plan approval, and token metrics |
 | `set_stage` | Manually transition workflow stage |
 | `advance` | Composite check, approval, and transition in a single step |
-| `authorize_edit` | Evaluate target file risk via Code Graph, trigger zero-turn transition (Plan → Build), auto-create pre-edit snapshot, and grant edit permission |
+| `authorize_edit` | Evaluate target file risk via Code Graph, enforce < 300 LOC cap, trigger zero-turn transition (Plan → Build), auto-create pre-edit snapshot, and grant file-scoped edit permission |
 | `rollback` | Restore pre-edit file snapshot from `.agent-context/snapshots/{session_id}/` |
 
 | Action | Description |

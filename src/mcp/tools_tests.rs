@@ -187,6 +187,7 @@
             "workflow_gate",
             json!({
                 "action": "authorize_edit",
+                "relative_path": "src/main.rs",
                 "architecture_pattern": "Auto",
                 "risk_level": "LOW",
                 "justification": "Refactoring test"
@@ -383,6 +384,7 @@
                 "workflow_gate",
                 json!({
                     "action": "authorize_edit",
+                    "relative_path": "src/main.rs",
                     "architecture_pattern": pattern,
                     "risk_level": "LOW",
                     "justification": "Testing expanded pattern"
@@ -1229,5 +1231,61 @@
         assert!(cli.contains("CLI_Pipeline"));
         assert!(cli.contains("commands/"));
     }
+
+    #[test]
+    fn test_workflow_gate_blocks_missing_relative_path() {
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        // Calling authorize_edit without relative_path must be strictly BLOCKED
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "authorize_edit",
+                "architecture_pattern": "Clean_Architecture",
+                "justification": "General feature build"
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("BLOCKED (RELATIVE_PATH_REQUIRED)"));
+        assert!(text.contains("RELATIVE_PATH_REQUIRED"));
+        assert!(text.contains("< 300 LOC Cap"));
+    }
+
+    #[test]
+    fn test_workflow_gate_new_file_modular_architecture_mandate() {
+        let temp_dir = std::env::temp_dir().join(format!("ag_newfile_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        // Authorize a non-existent (new) file
+        let res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "authorize_edit",
+                "project_path": temp_dir.to_str().unwrap(),
+                "relative_path": "frontend/src/views/ProcurementView.tsx",
+                "architecture_pattern": "Layered_Architecture",
+                "justification": "Build new procurement view and modals"
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Status: PASSED"));
+        assert!(text.contains("[NEW FILE]"));
+        assert!(text.contains("Upfront Modular Architecture Mandate for New File"));
+        assert!(text.contains("< 300 LOC"));
+        assert!(text.contains("Decomposition Mandate"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
 
 
