@@ -105,9 +105,10 @@ pub fn handle_request(
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["search", "navigate", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex"],
-                                "description": "Operation: 'search' (5-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (structure), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh)"
+                                "enum": ["search", "navigate", "graph_rag", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex"],
+                                "description": "Operation: 'graph_rag' (hierarchical Leiden community RAG), 'search' (5-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (structure), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh)"
                             },
+                            "mode": { "type": "string", "enum": ["global", "local", "drift", "basic"], "description": "Query mode for 'graph_rag' operation: 'global' (community summaries), 'local' (entity fan-out), 'drift' (dual-route), or 'basic'" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
                             "query": { "type": "string", "description": "Search keyword, symbol name, natural language query, or pattern" },
                             "relative_path": { "type": "string", "description": "Relative file path within project (e.g. 'src/main.rs')" },

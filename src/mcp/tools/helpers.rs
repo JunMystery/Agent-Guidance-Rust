@@ -78,6 +78,14 @@ pub fn detect_project_architecture(proj_path: &Path) -> String {
         return persisted;
     }
 
+    // 2. Check GraphRAG communities hierarchy if available
+    if let Some(hierarchy) = crate::context::graph_rag::persistence::load_hierarchy(proj_path) {
+        if !hierarchy.detected_architecture.is_empty() {
+            let _ = ServerState::save_persisted_architecture(proj_path, &hierarchy.detected_architecture);
+            return hierarchy.detected_architecture;
+        }
+    }
+
     let files = scan_project(proj_path, 8);
     let paths: Vec<String> = files.into_iter().map(|f| f.path.to_lowercase()).collect();
 

@@ -19,6 +19,7 @@ mod context_search;
 mod continuity;
 mod gate;
 mod gate_edit;
+mod gate_edit_modularity;
 
 pub fn handle_tool_call(
     name: &str,

@@ -1,6 +1,7 @@
 use serde_json::Value;
 
 use crate::mcp::state::ServerState;
+use super::gate_edit_modularity::validate_new_file_modularity;
 use super::helpers::{detect_project_path, resolve_architecture_pattern};
 
 pub(crate) fn handle_authorize_edit(
@@ -98,6 +99,8 @@ pub(crate) fn handle_authorize_edit(
                 &arch_pattern
             }
         )
+    } else if is_new_file && validate_new_file_modularity(rel_path, justification).is_err() {
+        validate_new_file_modularity(rel_path, justification).unwrap_err()
     } else if target_loc >= 300 && !is_refactoring_justification {
         // Hard-block adding new logic to files >= 300 LOC
         crate::catalog::blueprint::format_decomposition_guidance(
@@ -170,3 +173,4 @@ pub(crate) fn handle_authorize_edit(
         )
     }
 }
+

@@ -87,6 +87,7 @@ fn watcher_loop(project_path: PathBuf, active: std::sync::Arc<std::sync::atomic:
                     let _ = indexer.index_specific_files(&changed);
                     let _ = indexer.embed_symbols();
                     let _ = indexer.embed_chunks();
+                    let _ = indexer.update_graph_rag("Auto");
                 }
                 last_event = None;
                 last_snapshot_time = Instant::now();
@@ -97,6 +98,7 @@ fn watcher_loop(project_path: PathBuf, active: std::sync::Arc<std::sync::atomic:
                 let _ = indexer.incremental_index();
                 let _ = indexer.embed_symbols();
                 let _ = indexer.embed_chunks();
+                let _ = indexer.update_graph_rag("Auto");
             }
             last_snapshot_time = Instant::now();
         }

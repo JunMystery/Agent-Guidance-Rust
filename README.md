@@ -51,7 +51,7 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 | **`task_pipeline`** | **Entrypoint Orchestrator** | `task`, `project_path`, `phase` | CALL FIRST. Scans project, unlocks priority gate, proposes skills, synthesizes **Dynamic Split Blueprints** (detects $\ge 200$ LOC files) and **Skill Recipes**, and injects **Memorized Learnings**. |
 | **`select_skills`** | **Semantic Skill Loader** | `skills` | Loads skill instructions into context with **Semantic Slicing** (Top-3 sections via Multilingual-E5 saving ~70% tokens) and injects language safety micro-guidance. |
 | **`workflow_gate`** | **Stage & Impact Guard** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`, `rollback`). Features **Zero-Turn Advance**, **Code Graph Impact Risk Gating**, and **Pre-edit Snapshot Rollback**. |
-| **`project_context`** | **Code Graph & AST Skeleton** | `operation` (`search` / `navigate` / `read` / `symbols` / `references` / `architecture` / `tree` / `learn_alias` / `reindex`) | 5-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, alias learning with 30/90d decay, realtime file watcher, and **AST Structural Skeletonization** (`view_mode="skeleton"`, saving 90-95% tokens on files >300 LOC). |
+| **`project_context`** | **Code Graph, GraphRAG & AST Skeleton** | `operation` (`graph_rag` / `search` / `navigate` / `read` / `symbols` / `references` / `architecture` / `tree` / `learn_alias` / `reindex`) | **Hierarchical Leiden GraphRAG** (`global`, `local`, `drift`, `basic`), 5-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, alias learning with 30/90d decay, realtime file watcher, and **AST Structural Skeletonization** (`view_mode="skeleton"`, saving 90-95% tokens on files >300 LOC). |
 | **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify`) | 2-stage vector search, language-specific precode safety rules (Kotlin, Go, Rust, TS, Python), and empirical verification contracts. |
 | **`session_continuity`** | **Memory & Handoff** | `operation` (`save` / `load` / `clear` / `learn` / `handoff`) | Persists active task states, records **Categorized Project Learnings** in `.agent-context/learnings.md` (30-item FIFO cap), and generates **Cross-Agent Handoff** summaries in `.agent-context/handoff.md`. |
 
@@ -59,11 +59,20 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 
 ## 🎯 Key Capabilities
 
-### 1. Autonomous Single-Entrypoint Orchestration
+### 1. Hierarchical Codebase GraphRAG (Global, Local, DRIFT Search)
+- **Leiden Hierarchical Community Clustering**: Partitions codebase symbols and AST relationships into Level 0 (Macro Subsystems), Level 1 (Feature Modules), and Level 2 (Micro Clusters).
+- **The 4 Query Modes**:
+  - **Global Search**: High-level reasoning across community summaries.
+  - **Local Search**: Targeted symbol search with 1-hop & 2-hop DAG call/import fan-out.
+  - **DRIFT Search**: Dual-route combining macro community layer context with micro AST signatures.
+  - **Basic Search**: Fast HNSW vector and FTS5 fallback.
+- **Continuous Reactive Watcher**: Background file watcher automatically updates AST nodes and re-clusters community summaries upon code modifications.
+
+### 2. Autonomous Single-Entrypoint Orchestration
 - Governs the complete AI agent lifecycle through `task_pipeline`. The MCP server inspects the workspace, unlocks priority gates, selects skills, and dynamically directs next steps.
 - Enforces enterprise architecture styles (**Clean Architecture**, **Layered Architecture**, **Package-by-Feature**, **CLI Pipeline**, **Flat Library**, **Orchestrator**) with cross-session persistence in `.agent-context/architecture.json`.
 
-### 2. High-Speed 5-Phase Search Cascade (<100ms)
+### 3. High-Speed 5-Phase Search Cascade (<100ms)
 - Replaces slow raw disk scans with an instant multi-tier cascade stored in `<project_root>/.agent-context/code_graph.db`:
   1. **Phase 1: Alias Cache (<1ms)**: Instant lookup for learned natural language queries.
   2. **Phase 2: Symbol FTS5 (<5ms)**: SQLite FTS5 index on all functions, structs, enums, classes, and traits.

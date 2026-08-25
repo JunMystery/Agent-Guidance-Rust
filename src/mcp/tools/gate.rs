@@ -122,23 +122,42 @@ pub(crate) fn handle(
             )
         }
         "advance" => {
-            // SECURITY FIX Bug #3: Do NOT auto-process user_message in advance to prevent agent self-approval
             let target_stage = arguments
                 .get("target_stage")
                 .and_then(|t| t.as_str())
                 .unwrap_or("Build");
-            let stage_res = state.set_stage(target_stage);
 
-            let raw_arch = arguments
-                .get("architecture_pattern")
-                .and_then(|a| a.as_str())
-                .unwrap_or("Auto");
             let proj_path_arg = arguments
                 .get("project_path")
                 .and_then(|p| p.as_str())
                 .unwrap_or(".");
             let proj_path = detect_project_path(proj_path_arg, state);
             state.update_project_path(&proj_path);
+
+            // 300 LOC Post-Edit Hard Trap: Block advancing if any modified/created file >= 300 LOC
+            if target_stage == "Proposal" || target_stage == "Review" {
+                for file_rel in &state.modified_files {
+                    let full = proj_path.join(file_rel);
+                    if full.exists() && full.is_file() {
+                        if let Ok(content) = std::fs::read_to_string(&full) {
+                            let loc = content.lines().count();
+                            if loc >= 300 {
+                                return Ok(format!(
+                                    "# Workflow Gate: BLOCKED (300_LOC_CAP_EXCEEDED)\n\n- Target File: `{}`\n- Current Length: **{} lines** (hard limit: 300 lines)\n\n⚠️ **Error: 300_LOC_LIMIT_EXCEEDED**: Newly created or modified file '{}' has {} lines, which breaches the 300 LOC limit. You cannot advance workflow stages until this file is decomposed into modular sub-files (< 150 LOC each).\n\n👉 **Action Required**: Decompose `{}` into focused sub-modules using `workflow_gate(action=\"authorize_edit\", justification=\"Refactor/Decompose: ...\")`.",
+                                    file_rel, loc, file_rel, loc, file_rel
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            let stage_res = state.set_stage(target_stage);
+
+            let raw_arch = arguments
+                .get("architecture_pattern")
+                .and_then(|a| a.as_str())
+                .unwrap_or("Auto");
             let risk_level = arguments
                 .get("risk_level")
                 .and_then(|r| r.as_str())

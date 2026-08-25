@@ -246,6 +246,13 @@ impl IncrementalIndexer {
 
         Ok(count)
     }
+
+    /// Background refresh of GraphRAG hierarchical community clustering
+    pub fn update_graph_rag(&self, arch_pattern: &str) -> Result<()> {
+        let engine = crate::context::graph_rag::GraphRagEngine::new(&self.project_path);
+        let _ = engine.build_or_update(arch_pattern);
+        Ok(())
+    }
 }
 
 

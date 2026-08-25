@@ -112,12 +112,28 @@ Returns a top-level directory and file overview (capped at depth 2).
 }
 ```
 
+### 9. `operation="graph_rag"`
+Executes Hierarchical Leiden GraphRAG across multi-level community hierarchies and DAG call/import relationships.
+```json
+{
+  "operation": "graph_rag",
+  "project_path": "/path/to/project",
+  "query": "authentication flow",
+  "mode": "drift"
+}
+```
+*`mode` options*:
+- `"global"`: Holistic reasoning leveraging Level 0 (Macro Subsystems) & Level 1 (Feature Modules) Community Summaries.
+- `"local"`: Targeted entity search fanning out across 1-hop and 2-hop DAG call/import edges.
+- `"drift"`: Dual-route search combining Top-down Community Context with Bottom-up factual AST traversal.
+- `"basic"`: Standard top-$k$ fallback vector/FTS search.
+
 ---
 
 ## 🔄 Proactive Background File Watcher
 
 The engine automatically runs an OS-level inotify/file watcher in the background:
-- **5s Debounce**: File edits are buffered for 5 seconds before triggering incremental indexing.
+- **5s Debounce**: File edits are buffered for 5 seconds before triggering incremental indexing and GraphRAG community re-clustering.
 - **Incremental Indexing**: Uses SHA256 hashes to only re-parse modified files.
 - **Safe Filtering**: Automatically excludes `.git`, `.agent-context`, `target`, `node_modules`, `build`, `__pycache__`, `dist`, `.next`, and binary files.
 
@@ -129,7 +145,8 @@ All code graph databases, FTS5 virtual tables, and vector embeddings are stored 
 ```
 <project_root>/
 └── .agent-context/
-    ├── architecture.json      # Detected architectural pattern
+    ├── architecture.json      # Inferred architectural topology
+    ├── communities.json       # GraphRAG Leiden Community Hierarchy & Summaries
     ├── code_graph.db          # SQLite DB (symbols, edges, vectors, chunks, aliases)
     └── sessions/              # Multi-session continuity state
 ```

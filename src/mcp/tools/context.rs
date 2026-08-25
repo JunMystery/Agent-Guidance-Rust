@@ -105,12 +105,39 @@ pub(crate) fn handle(
                     let arch_pattern = detect_project_architecture(&proj_path);
                     state.active_architecture_pattern = Some(arch_pattern.clone());
                     let _ = ServerState::save_persisted_architecture(&proj_path, &arch_pattern);
+
+                    let engine = crate::context::graph_rag::GraphRagEngine::new(&proj_path);
+                    let hierarchy = engine.load_or_build(&arch_pattern);
+
                     state.record_call(1000, 200);
                     format!(
-                        "# Project Architecture Analysis\n\n- Detected / Memorized Pattern: {}\n- Workspace Root: {}\n- Persistence: Memorized in `.agent-context/architecture.json`\n\nArchitectural Guidelines:\n- Clean_Architecture: Enforce strict separation between domain, usecase, infrastructure.\n- Layered_Architecture: Enforce controllers -> services -> models flow.\n- Package_By_Feature: Organize code by features/modules.\n- Orchestrator: Keep dispatcher thin and split logic into sub-modules upfront.\n- CLI_Pipeline: Separate argument parsing, command handlers, and core execution engine.\n- Flat_Library: Keep modules focused and avoid over-nested directories.",
+                        "# Project Architecture Analysis (GraphRAG)\n\n- Detected / Memorized Pattern: **{}**\n- Workspace Root: {}\n- Total Hierarchical Communities: {}\n- Persistence: Memorized in `.agent-context/architecture.json` and `.agent-context/communities.json`\n\n### Core Community Subsystems:\n{}\n\nArchitectural Guidelines:\n- Clean_Architecture: Enforce strict separation between domain, usecase, infrastructure.\n- Layered_Architecture: Enforce controllers -> services -> models flow.\n- Package_By_Feature: Organize code by features/modules.\n- Orchestrator: Keep dispatcher thin and split logic into sub-modules upfront.\n- CLI_Pipeline: Separate argument parsing, command handlers, and core execution engine.\n- Flat_Library: Keep modules focused and avoid over-nested directories.",
                         arch_pattern,
-                        proj_path.display()
+                        proj_path.display(),
+                        hierarchy.communities.len(),
+                        if hierarchy.communities.is_empty() {
+                            "No communities indexed yet.".to_string()
+                        } else {
+                            hierarchy.get_by_level(crate::context::graph_rag::CommunityLevel::MacroSubsystem)
+                                .iter()
+                                .map(|c| format!("- **{}** (Layer: {}): {}", c.summary.title, c.summary.layer, c.summary.description))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        }
                     )
+                }
+                "graph_rag" => {
+                    let mode_str = arguments.get("mode").and_then(|m| m.as_str()).unwrap_or("drift");
+                    let mode = crate::context::graph_rag::GraphRagQueryMode::from_str(mode_str);
+                    let arch_pattern = detect_project_architecture(&proj_path);
+                    let engine = crate::context::graph_rag::GraphRagEngine::new(&proj_path);
+                    match engine.query(query, mode, &arch_pattern) {
+                        Ok(res) => {
+                            state.record_call(3000, 400);
+                            format!("# {}\n\nMode: {:?}\n\n{}", res.title, res.mode, res.sections.join("\n\n"))
+                        }
+                        Err(e) => format!("GraphRAG query error: {}", e),
+                    }
                 }
                 "symbols" | "structure" => {
                     if rel_path.is_empty() {
