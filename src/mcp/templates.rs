@@ -10,71 +10,41 @@ pub const AGENT_RULES_BLOCK: &str = r#"
 <!-- agent-guidance:start -->
 # MANDATORY AGENT EXECUTION PROTOCOL
 
-CRITICAL OVERRIDE: This repository is managed by the `agent-guidance` MCP Server. Route all context gathering, skill selection, and file inspection through `agent-guidance` MCP tools (Token-Bounded Reads & GraphRAG). Do not default to raw filesystem builtins (`view_file`, `list_dir`, `grep_search`, `read_file`) when MCP tools are available.
+CRITICAL OVERRIDE: This repository is managed by the `agent-guidance` MCP Server. Route all context gathering, skill selection, and file inspection through `agent-guidance` MCP tools (Token-Bounded Reads & GraphRAG). Do not use raw filesystem builtins (`view_file`, `list_dir`, `grep_search`, `read_file`) when MCP tools are available.
 
-## Strict Rules
-1. Turn 1 Initialization: Start every task/turn by calling `task_pipeline(task="...", project_path="<abs_path>", phase="plan")` FIRST.
-2. Token-Bounded File Reads & GraphRAG: Do not dump full files. NEVER call raw `view_file` or `cat` directly on project files. Always use `project_context(operation="read", relative_path="...", target_symbol="...")` or `project_context(operation="search" | "graph_rag", query="...")` (300 LOC cap).
-3. Per-File Edit Authorization Gate & 300 LOC Hard Cap: Always call `workflow_gate(action="authorize_edit", project_path="...", relative_path="<exact_file_path>", risk_level="LOW", justification="...", architecture_pattern="Auto")` individually for EACH file BEFORE creating or modifying it. Blanket authorizations without `relative_path` are rejected. All files (new and existing) MUST strictly remain < 300 LOC (aim for < 150 LOC per sub-module/component). Files >= 300 LOC are hard-blocked from adding new code; decompose into architecture-aligned sub-modules from line 1.
-4. Native File Writing & Shell Command Prohibition: Once authorized by `workflow_gate`, apply file creations and modifications exclusively using the client's native file-writing tools (`write_to_file`, `replace_file_content`, `edit_file`). NEVER use terminal/shell commands (`run_command`, PowerShell `Set-Content`/`New-Item`, Bash `cat << EOF`, Python scripts) to write or edit files, as this triggers disruptive user permission modals on every action.
-5. Mandatory User Skill Selection: When `task_pipeline` returns `-> SKILL_PROPOSAL`, NEVER auto-select skills or call `select_skills` immediately. You MUST trigger the IDE/CLI `ask_question` tool to let the user select skills. ONLY THEN call `select_skills(skills=[...])` with the user's chosen skills (or `select_skills(skills=[])` if skipped).
-6. Background Tasks: Stop tool calling immediately when a background command is launched and wait for system reactive wakeup. Do not poll or loop `manage_task(action="status")`.
+## Execution Lifecycle & Strict Rules
+1. **Turn 1 Initialization**: Call `task_pipeline(task="<user request>", project_path="<abs_path>", phase="plan")` FIRST. If skills are proposed, trigger the IDE/CLI `ask_question` tool for user selection, then call `select_skills(...)`.
+2. **Token-Bounded Context & GraphRAG**: Search and inspect code exclusively via `project_context(operation="search" | "graph_rag" | "read" | "symbols", ...)` (300 LOC cap). Never dump full files.
+3. **Plan & Design**: Create/update `implementation_plan.md` for complex tasks and obtain user plan approval before entering the `Build` stage.
+4. **Per-File Edit Authorization Gate & 300 LOC Hard Cap**: Always call `workflow_gate(action="authorize_edit", project_path="...", relative_path="<exact_file_path>", risk_level="LOW", justification="...", architecture_pattern="Auto")` individually for EACH file BEFORE creating or modifying it. All files MUST remain strictly < 300 LOC (target < 150 LOC per sub-module).
+5. **Apply Surgical Changes**: Apply modular changes respecting the authorized architecture pattern.
+6. **Empirical Verification**: Call `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` and run automated tests.
+7. **Background Tasks**: Stop tool calling immediately when a background command is launched and wait for system reactive wakeup.
 
-## Tool Dispatch Matrix
-
-| Operation | MCP Tool (Direct / Prefixed / Lazy) | Required Arguments |
+## Quick Tool Reference
+| Phase / Task | MCP Tool | Operation / Action |
 |---|---|---|
-| Initialize Task / Turn 1 | `task_pipeline`<br>`agent-guidance_task_pipeline`<br>`call_mcp_tool(ServerName="agent-guidance", ToolName="task_pipeline")` | `task: "..."`<br>`project_path: "<abs_path>"`<br>`phase: "plan"` |
-| Select / Load Skills | `select_skills`<br>`agent-guidance_select_skills` | `skills: ["skill-name"]` (or `[]` to skip) |
-| Search Codebase / AST / GraphRAG | `project_context`<br>`agent-guidance_project_context` | `operation: "search"` or `"graph_rag"`<br>`project_path: "<abs_path>"`<br>`query: "..."` |
-| Read File / Symbol | `project_context`<br>`agent-guidance_project_context` | `operation: "read"`<br>`project_path: "<abs_path>"`<br>`relative_path: "..."`<br>`target_symbol: "..."` (optional) |
-| Extract File Outline | `project_context`<br>`agent-guidance_project_context` | `operation: "symbols"`<br>`project_path: "<abs_path>"`<br>`relative_path: "..."` |
-| Authorize File Edit | `workflow_gate`<br>`agent-guidance_workflow_gate` | `action: "authorize_edit"`<br>`project_path: "<abs_path>"`<br>`relative_path: "<exact_file_path>"`<br>`risk_level: "LOW"`<br>`justification: "..."`<br>`architecture_pattern: "Auto"` |
-| Apply File Creations & Edits | **Native Client Write Tools**<br>(`write_to_file`, `replace_file_content`) | *Use native IDE edit tools after `workflow_gate` authorization.*<br>⛔ **DO NOT use terminal/shell commands (`run_command`) for file I/O.** |
-| Reindex Skills / Memory | `guidance`<br>`agent-guidance_guidance` | `operation: "reindex_skills"`<br>`project_path: "<abs_path>"` |
-| Standards & Docs | `guidance`<br>`agent-guidance_guidance` | `operation: "search"` or `"docs"`<br>`query: "..."` |
-| Verify / Empirical Test | `guidance`<br>`agent-guidance_guidance` | `operation: "verify"`<br>`verification_command: "cargo test"`<br>`expected_output_keyword: "ok"` |
-| Session State | `session_continuity`<br>`agent-guidance_session_continuity` | `operation: "save"` \| `"load"` \| `"learn"` \| `"handoff"` |
-
-## Turn-by-Turn Execution Lifecycle
-1. Autonomous Initialization: Call `task_pipeline(task="<user request>", project_path="<abs_path>", phase="plan")`. If skills proposed, MUST call `ask_question` for user selection -> THEN call `select_skills(...)` with user input.
-2. Context Retrieval: Call `project_context(operation="search" | "graph_rag" | "read" | "symbols", ...)`. Verify symbols and architecture pattern.
-3. Plan & Design: Create/update `implementation_plan.md` if complex. Plan modular sub-components (< 150 LOC each) aligned with the scanned architecture blueprint.
-4. Authorize Edit Gate: Call `workflow_gate(action="authorize_edit", project_path="...", relative_path="<exact_file_path>", risk_level="LOW", justification="...", architecture_pattern="Auto")` for EACH target file before creating or modifying it.
-5. Apply Changes via Native Tools: Apply surgical changes using IDE native write tools (`write_to_file`, `replace_file_content`) respecting the < 300 LOC limit per file. Never execute terminal/shell commands to write or create files.
-6. Empirical Verification: Call `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` and run automated tests.
-
-## Core Engineering Principles (Karpathy-Aligned)
-- **Think Before Coding**: State assumptions explicitly. If uncertain or ambiguous, surface tradeoffs and ask rather than guess.
-- **Simplicity First**: Write the minimum code that solves the problem. No speculative abstractions or unrequested configurability.
-- **Surgical Changes**: Touch only what you must. Every modified line must trace to request. Do not edit unrelated code/formatting.
-- **Goal-Driven Execution**: Define verifiable criteria per step. Validate empirically via tests before claiming completion.
+| Turn 1 Init & Skills | `task_pipeline` / `select_skills` | `phase="plan"` / `skills=[...]` |
+| GraphRAG & Code Search | `project_context` | `operation="search"` \| `"graph_rag"` |
+| Token-Bounded File/Symbol Read | `project_context` | `operation="read"` (`target_symbol="..."`) \| `"symbols"` |
+| Edit Authorization Gate | `workflow_gate` | `action="authorize_edit"` (`relative_path="..."`) |
+| Standards, Docs & Verification | `guidance` | `operation="search"` \| `"docs"` \| `"verify"` |
+| Session Continuity & Memory | `session_continuity` | `operation="save"` \| `"load"` \| `"learn"` \| `"handoff"` |
 <!-- agent-guidance:end -->
 "#;
 
 pub const ENFORCER_SKILL_CONTENT: &str = r#"<!-- agent-guidance-skill:start -->
 ---
 name: agent-guidance
-description: Core system standards check and token-optimized codebase context retrieval. Run this skill before performing any tool execution or codebase changes.
+description: Core system standards check and token-optimized codebase context retrieval.
 ---
 
 # Agent Guidance & Token Optimization Enforcer
 
 This repository uses the `agent-guidance` MCP server to optimize token usage, enforce codebase modularity (< 300 LOC), and prevent context window exhaustion.
 
-You must invoke the 6 core `agent-guidance` MCP tools in this priority order:
-1. Call `task_pipeline(task="...", project_path="<path>", phase="plan")` at the start of any task or phase to retrieve workspace context, tree, and skill recommendations.
-2. If skills are proposed, trigger the IDE/CLI `ask_question` tool to present recommended skills interactively, then call `select_skills(skills=[...])` to load chosen skills.
-3. Call `project_context(operation="read", relative_path="...", target_symbol="...")` instead of standard file reads (capped at 300 lines).
-4. Call `project_context(operation="search" | "graph_rag", query="...")` instead of standard file searches.
-5. Call `workflow_gate(action="authorize_edit", project_path="...", relative_path="<file>", risk_level="LOW", justification="...")` for EACH file before modifying or creating it, then write changes using native editor file tools (NEVER shell/terminal commands).
-6. Call `guidance(operation="search", query="...")` for coding standards or `guidance(operation="ui_ux", query="...")` for UI/UX design rules.
-7. Call `guidance(operation="verify", verification_command="...", expected_output_keyword="...")` for empirical post-code testing.
-
-## Critical Behavioral Rules
-- When unsure about anything, trigger the IDE/CLI `ask_question` tool! DO NOT GUESS.
-- Propose an implementation plan before making any big or complex changes.
-- Every created or modified file MUST be < 300 LOC (aim for < 150 LOC per sub-module/component).
-- For each new work phase, re-call `task_pipeline` with that phase's goal and request user confirmation for stage transitions.
+## Mandatory Workflow
+1. Use `project_context` for reading files and searching (capped at 300 lines).
+2. Call `workflow_gate(action="authorize_edit", ...)` for EACH file before modifying or creating it.
 <!-- agent-guidance-skill:end -->
 "#;

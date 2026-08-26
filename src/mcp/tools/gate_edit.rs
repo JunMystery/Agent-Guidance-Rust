@@ -147,8 +147,6 @@ pub(crate) fn handle_authorize_edit(
             arch_pattern
         );
 
-        resp.push_str("\n\n✍️ **Next Step (File Modification)**:\n- Apply changes using your client/IDE's native file-writing tools (`write_to_file`, `replace_file_content`, `edit_file`).\n- ⛔ **PROHIBITION**: DO NOT use terminal/shell commands (`run_command`, PowerShell, Bash, Python scripts) to create or edit files.");
-
         if is_new_file {
             resp.push_str(&format!(
                 "\n\n📐 **Upfront Modular Architecture Mandate for New File**:\n- **Hard Limit**: This new file MUST remain strictly < 300 LOC (target < 150 LOC for high cohesion).\n- **Decomposition Mandate**: Do NOT build monolithic files. Decompose complex logic (modals, tables, adapters, sub-services) into separate sub-modules from line 1 under `{}` Architecture.",
