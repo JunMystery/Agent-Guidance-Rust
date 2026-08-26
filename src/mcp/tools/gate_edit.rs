@@ -147,6 +147,8 @@ pub(crate) fn handle_authorize_edit(
             arch_pattern
         );
 
+        resp.push_str("\n\n✍️ **Next Step (File Modification)**:\n- Apply changes using your client/IDE's native file-writing tools (`write_to_file`, `replace_file_content`, `edit_file`).\n- ⛔ **PROHIBITION**: DO NOT use terminal/shell commands (`run_command`, PowerShell, Bash, Python scripts) to create or edit files.");
+
         if is_new_file {
             resp.push_str(&format!(
                 "\n\n📐 **Upfront Modular Architecture Mandate for New File**:\n- **Hard Limit**: This new file MUST remain strictly < 300 LOC (target < 150 LOC for high cohesion).\n- **Decomposition Mandate**: Do NOT build monolithic files. Decompose complex logic (modals, tables, adapters, sub-services) into separate sub-modules from line 1 under `{}` Architecture.",
@@ -154,8 +156,9 @@ pub(crate) fn handle_authorize_edit(
             ));
         } else if target_loc >= 300 {
             resp.push_str(&format!(
-                "\n\n⚡ **Decomposition / Refactor Mode**: Target file has {} lines (>= 300 LOC). Edits are authorized strictly to extract logic into sub-modules and reduce file length.",
-                target_loc
+                "\n\n📐 **300 LOC Modular Refactoring Mandate**:\n- **Current Size**: {} lines (>= 300 LOC limit).\n- **Action**: You are authorized ONLY to decompose/refactor this file into modular sub-files under `{}` Architecture. No new net functionality may be added directly to this file.",
+                target_loc,
+                arch_pattern
             ));
         }
 

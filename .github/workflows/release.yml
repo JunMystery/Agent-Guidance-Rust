@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag to build (e.g. v1.4.10)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -54,15 +60,23 @@ jobs:
         run: |
           cd target/${{ matrix.target }}/release
           tar -czvf ../../../${{ matrix.artifact_name }} ${{ matrix.binary_name }}
+          cd ../../..
+          sha256sum ${{ matrix.artifact_name }} > ${{ matrix.artifact_name }}.sha256
 
       - name: Package artifacts (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Compress-Archive -Path "target\${{ matrix.target }}\release\${{ matrix.binary_name }}" -DestinationPath "${{ matrix.artifact_name }}" -Force
+          (Get-FileHash -Path "${{ matrix.artifact_name }}" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.artifact_name }}" | Out-File -FilePath "${{ matrix.artifact_name }}.sha256" -Encoding ascii
 
       - name: Upload artifact to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact_name }}
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          name: ${{ inputs.tag_name || github.ref_name }}
+          files: |
+            ${{ matrix.artifact_name }}
+            ${{ matrix.artifact_name }}.sha256
+          generate_release_notes: true
           token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,76 @@
+name: Version Sync & Verification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Cargo.toml'
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'scripts/install.*'
+      - 'packaging/**'
+      - 'README.md'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Target version to pump (e.g. 1.4.10)'
+        required: false
+        type: string
+      auto_commit:
+        description: 'Automatically commit and push version sync changes'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  version-sync:
+    name: Sync & Verify Versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Version Sync Script
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            python scripts/sync-version.py "${{ inputs.version }}"
+          else
+            python scripts/sync-version.py
+          fi
+
+      - name: Check for Uncommitted Version Diffs
+        id: git-diff
+        run: |
+          git diff --stat
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail on PR if manifests are out of sync
+        if: github.event_name == 'pull_request' && steps.git-diff.outputs.has_changes == 'true'
+        run: |
+          echo "::error::Version manifests are out of sync with Cargo.toml! Run 'python scripts/sync-version.py' locally to sync."
+          exit 1
+
+      - name: Commit and push changes (Dispatch / Main Push)
+        if: steps.git-diff.outputs.has_changes == 'true' && (github.event_name == 'workflow_dispatch' && inputs.auto_commit || github.event_name == 'push')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore(version): synchronize version manifests [skip ci]"
+          git push

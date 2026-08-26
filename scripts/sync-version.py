@@ -116,10 +116,19 @@ def main():
         f'badge/Version-{v_version}-blue.svg'
     )
 
-    # 8. Cargo.lock (via cargo check)
-    print("  Running cargo check to update Cargo.lock...")
-    subprocess.run(["cargo", "check"], cwd=root, check=True)
-    print("  [OK] Updated Cargo.lock")
+    # 8. Cargo.lock
+    try:
+        subprocess.run(["cargo", "check"], cwd=root, check=True, capture_output=True)
+        print("  [OK] Updated Cargo.lock via cargo check")
+    except Exception:
+        lock_path = root / "Cargo.lock"
+        if lock_path.exists():
+            replace_in_file(
+                lock_path,
+                r'(\[\[package\]\]\nname = "agent-guidance"\nversion = ")[^"]+(")',
+                rf'\g<1>{version}\g<2>'
+            )
+            print("  [OK] Updated Cargo.lock via direct manifest replacement")
 
     print(f"\nVersion synchronization to v{version} complete across all files!")
 
