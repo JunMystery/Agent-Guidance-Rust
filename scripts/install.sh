@@ -137,7 +137,7 @@ elif command -v wget &>/dev/null; then
     VERSION="$(wget -qO- "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 fi
 if [ -z "$VERSION" ]; then
-    VERSION="v1.4.10"
+    VERSION="v1.4.11"
     echo -e "  ${YELLOW}⚠️  Could not fetch latest release tag, defaulting to ${VERSION}${NC}"
 else
     echo -e "  ${GRAY}Latest release: ${VERSION}${NC}"
@@ -270,8 +270,6 @@ echo -e "${GREEN}${BOLD}╔═════════════════�
 echo -e "${GREEN}${BOLD}║         ✓  Agent Guidance Installed / Updated!               ║${NC}"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo -e ""
-echo -e "  ${BOLD}Binary:${NC}    ${CYAN}$LOCAL_BIN/agent-guidance${NC}"
-echo -e "  ${BOLD}Dashboard:${NC} ${CYAN}agent-guidance --dashboard${NC}  (serves updated HTML/JS embedded in binary)"
-echo -e "  ${BOLD}MCP Config:${NC}${GREEN} Automatic across all detected IDE clients${NC}"
-echo -e "  ${BOLD}Rules/Skills:${NC}${GRAY} Preserved under manual user control (no automatic overwrites)${NC}"
+echo -e "  ${BOLD}Binary:${NC}       ${GREEN}${LOCAL_BIN}/agent-guidance${NC}"
+echo -e "  ${BOLD}MCP Config:${NC}   ${GRAY}Automatic across all detected IDE clients${NC}"
 echo -e ""

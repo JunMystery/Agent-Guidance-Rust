@@ -1,7 +1,7 @@
 {
-  "catalog_fingerprint": 16054111994867959412,
-  "count": 438,
-  "created_at": 1787103655,
+  "catalog_fingerprint": 18357352080241181740,
+  "count": 440,
+  "created_at": 1787838020,
   "dimension": 384,
   "model": "intfloat/multilingual-e5-small",
   "skills": [
@@ -8950,6 +8950,25 @@
     },
     {
       "action_triggers": [
+        "comply",
+        "skill"
+      ],
+      "applicable_phases": [
+        "implement",
+        "refactor"
+      ],
+      "file_patterns": [],
+      "intent": "Visualize whether skills, rules, and agent definitions are actually followed — auto-generates scenarios at 3 prompt strictness levels, runs agents, classifies behavioral sequences, and reports compliance rates with full tool call timelines",
+      "micro_rules": [
+        "User runs `/skill-comply <path>`",
+        "User asks \"is this rule actually being followed?\"",
+        "After adding new rules/skills, to verify agent compliance"
+      ],
+      "name": "skill-comply",
+      "title": "skill-comply: Automated Compliance Measurement"
+    },
+    {
+      "action_triggers": [
         "data-model",
         "optimize",
         "orm",
@@ -9448,6 +9467,25 @@
       ],
       "name": "taste",
       "title": "Taste"
+    },
+    {
+      "action_triggers": [
+        "tasteforge",
+        "video"
+      ],
+      "applicable_phases": [
+        "plan",
+        "review"
+      ],
+      "file_patterns": [],
+      "intent": "Use for file-driven multimodal image, video, and 3D-asset discovery; taste interviews; distill or apply workflows; style-pack validation; editable EDL/FCPXML export; provenance audits; and offline planning that must fail closed before provider generation",
+      "micro_rules": [
+        "The user asks to **interview for video taste** before any footage is made",
+        "The user wants to **distill an aesthetic into structured constraints** — a",
+        "The user wants to **validate a style pack** (is the metadata complete,"
+      ],
+      "name": "tasteforge-video",
+      "title": "TasteForge Video"
     },
     {
       "action_triggers": [

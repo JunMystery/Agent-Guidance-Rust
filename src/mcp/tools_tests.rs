@@ -162,7 +162,12 @@
         let detected = detect_project_architecture(&cwd);
         assert!(matches!(
             detected.as_str(),
-            "Clean_Architecture" | "Layered_Architecture" | "Package_By_Feature" | "Orchestrator"
+            "Clean_Architecture"
+                | "Layered_Architecture"
+                | "Package_By_Feature"
+                | "Orchestrator"
+                | "CLI_Pipeline"
+                | "Flat_Library"
         ));
 
         let state = ServerState::new();

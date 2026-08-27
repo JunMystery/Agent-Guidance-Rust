@@ -68,6 +68,8 @@ pub(crate) fn handle_authorize_edit(
         0
     };
 
+    let is_exempt = is_exempt_from_loc_limit(rel_path);
+
     let is_refactoring_justification = {
         let j_lower = justification.to_lowercase();
         j_lower.contains("refactor")
@@ -99,10 +101,10 @@ pub(crate) fn handle_authorize_edit(
                 &arch_pattern
             }
         )
-    } else if is_new_file && validate_new_file_modularity(rel_path, justification).is_err() {
+    } else if is_new_file && !is_exempt && validate_new_file_modularity(rel_path, justification).is_err() {
         validate_new_file_modularity(rel_path, justification).unwrap_err()
-    } else if target_loc >= 300 && !is_refactoring_justification {
-        // Hard-block adding new logic to files >= 300 LOC
+    } else if target_loc >= 300 && !is_exempt && !is_refactoring_justification {
+        // Hard-block adding new logic to code files >= 300 LOC
         crate::catalog::blueprint::format_decomposition_guidance(
             rel_path,
             target_loc,
@@ -135,7 +137,7 @@ pub(crate) fn handle_authorize_edit(
 
         let mut resp = format!(
             "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: `{}`{}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
-            if target_loc >= 300 { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
+            if target_loc >= 300 && !is_exempt { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
             proj_path.display(),
             rel_path,
             if is_new_file { " [NEW FILE]" } else { "" },
@@ -147,12 +149,12 @@ pub(crate) fn handle_authorize_edit(
             arch_pattern
         );
 
-        if is_new_file {
+        if is_new_file && !is_exempt {
             resp.push_str(&format!(
                 "\n\n📐 **Upfront Modular Architecture Mandate for New File**:\n- **Hard Limit**: This new file MUST remain strictly < 300 LOC (target < 150 LOC for high cohesion).\n- **Decomposition Mandate**: Do NOT build monolithic files. Decompose complex logic (modals, tables, adapters, sub-services) into separate sub-modules from line 1 under `{}` Architecture.",
                 arch_pattern
             ));
-        } else if target_loc >= 300 {
+        } else if target_loc >= 300 && !is_exempt {
             resp.push_str(&format!(
                 "\n\n📐 **300 LOC Modular Refactoring Mandate**:\n- **Current Size**: {} lines (>= 300 LOC limit).\n- **Action**: You are authorized ONLY to decompose/refactor this file into modular sub-files under `{}` Architecture. No new net functionality may be added directly to this file.",
                 target_loc,
@@ -171,6 +173,34 @@ pub(crate) fn handle_authorize_edit(
             proj_path.display(),
             state.workflow_stage,
             state.plan_approved
+        )
+    }
+}
+
+/// Checks whether a target file path is exempt from the 300 LOC source code limit and modularity validation.
+/// Documentation, markdown, data, serializations, configurations, assets, and static files are exempt.
+pub fn is_exempt_from_loc_limit(rel_path: &str) -> bool {
+    let path = std::path::Path::new(rel_path);
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        let ext_lower = ext.to_lowercase();
+        matches!(
+            ext_lower.as_str(),
+            // Documentation & Markup
+            "md" | "markdown" | "mdown" | "mdx" | "txt" | "rst" | "adoc" | "doc" | "docx" | "pdf"
+            // Data, Datasets, Schemas & Serialized Configs
+            | "json" | "json5" | "jsonl" | "csv" | "tsv" | "yaml" | "yml" | "xml" | "toml" | "lock"
+            | "sql" | "env" | "ini" | "cfg" | "properties" | "parquet" | "dataset" | "arrow" | "proto" | "graphql" | "gql"
+            // Static Assets, Images, Web Styles
+            | "html" | "htm" | "css" | "scss" | "sass" | "less" | "svg" | "png" | "jpg" | "jpeg" | "gif" | "ico" | "webp"
+            // Logs, Patches & Diffs
+            | "log" | "diff" | "patch"
+        )
+    } else {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let name_upper = name.to_uppercase();
+        matches!(
+            name_upper.as_str(),
+            "LICENSE" | "LICENCE" | "README" | "CHANGELOG" | "AUTHORS" | "CONTRIBUTING" | ".GITIGNORE" | ".ENV"
         )
     }
 }

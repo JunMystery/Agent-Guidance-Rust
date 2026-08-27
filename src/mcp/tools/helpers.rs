@@ -80,7 +80,10 @@ pub fn detect_project_architecture(proj_path: &Path) -> String {
 
     // 2. Check GraphRAG communities hierarchy if available
     if let Some(hierarchy) = crate::context::graph_rag::persistence::load_hierarchy(proj_path) {
-        if !hierarchy.detected_architecture.is_empty() {
+        if !hierarchy.detected_architecture.is_empty()
+            && !hierarchy.detected_architecture.eq_ignore_ascii_case("auto")
+            && !hierarchy.detected_architecture.eq_ignore_ascii_case("none")
+        {
             let _ = ServerState::save_persisted_architecture(proj_path, &hierarchy.detected_architecture);
             return hierarchy.detected_architecture;
         }
@@ -143,10 +146,14 @@ pub fn resolve_architecture_pattern(raw_pattern: &str, proj_path: &Path, state: 
         || trimmed.eq_ignore_ascii_case("none")
     {
         if let Some(active) = &state.active_architecture_pattern {
-            active.clone()
-        } else {
-            detect_project_architecture(proj_path)
+            if !active.eq_ignore_ascii_case("auto")
+                && !active.eq_ignore_ascii_case("none")
+                && !active.is_empty()
+            {
+                return active.clone();
+            }
         }
+        detect_project_architecture(proj_path)
     } else {
         trimmed.to_string()
     }

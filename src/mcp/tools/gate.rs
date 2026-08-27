@@ -134,16 +134,19 @@ pub(crate) fn handle(
             let proj_path = detect_project_path(proj_path_arg, state);
             state.update_project_path(&proj_path);
 
-            // 300 LOC Post-Edit Hard Trap: Block advancing if any modified/created file >= 300 LOC
+            // 300 LOC Post-Edit Hard Trap: Block advancing if any modified/created code file >= 300 LOC
             if target_stage == "Proposal" || target_stage == "Review" {
                 for file_rel in &state.modified_files {
+                    if crate::mcp::tools::gate_edit::is_exempt_from_loc_limit(file_rel) {
+                        continue;
+                    }
                     let full = proj_path.join(file_rel);
                     if full.exists() && full.is_file() {
                         if let Ok(content) = std::fs::read_to_string(&full) {
                             let loc = content.lines().count();
                             if loc >= 300 {
                                 return Ok(format!(
-                                    "# Workflow Gate: BLOCKED (300_LOC_CAP_EXCEEDED)\n\n- Target File: `{}`\n- Current Length: **{} lines** (hard limit: 300 lines)\n\n⚠️ **Error: 300_LOC_LIMIT_EXCEEDED**: Newly created or modified file '{}' has {} lines, which breaches the 300 LOC limit. You cannot advance workflow stages until this file is decomposed into modular sub-files (< 150 LOC each).\n\n👉 **Action Required**: Decompose `{}` into focused sub-modules using `workflow_gate(action=\"authorize_edit\", justification=\"Refactor/Decompose: ...\")`.",
+                                    "# Workflow Gate: BLOCKED (300_LOC_CAP_EXCEEDED)\n\n- Target File: `{}`\n- Current Length: **{} lines** (hard limit: 300 lines)\n\n⚠️ **Error: 300_LOC_LIMIT_EXCEEDED**: Newly created or modified code file '{}' has {} lines, which breaches the 300 LOC limit. You cannot advance workflow stages until this file is decomposed into modular sub-files (< 150 LOC each).\n\n👉 **Action Required**: Decompose `{}` into focused sub-modules using `workflow_gate(action=\"authorize_edit\", justification=\"Refactor/Decompose: ...\")`.",
                                     file_rel, loc, file_rel, loc, file_rel
                                 ));
                             }

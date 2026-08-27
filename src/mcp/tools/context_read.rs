@@ -24,8 +24,10 @@ pub(crate) fn handle_read(
                                         let lines: Vec<&str> = content.lines().collect();
                                         let total_lines = lines.len();
 
-                                        // If explicit skeleton requested, or file is large (>300 LOC) and no target symbol requested
-                                        if view_mode == "skeleton" || (total_lines > 300 && target_symbol.is_none() && view_mode != "full") {
+                                        let is_exempt = crate::mcp::tools::gate_edit::is_exempt_from_loc_limit(rel_path);
+
+                                        // If explicit skeleton requested, or code file is large (>300 LOC) and no target symbol requested
+                                        if (view_mode == "skeleton" || (total_lines > 300 && target_symbol.is_none() && view_mode != "full")) && !is_exempt {
                                             let skeleton = crate::optimizer::skeleton::generate_code_skeleton(&content, rel_path);
                                             let compressed = compress_markdown(&skeleton);
                                             state.record_call(orig_len / 4, compressed.len() as u64 / 4);
@@ -94,12 +96,12 @@ pub(crate) fn handle_read(
                                             state
                                                 .record_call(orig_len / 4, compressed.len() as u64 / 4);
 
-                                            let loc_warning = if was_capped && target_symbol.is_none() {
+                                            let loc_warning = if was_capped && target_symbol.is_none() && !is_exempt {
                                                 format!(
                                                     "\n\n---\n⚠️ **ARCHITECTURE MANDATE (300 LOC Cap Exceeded)**: File `{}` has **{} total lines** (capped at 300 lines).\n**MANDATORY ACTION**: Do NOT add new logic directly into this file. Decompose into sub-modules upfront (split entry dispatchers from sub-module handlers).",
                                                     rel_path, count
                                                 )
-                                            } else if count > 100 && target_symbol.is_none() {
+                                            } else if count > 100 && target_symbol.is_none() && !is_exempt {
                                                 format!(
                                                     "\n\n---\n💡 **Token Optimization Tip**: Pass `target_symbol=\"<fn_or_struct_name>\"` in `project_context(operation=\"read\")` to extract only the target definition and save token budget."
                                                 )

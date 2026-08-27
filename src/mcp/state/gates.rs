@@ -97,7 +97,10 @@ impl ServerState {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(pat) = val.get("architecture_pattern").and_then(|p| p.as_str()) {
                         let trimmed = pat.trim();
-                        if !trimmed.is_empty() {
+                        if !trimmed.is_empty()
+                            && !trimmed.eq_ignore_ascii_case("auto")
+                            && !trimmed.eq_ignore_ascii_case("none")
+                        {
                             return Some(trimmed.to_string());
                         }
                     }
