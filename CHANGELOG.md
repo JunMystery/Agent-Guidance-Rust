@@ -1,6 +1,18 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
+
+## [1.4.12] - 2026-08-31
+
+### ♻️ DRY & Reusable Code Intelligence (GraphRAG & ML)
+- **GraphRAG Topology Fan-In Analysis**: Added automated in-degree caller analysis and ranking (`reusability_score`) to detect core shared utilities across modules.
+- **ML Semantic Clone Detection**: Integrated embedding cosine similarity ($\ge 88\%$) to detect duplicate logic across files and issue automated DRY warnings.
+- **MCP project_context Operations**: Added `operation="reusable"` / `"detect_duplicates"` / `"reusable_candidates"` to inspect reusable symbols.
+
+### 🛡️ Agent Guidance & Token Bounding Hardening
+- **Strict File Inspection Enforcement**: Added explicit negative constraints prohibiting native IDE inspection tools (`view_file`, `grep_search`, `find_by_name`, `list_dir`) to prevent token window explosion.
+- **DRY & Shared Code Protocol**: Enforced mandatory reuse of existing helpers in `shared/`, `utils/`, `common/` before authoring new code.
+- **Test Suite Perfection**: 103 unit tests passing with zero failures.
 
 ## [1.4.11] - 2026-08-27
 

@@ -18,7 +18,7 @@ mod context_read;
 mod context_search;
 mod continuity;
 mod gate;
-mod gate_edit;
+pub(crate) mod gate_edit;
 mod gate_edit_modularity;
 
 pub fn handle_tool_call(

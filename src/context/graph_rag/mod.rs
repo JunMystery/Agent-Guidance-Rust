@@ -5,9 +5,11 @@ pub mod community;
 pub mod leiden;
 pub mod persistence;
 pub mod query;
+pub mod reusability;
 
 pub use community::{Community, CommunityHierarchy, CommunityLevel, CommunitySummary, GraphEdge, GraphEntity};
 pub use query::{GraphRagQueryMode, QueryResult};
+pub use reusability::{format_reusable_report, is_shared_path, ReusableSymbol, SemanticClonePair};
 
 use crate::context::db::CodeGraphDb;
 
@@ -100,6 +102,11 @@ impl GraphRagEngine {
             GraphRagQueryMode::Drift => query::execute_drift_search(query_text, &db, &hierarchy),
             GraphRagQueryMode::Basic => Ok(query::execute_global_search(query_text, &hierarchy)),
         }
+    }
+
+    /// Analyzes codebase for reusable shared functions and ML semantic clones.
+    pub fn analyze_reusability(&self) -> Result<String> {
+        reusability::analyze_project_reusability(&self.project_path)
     }
 }
 

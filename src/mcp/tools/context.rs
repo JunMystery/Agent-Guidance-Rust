@@ -139,6 +139,16 @@ pub(crate) fn handle(
                         Err(e) => format!("GraphRAG query error: {}", e),
                     }
                 }
+                "reusable" | "shared" | "reusable_candidates" | "detect_duplicates" => {
+                    let engine = crate::context::graph_rag::GraphRagEngine::new(&proj_path);
+                    match engine.analyze_reusability() {
+                        Ok(report) => {
+                            state.record_call(2500, 400);
+                            report
+                        }
+                        Err(e) => format!("Reusability analysis error: {}", e),
+                    }
+                }
                 "symbols" | "structure" => {
                     if rel_path.is_empty() {
                         "Error: relative_path is required for symbols/structure operation. Example: project_context(operation=\"symbols\", project_path=\"...\", relative_path=\"src/main.rs\")".to_string()

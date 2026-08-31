@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::mcp::router::handle_tool_call;
+    use crate::mcp::tools::handle_tool_call;
     use crate::mcp::state::ServerState;
     use crate::mcp::tools::gate_edit::is_exempt_from_loc_limit;
     use serde_json::json;

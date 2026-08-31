@@ -31,7 +31,14 @@ This file contains standards, conventions, and rules specific to this project. A
 > [!IMPORTANT]
 > **GLOBAL ENFORCEMENT**: All 8 rules herein MUST be evaluated and followed for every single coding action, repository lookup, refactoring, or planning phase without exception.
 
+### ♻️ Reusable & Unified Shared Code (DRY Mandate)
+- **Rule (Required):** Always check for existing shared utilities, formatters, models, and UI helpers in common/shared directories before writing new code. Never create duplicate implementations of logic that already exists in the project.
+- **Reason (Required):** Prevents code fragmentation, eliminates duplicate bugs, reduces bundle size, and maintains a Single Source of Truth (SSOT).
+- **Do / Good Example (Optional):** Search via `project_context(operation="search", query="...")` or `project_context(operation="graph_rag")` to find existing utility functions, import them, and use them directly.
+- **Don't / Bad Example (Optional):** Writing a custom date formatter, string slugifier, or validation regex inside a feature controller when `shared/utils` already has one.
+- **Scope (Optional):** All frontend and backend code across the repository.
+- **How to Test (Optional):** Run symbol/AST duplicate check and codebase linting.
+
 <!-- ADD YOUR STANDARDS BELOW -->
 
 *(Add your custom project-specific standards using the template structure above)*
-
