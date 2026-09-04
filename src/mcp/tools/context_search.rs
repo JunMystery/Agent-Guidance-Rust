@@ -110,7 +110,7 @@ pub(crate) fn handle_search(
 
                         state.record_call(2000, 400);
                         format!(
-                            "# Context Search Results for '{}'\n\nSource: {} | Cascade: [alias → sym_fts → sym_vec → content_fts → rag_vec]\n\n{}\n\n---\n💡 **Next Step**: Pass `relative_path=\"...\"` to `project_context(operation=\"read\")` to read file content.",
+                            "# Context Search Results for '{}'\n\nSource: {} | Cascade: [alias → sym_fts → sym_vec → content_fts → rag_vec]\n\n{}",
                             query,
                             source,
                             if results.is_empty() {
@@ -200,7 +200,7 @@ pub(crate) fn handle_navigate(
 
                         state.record_call(3000, 500);
                         format!(
-                            "# Code Graph Navigation for '{}'\n\n{}\n\n---\n💡 **Next Step**: Pass `relative_path=\"...\"` to `project_context(operation=\"read\")` to view source code.",
+                            "# Code Graph Navigation for '{}'\n\n{}",
                             query,
                             if sections.is_empty() {
                                 "No navigation nodes found.".to_string()

@@ -99,7 +99,7 @@ pub(crate) fn handle(
             for (score, item) in final_results {
                 if seen_names.insert(item.name.clone()) {
                     deduped_results.push((score, item));
-                    if deduped_results.len() >= 15 {
+                    if deduped_results.len() >= 6 {
                         break;
                     }
                 }
@@ -210,22 +210,17 @@ pub(crate) fn handle(
                 .unwrap_or("plan")
                 .to_lowercase();
 
-            let ref_asset = format!("workflow-modes/references/workflow-{}.md", stage);
-            let alt_asset = format!("workflow-modes/references/{}.md", stage);
-            let skill_asset = format!("skills/{}/SKILL.md", stage);
-
-            if let Some(content) = get_embedded_skill(&ref_asset) {
-                compress_markdown(&content)
-            } else if let Some(content) = get_embedded_skill(&alt_asset) {
-                compress_markdown(&content)
-            } else if let Some(content) = get_embedded_skill(&skill_asset) {
-                compress_markdown(&content)
-            } else {
-                format!(
-                    "# Dev Workflow Guidance: [{}]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document",
-                    stage
-                )
-            }
+            let candidates = [
+                format!("workflow-modes/references/workflow-{}.md", stage),
+                format!("workflow-modes/references/{}.md", stage),
+                format!("skills/{}/SKILL.md", stage),
+            ];
+            candidates
+                .iter()
+                .find_map(|p| get_embedded_skill(p).map(|c| compress_markdown(&c)))
+                .unwrap_or_else(|| {
+                    format!("# Dev Workflow Guidance: [{}]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document", stage)
+                })
         }
         "precode" => super::guidance_precode::handle_precode(&arguments, &query, state),
         "verify" => {
@@ -239,7 +234,7 @@ pub(crate) fn handle(
             if let (Some(cmd), Some(kw)) = (v_cmd, v_kw) {
                 state.verification_command = Some(cmd.to_string());
                 state.expected_output_keyword = Some(kw.to_string());
-                state.verification_passed = false; // SECURITY FIX Bug #4: Registered contract; awaiting test execution
+                state.verification_passed = false;
                 format!(
                     "# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED (Awaiting test execution output)\n\n✓ Run verification command to satisfy anti-hallucination requirement.",
                     cmd, kw

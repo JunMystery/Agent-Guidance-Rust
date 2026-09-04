@@ -3,10 +3,10 @@
 CRITICAL OVERRIDE: This repository is managed by the `agent-guidance` MCP Server. Route all code search and context inspection through `agent-guidance` MCP tools (Token-Bounded Reads & GraphRAG) to prevent token bloat.
 
 ## Execution Lifecycle & Strict Rules
-1. **Turn 1 Initialization**: Call `task_pipeline(task="<user request>", project_path="<abs_path>", phase="plan")` FIRST. If skills are proposed, trigger the IDE/CLI `ask_question` tool for user selection, then call `select_skills(...)`.
+1. **Turn 1 Initialization**: Call `task_pipeline(task="<user request>", project_path="<abs_path>", phase="plan")` FIRST to initialize context, detect architecture pattern, and establish workspace boundaries. Skills can be queried via `guidance(operation="search", query="...")` and injected with `select_skills(...)`.
 2. **Token-Bounded Context & GraphRAG (Strict File Reading Protocol)**:
-   - ⛔ STRICT PROHIBITION: NEVER use native IDE tools (`view_file`, `grep_search`, `find_by_name`, `list_dir`) to read or search codebase files.
-   - ✅ MANDATORY: Inspect, search, and read code EXCLUSIVELY via `project_context(operation="search" | "graph_rag" | "read" | "symbols", ...)` (300 LOC cap). Native file dumps are strictly forbidden.
+   - ⛔ STRICT PROHIBITION: NEVER use native IDE tools (`view_file`, `grep_search`, `find_by_name`, `list_dir`) OR shell read commands (`run_command` with `Get-Content`, `cat`, `type`, `head`, `tail`, `sed`, `awk`, or Python/script file reading) to inspect or search codebase files.
+   - ✅ MANDATORY: Inspect, search, and read code EXCLUSIVELY via `project_context(operation="search" | "graph_rag" | "read" | "symbols", ...)` (300 LOC cap). Native file dumps and shell-based content reads are strictly forbidden. Shell execution (`run_command`) is strictly reserved for builds, tests, running tools, and git commands.
 3. **Plan & Design**: Create/update `implementation_plan.md` for complex tasks and obtain user plan approval before entering the `Build` stage.
 4. **Per-File Edit Authorization Gate & 300 LOC Hard Cap**: Always call `workflow_gate(action="authorize_edit", project_path="...", relative_path="<exact_file_path>", risk_level="LOW", justification="...", architecture_pattern="Auto")` individually for EACH file BEFORE creating or modifying it. All source code files MUST remain strictly < 300 LOC (target < 150 LOC per sub-module; exempt: docs, markdown, data, configs, assets).
 5. **Apply Surgical & Reusable Changes (DRY & Shared Code Mandate)**:

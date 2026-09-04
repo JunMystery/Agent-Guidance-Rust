@@ -42,14 +42,13 @@ pub fn handle_request(
             "tools": [
                 {
                     "name": "task_pipeline",
-                    "description": "CALL FIRST before any coding task. Prepares recommendations, project tree, code search, and optional UI guidance in ONE optimized call. You MUST pass project_path and phase.",
+                    "description": "CALL FIRST before any coding task. Initializes workspace context, resets phase state, detects architecture, and checks modularity blueprint in ONE call. You MUST pass project_path and phase.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "task": { "type": "string", "description": "The task description or goal" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
-                            "phase": { "type": "string", "enum": ["plan", "implement", "test", "debug", "review", "refactor"], "description": "Active development phase for per-phase context reset" },
-                            "focus": { "type": "string", "default": "general", "description": "Optional focus area (e.g. 'security', 'performance', 'frontend', 'testing') to refine skill search ranking." }
+                            "phase": { "type": "string", "enum": ["plan", "implement", "test", "debug", "review", "refactor"], "description": "Active development phase for per-phase context reset" }
                         },
                         "required": ["task", "project_path", "phase"]
                     }
@@ -99,7 +98,7 @@ pub fn handle_request(
                 },
                 {
                     "name": "project_context",
-                    "description": "Read, search, navigate code graph, and extract symbols across project files with built-in 300 LOC token budgets. Use this tool instead of raw grep_search, list_dir, or view_file.",
+                    "description": "Read, search, navigate code graph, and extract symbols across project files with built-in 300 LOC token budgets. Use this tool exclusively instead of shell commands (Get-Content, cat, type, python reads) or raw view_file/grep_search.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {

@@ -101,10 +101,6 @@ pub(crate) fn handle_read(
                                                     "\n\n---\n⚠️ **ARCHITECTURE MANDATE (300 LOC Cap Exceeded)**: File `{}` has **{} total lines** (capped at 300 lines).\n**MANDATORY ACTION**: Do NOT add new logic directly into this file. Decompose into sub-modules upfront (split entry dispatchers from sub-module handlers).",
                                                     rel_path, count
                                                 )
-                                            } else if count > 100 && target_symbol.is_none() && !is_exempt {
-                                                format!(
-                                                    "\n\n---\n💡 **Token Optimization Tip**: Pass `target_symbol=\"<fn_or_struct_name>\"` in `project_context(operation=\"read\")` to extract only the target definition and save token budget."
-                                                )
                                             } else {
                                                 String::new()
                                             };

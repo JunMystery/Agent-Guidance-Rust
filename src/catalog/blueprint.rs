@@ -20,6 +20,9 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
             for word in words {
                 if let Ok(syms) = db.search_symbols(word, 5) {
                     for (file_path, sym_name, _line) in syms {
+                        if crate::mcp::tools::gate_edit::is_exempt_from_loc_limit(&file_path) {
+                            continue;
+                        }
                         let full = proj_path.join(&file_path);
                         if let Ok(content) = std::fs::read_to_string(&full) {
                             let loc = content.lines().count();

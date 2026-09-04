@@ -8,6 +8,7 @@ use crate::mcp::templates::*;
 
 pub(crate) fn remove_global_rules(home: &Path) -> Result<()> {
     let targets = vec![
+        home.join(".gemini").join("GEMINI.md"),
         home.join(".gemini").join("config").join("AGENTS.md"),
         home.join(".config").join("opencode").join("AGENTS.md"),
         home.join(".claude").join("CLAUDE.md"),
@@ -99,7 +100,11 @@ fn strip_tagged_section(content: &str, start_tag: &str, end_tag: &str) -> String
 pub(crate) fn configure_global_rules(home: &Path) -> Result<()> {
     let targets = vec![
         (
-            "Gemini/Antigravity",
+            "Gemini/Antigravity Root",
+            home.join(".gemini").join("GEMINI.md"),
+        ),
+        (
+            "Gemini/Antigravity Config",
             home.join(".gemini").join("config").join("AGENTS.md"),
         ),
         (

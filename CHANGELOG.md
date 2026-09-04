@@ -2,6 +2,14 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.4.13] - 2026-09-04
+
+### ⚡ Token Optimization & Lean Pipeline
+- **Removed Unrequested Skill Proposals**: Eliminated skill search/recommendations and recipes from `task_pipeline` to stop token waste on every turn 1 initialization.
+- **Compacted Tree and Blueprint**: Replaced 15-file listing with scanned file counts; suppressed empty blueprint blocks.
+- **Workflow Gate & Context Compact**: Condensed verbose multi-line upfront architecture warnings to single-line notices, and removed repetitive advice footers from `project_context`.
+- **Prohibited Shell Read Commands**: Added strict prohibitions against `Get-Content`, `cat`, `type`, and script reads.
+
 ## [1.4.12] - 2026-08-31
 
 ### ♻️ DRY & Reusable Code Intelligence (GraphRAG & ML)

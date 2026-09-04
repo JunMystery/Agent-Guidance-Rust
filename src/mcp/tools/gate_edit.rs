@@ -150,15 +150,11 @@ pub(crate) fn handle_authorize_edit(
         );
 
         if is_new_file && !is_exempt {
-            resp.push_str(&format!(
-                "\n\n📐 **Upfront Modular Architecture Mandate for New File**:\n- **Hard Limit**: This new file MUST remain strictly < 300 LOC (target < 150 LOC for high cohesion).\n- **Decomposition Mandate**: Do NOT build monolithic files. Decompose complex logic (modals, tables, adapters, sub-services) into separate sub-modules from line 1 under `{}` Architecture.",
-                arch_pattern
-            ));
+            resp.push_str("\n\n📐 [LOC Limit: strictly < 300 LOC (target < 150 LOC)]");
         } else if target_loc >= 300 && !is_exempt {
             resp.push_str(&format!(
-                "\n\n📐 **300 LOC Modular Refactoring Mandate**:\n- **Current Size**: {} lines (>= 300 LOC limit).\n- **Action**: You are authorized ONLY to decompose/refactor this file into modular sub-files under `{}` Architecture. No new net functionality may be added directly to this file.",
-                target_loc,
-                arch_pattern
+                "\n\n📐 **300 LOC Modular Refactoring Mandate**: {} lines (>= 300 LOC limit). Refactoring/decomposition only.",
+                target_loc
             ));
         }
 
