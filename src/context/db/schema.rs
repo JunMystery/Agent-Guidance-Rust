@@ -191,6 +191,17 @@ pub(crate) fn init_schema(conn: &mut Connection) -> Result<()> {
             [],
         )?;
 
+        // Proposal 03: Content-addressable embedding cache
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS embedding_cache (
+                passage_hash TEXT PRIMARY KEY,
+                vector BLOB NOT NULL,
+                model_version TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );",
+            [],
+        )?;
+
         tx.commit()?;
         Ok(())
     }

@@ -1,12 +1,10 @@
 use serde_json::{Value, json};
 use std::path::Path;
 
-use crate::catalog::store::{SkillSource, get_embedded_skill, list_embedded_skills, load_all_skills};
-use crate::context::cache::project_snapshot;
+use crate::catalog::language_detector::detect_language_fast;
+use crate::catalog::store::get_embedded_skill;
 use crate::mcp::state::ServerState;
-use crate::ml::embeddings::hybrid_vector_search;
-use crate::ml::llm_selector::LLMSelector;
-use crate::optimizer::compressor::compress_markdown;
+use crate::optimizer::compressor::{compress_markdown, estimate_tokens};
 use super::{detect_project_path, ensure_not_cancelled, validate_path};
 
 pub(crate) fn handle(
@@ -55,17 +53,15 @@ pub(crate) fn handle(
         .and_then(|t| t.as_str())
         .unwrap_or("");
 
-    let core_rules = crate::catalog::rules::format_skill_load_rules();
-
     let resp = if requested_skills.is_empty() {
-        state.record_call(100, 50);
-        format!(
-            "# Skill Selection\n\nNo skills selected. Proceeding without loading skills.\n\n{}\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.",
-            core_rules
-        )
+        let text = "# Skill Selection\n\nNo skills selected. Proceeding directly to task execution.\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.".to_string();
+        let tokens = estimate_tokens(&text, false) as u64;
+        state.record_call(tokens, tokens);
+        text
     } else {
         let mut loaded_sections = Vec::new();
         let mut not_found = Vec::new();
+        let mut raw_token_acc: usize = 0;
 
         for name in &requested_skills {
             if let Some((_, rel_path, _)) = proposals.iter().find(|(n, _, _)| n == name) {
@@ -75,17 +71,16 @@ pub(crate) fn handle(
                     Some(c)
                 } else if let Some(c) = get_embedded_skill(rel_path) {
                     Some(c)
-                } else if let Ok(c) = std::fs::read_to_string(name) {
-                    Some(c)
-                } else if let Ok(c) = std::fs::read_to_string(rel_path) {
-                    Some(c)
                 } else if let Ok(full_path) = validate_path(&proj_path, rel_path) {
+                    std::fs::read_to_string(&full_path).ok()
+                } else if let Ok(full_path) = validate_path(&proj_path, name) {
                     std::fs::read_to_string(&full_path).ok()
                 } else {
                     None
                 };
 
                 if let Some(content) = raw_content {
+                    raw_token_acc += estimate_tokens(&content, false);
                     let processed = if !task_arg.is_empty() {
                         crate::catalog::slicing::slice_skill_markdown(&content, task_arg, 3)
                     } else {
@@ -103,6 +98,7 @@ pub(crate) fn handle(
                 }
             } else if let Some(c) = get_embedded_skill(name) {
                 crate::mcp::db::log_skill_load(name);
+                raw_token_acc += estimate_tokens(&c, false);
                 let processed = if !task_arg.is_empty() {
                     crate::catalog::slicing::slice_skill_markdown(&c, task_arg, 3)
                 } else {
@@ -115,6 +111,7 @@ pub(crate) fn handle(
             } else if let Ok(full_path) = validate_path(&proj_path, name) {
                 if let Ok(c) = std::fs::read_to_string(&full_path) {
                     crate::mcp::db::log_skill_load(name);
+                    raw_token_acc += estimate_tokens(&c, false);
                     let processed = if !task_arg.is_empty() {
                         crate::catalog::slicing::slice_skill_markdown(&c, task_arg, 3)
                     } else {
@@ -132,19 +129,13 @@ pub(crate) fn handle(
             }
         }
 
-        let snapshot = project_snapshot(&proj_path);
-        let profile = crate::catalog::language_detector::detect_language_profile(
-            snapshot.files.as_ref(),
-            task_arg,
-        );
+        let profile = detect_language_fast(&proj_path, task_arg);
         let safety_rules = crate::catalog::slicing::get_language_safety_rules(&profile);
 
-        state.record_call(1500, 500);
         let mut resp = format!(
-            "# Skill Selection Confirmed ({})\n\nLoaded Skills Content:\n\n{}\n\n{}\n\n## 🛡️ Language Safety Rules\n{}",
+            "# Skill Selection Confirmed ({})\n\nLoaded Skills Content:\n\n{}\n\n## 🛡️ Language Safety Rules\n{}",
             loaded_sections.len(),
             loaded_sections.join("\n\n---\n\n"),
-            core_rules,
             safety_rules
         );
 
@@ -156,7 +147,12 @@ pub(crate) fn handle(
         }
 
         resp.push_str("\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.");
+
+        let opt_tokens = estimate_tokens(&resp, false);
+        let orig_tokens = raw_token_acc.max(opt_tokens);
+        state.record_call(orig_tokens as u64, opt_tokens as u64);
+
         resp
-      };
+    };
     Ok(resp)
 }

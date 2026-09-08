@@ -16,6 +16,16 @@ impl CodeGraphDb {
         }
     }
 
+    pub fn get_file_metadata(&self, path: &str) -> Result<Option<(String, u64, i64)>> {
+        let mut stmt = self.conn.prepare("SELECT content_hash, size, modified_at FROM files WHERE path = ?")?;
+        let mut rows = stmt.query(params![path])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some((row.get(0)?, row.get::<_, i64>(1)? as u64, row.get(2)?)))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn upsert_file(&self, path: &str, content_hash: &str, size: u64, modified_at: i64) -> Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -45,6 +55,32 @@ impl CodeGraphDb {
     pub fn delete_file(&self, file_path: &str) -> Result<()> {
         self.conn.execute("DELETE FROM files WHERE path = ?", params![file_path])?;
         Ok(())
+    }
+
+    pub fn prune_orphaned_files(&self, project_path: &std::path::Path) -> Result<usize> {
+        let mut stmt = self.conn.prepare("SELECT path FROM files")?;
+        let recorded_paths: Vec<String> = stmt
+            .query_map([], |r| r.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let mut pruned = 0;
+        for path in recorded_paths {
+            if !project_path.join(&path).exists() {
+                let _ = self.clear_file_data(&path);
+                let _ = self.delete_file(&path);
+                pruned += 1;
+            }
+        }
+
+        if pruned > 0 {
+            let _ = self.conn.execute_batch(
+                "PRAGMA incremental_vacuum;
+                 PRAGMA wal_checkpoint(PASSIVE);",
+            );
+        }
+
+        Ok(pruned)
     }
 
     pub fn insert_symbol(
@@ -195,5 +231,43 @@ impl CodeGraphDb {
             files.push(r?);
         }
         Ok(files)
+    }
+
+    /// Retrieve precomputed embedding from content-addressable cache
+    pub fn get_cached_embedding(&self, passage_hash: &str) -> Result<Option<Vec<f32>>> {
+        let mut stmt = self.conn.prepare("SELECT vector FROM embedding_cache WHERE passage_hash = ?")?;
+        let mut rows = stmt.query(params![passage_hash])?;
+        if let Some(row) = rows.next()? {
+            let bytes: Vec<u8> = row.get(0)?;
+            Ok(Some(super::bytes_to_f32_vec(&bytes)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Store computed embedding into content-addressable cache
+    pub fn store_cached_embedding(&self, passage_hash: &str, vector: &[f32], model_version: &str) -> Result<()> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let bytes: Vec<u8> = vector.iter().flat_map(|f| f.to_le_bytes()).collect();
+        self.conn.execute(
+            "INSERT OR REPLACE INTO embedding_cache (passage_hash, vector, model_version, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![passage_hash, bytes, model_version, now],
+        )?;
+        Ok(())
+    }
+
+    /// Get all content hashes of existing chunks for a file
+    pub fn get_file_chunk_hashes(&self, file_path: &str) -> Result<std::collections::HashSet<String>> {
+        let mut stmt = self.conn.prepare("SELECT content_hash FROM content_chunks WHERE file_path = ?")?;
+        let rows = stmt.query_map(params![file_path], |row| row.get::<_, String>(0))?;
+        let mut hashes = std::collections::HashSet::new();
+        for r in rows {
+            hashes.insert(r?);
+        }
+        Ok(hashes)
     }
 }

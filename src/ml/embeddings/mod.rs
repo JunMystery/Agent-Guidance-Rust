@@ -1,15 +1,22 @@
-pub mod device;
-pub mod model;
-pub mod gpu;
+pub mod backend;
+pub mod candle_bert;
 pub mod cache;
+pub mod device;
+pub mod gpu;
+pub mod model;
 pub mod precomputed;
+pub mod providers;
+pub mod quantized;
 pub mod search;
 
 pub use candle_core::Device;
 pub use crate::catalog::store::SkillItem;
+pub use backend::EmbeddingBackend;
 pub use device::{cosine_similarity, resolve_optimal_device};
+pub use gpu::{GpuSkillMatrix, eager_vram_warmup, gpu_batch_cosine_similarity};
 pub use model::EmbeddingModel;
-pub use gpu::{GpuSkillMatrix, gpu_batch_cosine_similarity, eager_vram_warmup};
+pub use providers::{ExecutionProvider, detect_optimal_provider};
+pub use quantized::OnnxQuantizedModel;
 pub use cache::{
     cached_model, clear_passage_cache, embed_skills_cache, is_warmup_complete,
     mark_warmup_complete, try_cached_model, warmup_cache,
@@ -22,3 +29,6 @@ pub use search::hybrid_vector_search;
 #[cfg(test)]
 #[path = "../embeddings_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod quantized_tests;

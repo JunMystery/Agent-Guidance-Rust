@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::mcp::state::ServerState;
 use super::gate_edit_modularity::validate_new_file_modularity;
+use super::gate_stage::count_file_lines;
 use super::helpers::{detect_project_path, resolve_architecture_pattern};
 
 pub(crate) fn handle_authorize_edit(
@@ -41,6 +42,15 @@ pub(crate) fn handle_authorize_edit(
         );
     }
 
+    if let Err(err_msg) = crate::mcp::tools::helpers::validate_path(&proj_path, rel_path) {
+        return format!(
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (PATH_TRAVERSAL_PROHIBITED)\n- Project Path: {}\n- Target File: `{}`\n\n⚠️ **Security Error: PATH_TRAVERSAL_PROHIBITED**: {}. Edits outside workspace root are strictly prohibited.",
+            proj_path.display(),
+            rel_path,
+            err_msg
+        );
+    }
+
     // Zero-Turn Predictive Transition: if plan approved and in Plan stage, auto-advance to Build
     if state.plan_approved && state.workflow_stage == "Plan" {
         let _ = state.set_stage("Build");
@@ -61,9 +71,7 @@ pub(crate) fn handle_authorize_edit(
     let full_target_path = proj_path.join(rel_path);
     let is_new_file = !full_target_path.exists();
     let target_loc = if full_target_path.exists() && full_target_path.is_file() {
-        std::fs::read_to_string(&full_target_path)
-            .map(|c| c.lines().count())
-            .unwrap_or(0)
+        count_file_lines(&full_target_path)
     } else {
         0
     };
@@ -101,8 +109,8 @@ pub(crate) fn handle_authorize_edit(
                 &arch_pattern
             }
         )
-    } else if is_new_file && !is_exempt && validate_new_file_modularity(rel_path, justification).is_err() {
-        validate_new_file_modularity(rel_path, justification).unwrap_err()
+    } else if let Some(err_msg) = if is_new_file && !is_exempt { validate_new_file_modularity(rel_path, justification).err() } else { None } {
+        err_msg
     } else if target_loc >= 300 && !is_exempt && !is_refactoring_justification {
         // Hard-block adding new logic to code files >= 300 LOC
         crate::catalog::blueprint::format_decomposition_guidance(

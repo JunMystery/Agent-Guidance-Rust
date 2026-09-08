@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex, mpsc::sync_channel};
 use std::time::{Duration, Instant};
 use tiny_http::{Header, Response, Server, StatusCode};
 
+pub mod graph;
+pub mod projects;
 pub mod stats;
 use stats::handle_api_stats;
 
@@ -33,6 +35,15 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
     let server = Server::http(&addr)
         .map_err(|e| anyhow::anyhow!("Failed to bind server to {}: {}", addr, e))?;
     println!("✓ Usage Dashboard server listening on http://{}", addr);
+    if proj_dir != "." && proj_dir != "all" {
+        if std::path::Path::new(&proj_dir).exists() {
+            println!("  ↳ Focused on project: {}", proj_dir);
+        } else {
+            println!("  ↳ ⚠️ Project '{}' not found on disk. Displaying archived historical analytics.", proj_dir);
+        }
+    } else {
+        println!("  ↳ Viewing all tracked projects. Use project dropdown in UI to filter.");
+    }
     let stats_cache = Arc::new(Mutex::new(StatsCache::default()));
 
     let (sender, receiver) = sync_channel(DASHBOARD_QUEUE);
@@ -78,7 +89,22 @@ fn handle_dashboard_request(
         "/" | "/index.html" => serve_asset(request, "index.html", "text/html; charset=utf-8"),
         "/dashboard.css" => serve_asset(request, "dashboard.css", "text/css; charset=utf-8"),
         "/api/stats" => handle_api_stats(request, project_path, cache),
+        "/api/projects" => {
+            let db_path = dirs::home_dir()
+                .map(|h| h.join(".agent-guidance").join("usage.db"))
+                .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
+            projects::handle_api_projects(request, &db_path);
+        }
+        "/api/projects/prune" => {
+            let db_path = dirs::home_dir()
+                .map(|h| h.join(".agent-guidance").join("usage.db"))
+                .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
+            projects::handle_api_prune(request, &db_path);
+        }
+        "/api/graph" => graph::handle_api_graph(request, project_path),
+        "/api/cleanup" => handle_api_cleanup(request),
         "/health" => {
+            let db_bytes = crate::mcp::db::get_db_size_bytes();
             let json_data = json!({
                 "status": "ok",
                 "server": "agent-guidance-dashboard",
@@ -86,6 +112,7 @@ fn handle_dashboard_request(
                 "model_loaded": true,
                 "engine": "rust-candle",
                 "backend": "candle-bert",
+                "db_size_bytes": db_bytes,
                 "clients": crate::daemon::active_clients_count()
             });
             json_response(request, 200, &json_data);
@@ -123,11 +150,53 @@ fn serve_asset(request: tiny_http::Request, name: &str, mime_type: &str) {
 fn json_response(request: tiny_http::Request, status_code: u16, data: &serde_json::Value) {
     let body = serde_json::to_string(data).unwrap_or_default();
     let header_ct = Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap();
-    let header_cors = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap();
+    let origin_str = request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("Origin"))
+        .map(|h| h.value.as_str())
+        .filter(|o| o.starts_with("http://127.0.0.1") || o.starts_with("http://localhost"))
+        .unwrap_or("http://127.0.0.1:3000");
+    let header_cors = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], origin_str.as_bytes()).unwrap();
     let response = Response::from_string(body)
         .with_header(header_ct)
         .with_header(header_cors)
         .with_status_code(StatusCode(status_code));
     let _ = request.respond(response);
 }
+
+fn handle_api_cleanup(request: tiny_http::Request) {
+    let db_path = dirs::home_dir()
+        .map(|h| h.join(".agent-guidance").join("usage.db"))
+        .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
+
+    let conn = match rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            json_response(request, 500, &json!({"error": e.to_string()}));
+            return;
+        }
+    };
+
+    match crate::mcp::db::run_auto_cleanup(&conn, crate::mcp::db::cleanup::DEFAULT_RETENTION_DAYS) {
+        Ok(summary) => {
+            let db_bytes = crate::mcp::db::get_db_size_bytes();
+            json_response(
+                request,
+                200,
+                &json!({
+                    "success": true,
+                    "summary": summary,
+                    "db_size_bytes": db_bytes,
+                    "db_size_mb": format!("{:.2} MB", db_bytes as f64 / (1024.0 * 1024.0))
+                }),
+            );
+        }
+        Err(e) => json_response(request, 500, &json!({"error": e.to_string()})),
+    }
+}
+
 

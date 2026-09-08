@@ -20,9 +20,20 @@
     <a role="tab" aria-selected="false" aria-controls="view-actions" id="tab-actions" data-view="actions"><span>Actions Log</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-recent-calls" id="tab-recent-calls" data-view="recent-calls"><span>Recent Calls</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-guides" id="tab-guides" data-view="guides"><span>Quick Guides</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-graph" id="tab-graph" data-view="graph"><span>🕸️ Architecture Graph</span></a>
   </nav>
   <div class="sidebar-footer">
-    <div class="proj" id="sidebar-proj" onclick="changeProjectPath()" title="Click to change project path" style="cursor:pointer">project: --</div>
+    <div style="margin-bottom:8px">
+      <label for="project-selector" style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px">Tracked Project:</label>
+      <select id="project-selector" style="width:100%;padding:4px 6px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:12px;font-family:var(--font-mono)">
+        <option value="all">🌐 All Projects (Global)</option>
+      </select>
+    </div>
+    <div id="project-status-badge" style="font-size:11px;margin-bottom:8px;display:none"></div>
+    <button id="btn-prune-projects" title="Prune non-existent/deleted projects from registry" style="width:100%;padding:4px 6px;font-size:11px;margin-bottom:8px;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--border-radius-sm);cursor:pointer">🧹 Prune Missing</button>
+    <button id="btn-auto-cleanup" title="Clean expired logs, enforce caps, and vacuum database" style="width:100%;padding:4px 6px;font-size:11px;margin-bottom:8px;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--border-radius-sm);cursor:pointer">⚡ Vacuum & Optimize DB</button>
+    <div id="sidebar-db-size" style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">db size: --</div>
+    <div class="proj" id="sidebar-proj" style="font-size:11px;color:var(--text-muted)">--</div>
     <div id="sidebar-port">port: --</div>
     <div id="sidebar-version">version: --</div>
   </div>
@@ -389,6 +400,8 @@
     </div>
   </section>
 
+  <section id="view-graph" class="hidden" role="tabpanel" aria-labelledby="tab-graph">
+  </section>
 </main>
 
 <script type="module" src="/js/main.js?v={{js_hash}}"></script>

@@ -7,6 +7,8 @@ use std::time::Instant;
 use crate::context::db::CodeGraphDb;
 use crate::context::scanner::scan_project;
 
+pub mod chunking;
+pub mod embedder;
 pub mod parsers;
 pub use parsers::{
     CodeChunk, ExtractedEdge, ExtractedSymbol, chunk_code_content,
@@ -65,7 +67,7 @@ impl IncrementalIndexer {
         Ok(report)
     }
 
-    /// Incremental index: only index files whose content hash has changed
+    /// Incremental index: only index files whose size, mtime, or content hash has changed
     pub fn incremental_index(&mut self) -> Result<IndexReport> {
         let start = Instant::now();
         let files = scan_project(&self.project_path, 12);
@@ -76,9 +78,29 @@ impl IncrementalIndexer {
 
         for file in files.iter().filter(|f| f.file_type == "file") {
             let full_path = self.project_path.join(&file.path);
+            let metadata = match std::fs::metadata(&full_path) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let disk_size = metadata.len();
+            let disk_modified = metadata
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+
+            // Fast path: if size and modified_at match cached SQLite record, skip reading disk!
+            if let Ok(Some((_cached_hash, cached_size, cached_mod))) = self.db.get_file_metadata(&file.path) {
+                if cached_size == disk_size && cached_mod == disk_modified {
+                    report.files_skipped += 1;
+                    continue;
+                }
+            }
+
             if let Ok(content) = std::fs::read_to_string(&full_path) {
                 let current_hash = compute_hash(&content);
-                if let Ok(Some(cached_hash)) = self.db.get_file_content_hash(&file.path) {
+                if let Ok(Some((cached_hash, _, _))) = self.db.get_file_metadata(&file.path) {
                     if cached_hash == current_hash {
                         report.files_skipped += 1;
                         continue;
@@ -195,56 +217,12 @@ impl IncrementalIndexer {
 
     /// Background embedding of all symbols that do not have vectors yet
     pub fn embed_symbols(&self) -> Result<usize> {
-        let unindexed = self.db.get_symbols_without_vectors(100)?;
-        if unindexed.is_empty() {
-            return Ok(0);
-        }
-
-        let model_guard = match crate::ml::embeddings::try_cached_model() {
-            Some(m) => m,
-            None => return Ok(0), // Graceful zero-latency fallback if model not currently resident in memory
-        };
-
-        let mut count = 0;
-        for (id, name, kind, file_path, sig) in unindexed {
-            let passage = format!(
-                "{} in {} — {}",
-                kind,
-                file_path,
-                sig.as_deref().unwrap_or(&name)
-            );
-            if let Ok(vec) = model_guard.embed_text(&passage, Some("passage")) {
-                let _ = self.db.store_symbol_vector(&id, &vec, "multilingual-e5-small");
-                count += 1;
-            }
-        }
-
-        Ok(count)
+        embedder::embed_symbols_batched(&self.db, 100, 32)
     }
 
     /// Background embedding of all code chunks (RAG) that do not have vectors yet
     pub fn embed_chunks(&self) -> Result<usize> {
-        let unindexed = self.db.get_chunks_without_vectors(50)?;
-        if unindexed.is_empty() {
-            return Ok(0);
-        }
-
-        let model_guard = match crate::ml::embeddings::try_cached_model() {
-            Some(m) => m,
-            None => return Ok(0),
-        };
-
-        let mut count = 0;
-        for (chunk_id, file_path, start, end, text) in unindexed {
-            let truncated: String = text.chars().take(512).collect();
-            let passage = format!("code in {} lines {}-{}: {}", file_path, start, end, truncated);
-            if let Ok(vec) = model_guard.embed_text(&passage, Some("passage")) {
-                let _ = self.db.store_chunk_vector(chunk_id, &vec, "multilingual-e5-small");
-                count += 1;
-            }
-        }
-
-        Ok(count)
+        embedder::embed_chunks_batched(&self.db, 50, 32)
     }
 
     /// Background refresh of GraphRAG hierarchical community clustering
@@ -255,8 +233,12 @@ impl IncrementalIndexer {
     }
 }
 
-
 #[cfg(test)]
 #[path = "../indexer_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+mod chunking_tests;
+
+#[cfg(test)]
+mod embedder_tests;

@@ -1,7 +1,10 @@
+pub mod ast;
 pub mod cache;
 pub mod db;
 pub mod graph_rag;
 pub mod hnsw;
 pub mod indexer;
+pub mod lsp;
+pub mod multi_project;
 pub mod scanner;
 pub mod watcher;

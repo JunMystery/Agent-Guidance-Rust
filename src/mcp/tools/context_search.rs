@@ -7,7 +7,7 @@ use super::helpers::{embed_query, ensure_indexed};
 pub(crate) fn handle_search(
     query: &str,
     proj_path: &Path,
-    state: &mut ServerState,
+    _state: &mut ServerState,
 ) -> String {
                     if query.is_empty() {
                         "Error: query is required for search operation. Example: project_context(operation=\"search\", project_path=\"...\", query=\"search_term\")".to_string()
@@ -95,8 +95,36 @@ pub(crate) fn handle_search(
                             }
                         }
 
+                        // Phase 6: Multi-Project Cascade (<20ms)
+                        if results.is_empty() {
+                            let linked = crate::context::multi_project::discover_linked_projects(proj_path);
+                            if !linked.is_empty() {
+                                let syms = crate::context::multi_project::search_linked_symbols(&linked, query, 5);
+                                if !syms.is_empty() {
+                                    source = "linked_symbol";
+                                    for (proj_name, path, name, line) in syms {
+                                        results.push(format!(
+                                            "- linked:{}/{}:L{} → `{}` [linked symbol: {}]",
+                                            proj_name, path, line, name, proj_name
+                                        ));
+                                    }
+                                } else {
+                                    let content_hits = crate::context::multi_project::search_linked_content(&linked, query, 5);
+                                    if !content_hits.is_empty() {
+                                        source = "linked_content";
+                                        for (proj_name, path, start, end, snip) in content_hits {
+                                            results.push(format!(
+                                                "- linked:{}/{}:L{}-{} → `{}` [linked content: {}]",
+                                                proj_name, path, start, end, snip.replace('\n', " "), proj_name
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Auto-Learn: learn top result if resolved from non-alias source
-                        if !results.is_empty() && source != "alias_cache" {
+                        if !results.is_empty() && source != "alias_cache" && !source.starts_with("linked_") {
                             if let Some(ref db) = db_opt {
                                 let first_line = &results[0];
                                 if let Some(path_part) = first_line.strip_prefix("- ") {
@@ -108,9 +136,8 @@ pub(crate) fn handle_search(
                             }
                         }
 
-                        state.record_call(2000, 400);
                         format!(
-                            "# Context Search Results for '{}'\n\nSource: {} | Cascade: [alias → sym_fts → sym_vec → content_fts → rag_vec]\n\n{}",
+                            "# Context Search Results for '{}'\n\nSource: {} | Cascade: [alias → sym_fts → sym_vec → content_fts → rag_vec → linked_projects]\n\n{}",
                             query,
                             source,
                             if results.is_empty() {
@@ -126,7 +153,7 @@ pub(crate) fn handle_navigate(
     arguments: &Value,
     query: &str,
     proj_path: &Path,
-    state: &mut ServerState,
+    _state: &mut ServerState,
 ) -> String {
                     if query.is_empty() {
                         "Error: query is required for navigate operation.".to_string()
@@ -198,7 +225,19 @@ pub(crate) fn handle_navigate(
                             }
                         }
 
-                        state.record_call(3000, 500);
+                        // 6. Linked Projects section
+                        let linked = crate::context::multi_project::discover_linked_projects(proj_path);
+                        if !linked.is_empty() && (scope == "all" || scope == "symbols" || scope == "linked") {
+                            let syms = crate::context::multi_project::search_linked_symbols(&linked, query, 5);
+                            if !syms.is_empty() {
+                                let lines: Vec<String> = syms
+                                    .into_iter()
+                                    .map(|(proj, p, n, l)| format!("- linked:{}/{}:L{} → `{}`", proj, p, l, n))
+                                    .collect();
+                                sections.push(format!("## From Linked Projects (Cross-Workspace)\n\n{}", lines.join("\n")));
+                            }
+                        }
+
                         format!(
                             "# Code Graph Navigation for '{}'\n\n{}",
                             query,

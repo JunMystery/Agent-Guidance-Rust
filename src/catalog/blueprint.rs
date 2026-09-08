@@ -20,9 +20,29 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
             for word in words {
                 if let Ok(syms) = db.search_symbols(word, 5) {
                     for (file_path, sym_name, _line) in syms {
-                        if crate::mcp::tools::gate_edit::is_exempt_from_loc_limit(&file_path) {
+                        let p_lower = file_path.to_lowercase();
+                        if p_lower.starts_with("skills/")
+                            || p_lower.starts_with("skills\\")
+                            || p_lower.starts_with(".agents")
+                            || p_lower.starts_with(".claude")
+                            || p_lower.starts_with(".opencode")
+                            || p_lower.ends_with("_test.rs")
+                            || p_lower.ends_with("_tests.rs")
+                            || p_lower.ends_with(".test.ts")
+                            || p_lower.ends_with(".spec.ts")
+                            || p_lower.ends_with(".test.js")
+                            || crate::mcp::tools::gate_edit::is_exempt_from_loc_limit(&file_path)
+                        {
                             continue;
                         }
+
+                        // Fast metadata check: if file size < 5KB, it cannot exceed 200 LOC
+                        if let Ok(Some((_hash, size, _mod))) = db.get_file_metadata(&file_path) {
+                            if size < 5000 {
+                                continue;
+                            }
+                        }
+
                         let full = proj_path.join(&file_path);
                         if let Ok(content) = std::fs::read_to_string(&full) {
                             let loc = content.lines().count();

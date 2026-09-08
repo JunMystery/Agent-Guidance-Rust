@@ -30,23 +30,47 @@ pub(crate) fn handle(
         .unwrap_or("plan");
 
     // Record active phase and auto-reset approval state when starting a new planning phase
+    let is_same_task = state.user_intent_summary.as_deref() == Some(task);
     state.active_phase = Some(phase.to_string());
     if phase == "plan" {
-        state.workflow_stage = "Plan".to_string();
-        state.plan_approved = false;
-        state.edit_authorized = false;
-        state.verification_passed = false;
-        state.verification_command = None;
-        state.expected_output_keyword = None;
-        let _ = state.save_to_dir(&proj_path);
-        tracing::info!(
-            "Reset workflow stage to 'Plan' and plan_approved to false for new task pipeline execution."
-        );
+        // Only reset approval if this is a different task or if not already in Build/Test_Recheck
+        if !is_same_task || (state.workflow_stage != "Build" && state.workflow_stage != "Test_Recheck") {
+            state.workflow_stage = "Plan".to_string();
+            state.plan_approved = false;
+            state.edit_authorized = false;
+            state.verification_passed = false;
+            state.verification_command = None;
+            state.expected_output_keyword = None;
+            let _ = state.save_to_dir(&proj_path);
+            tracing::info!(
+                "Reset workflow stage to 'Plan' and plan_approved to false for new task pipeline execution."
+            );
+        }
     }
+    state.user_intent_summary = Some(task.to_string());
 
-    let snapshot = project_snapshot(&proj_path);
+    // Fast-path file count: use existing code_graph.db count if present, else snapshot
+    let file_count = {
+        let db_path = proj_path.join(".agent-context").join("code_graph.db");
+        if db_path.exists() {
+            if let Ok(db) = crate::context::db::CodeGraphDb::open_read_only(&db_path) {
+                db.conn
+                    .query_row("SELECT COUNT(*) FROM files", [], |r| r.get::<_, i64>(0))
+                    .map(|c| c as usize)
+                    .unwrap_or(0)
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    };
+    let file_count = if file_count > 0 {
+        file_count
+    } else {
+        project_snapshot(&proj_path).files.len()
+    };
     ensure_not_cancelled(state)?;
-    let file_count = snapshot.files.len();
 
     let detected_arch = detect_project_architecture(&proj_path);
     state.active_architecture_pattern = Some(detected_arch.clone());

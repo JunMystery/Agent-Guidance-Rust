@@ -28,24 +28,21 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             if entry.depth() == 0 {
                 return true;
             }
-            let name = entry.file_name().to_string_lossy();
-            !matches!(
-                name.as_ref(),
-                ".git"
-                    | ".agent-context"
-                    | "target"
-                    | "node_modules"
-                    | ".gradle"
-                    | "build"
-                    | "dist"
-                    | ".next"
-                    | "vendor"
-                    | ".venv"
-                    | ".cache"
-                    | "__pycache__"
-                    | ".turbo"
-                    | "out"
-            )
+            let name = entry.file_name();
+            !(name == ".git"
+                || name == ".agent-context"
+                || name == "target"
+                || name == "node_modules"
+                || name == ".gradle"
+                || name == "build"
+                || name == "dist"
+                || name == ".next"
+                || name == "vendor"
+                || name == ".venv"
+                || name == ".cache"
+                || name == "__pycache__"
+                || name == ".turbo"
+                || name == "out")
         })
         .build();
 
@@ -61,8 +58,12 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             let relative = path.strip_prefix(&target_root).unwrap_or(path);
             let rel_str = relative.to_string_lossy().to_string();
 
-            let file_type = if path.is_dir() { "directory" } else { "file" };
-            let size_bytes = if path.is_file() {
+            let ft = entry.file_type();
+            let is_dir = ft.as_ref().map(|t| t.is_dir()).unwrap_or(false);
+            let is_file = ft.as_ref().map(|t| t.is_file()).unwrap_or(false);
+
+            let file_type = if is_dir { "directory" } else { "file" };
+            let size_bytes = if is_file {
                 entry.metadata().map(|m| m.len()).unwrap_or(0)
             } else {
                 0

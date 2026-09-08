@@ -1,17 +1,19 @@
+//! Unified Embedding Model Coordinator
+//!
+//! Opportunistically instantiates the accelerated Int8 ONNX Runtime engine
+//! (with DirectML, CUDA, or CPU SIMD) and seamlessly falls back to Candle BERT.
+
 use anyhow::Result;
-use candle_core::{Device, Tensor};
-use candle_nn::VarBuilder;
-use candle_transformers::models::bert::{BertModel, Config};
-use hf_hub::{Cache, Repo, RepoType, api::sync::ApiBuilder};
-use tokenizers::Tokenizer;
+use candle_core::Device;
+use hf_hub::{Cache, Repo, RepoType};
+use std::path::PathBuf;
 use tracing::info;
 
-use super::device::resolve_optimal_device;
+use super::backend::EmbeddingBackend;
+use super::candle_bert::CandleBertInner;
+use super::quantized::OnnxQuantizedModel;
 
-pub(crate) fn resolve_repo_paths(
-    model_id: &str,
-    files: &[&str],
-) -> Result<Vec<std::path::PathBuf>> {
+pub(crate) fn resolve_repo_paths(model_id: &str, files: &[&str]) -> Result<Vec<PathBuf>> {
     let repo = Repo::new(model_id.to_string(), RepoType::Model);
     let cache_repo = Cache::from_env().repo(repo.clone());
     let mut paths = Vec::with_capacity(files.len());
@@ -28,110 +30,50 @@ pub(crate) fn resolve_repo_paths(
     if all_cached {
         return Ok(paths);
     }
-    anyhow::bail!("Model '{}' not locally cached in ~/.cache/huggingface. Using rich embedded manifest.", model_id)
+    anyhow::bail!(
+        "Model '{}' not locally cached in ~/.cache/huggingface. Using rich embedded manifest.",
+        model_id
+    )
 }
 
 pub struct EmbeddingModel {
-    pub(crate) model: BertModel,
-    pub(crate) tokenizer: Tokenizer,
-    pub(crate) device: Device,
+    pub backend: EmbeddingBackend,
+    pub device: Device,
 }
 
 impl EmbeddingModel {
     pub fn load_or_download() -> Result<Self> {
-        let (device, dev_name) = resolve_optimal_device();
-        let paths = resolve_repo_paths(
-            "intfloat/multilingual-e5-small",
-            &["config.json", "tokenizer.json", "model.safetensors"],
-        )?;
-        let config_filename = &paths[0];
-        let tokenizer_filename = &paths[1];
-        let weights_filename = &paths[2];
+        // 1. Opportunistic ONNX Int8 quantized vector acceleration
+        if let Some(onnx) = try_load_onnx_quantized() {
+            info!(
+                "EmbeddingModel active with ONNX Int8 acceleration on {}",
+                onnx.device_name()
+            );
+            return Ok(Self {
+                backend: EmbeddingBackend::OnnxInt8(Box::new(onnx)),
+                device: Device::Cpu,
+            });
+        }
 
-        let config: Config = serde_json::from_str(
-            &std::fs::read_to_string(config_filename)
-            .map_err(|e| anyhow::anyhow!("Failed to read model config: {}", e))?,
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to parse model config JSON: {}", e))?;
-
-        let tokenizer = Tokenizer::from_file(tokenizer_filename)
-            .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
-
-        let model = Self::try_load_model(weights_filename, &config, &device)
-            .map_err(|e| anyhow::anyhow!("Failed to load BertModel: {}", e))?;
-
-        info!("EmbeddingModel loaded successfully on {}.", dev_name);
+        // 2. Pure-Rust Candle BERT baseline fallback
+        let inner = CandleBertInner::load_or_download()?;
+        let device = inner.device.clone();
         Ok(Self {
-            model,
-            tokenizer,
+            backend: EmbeddingBackend::CandleBert(inner),
             device,
         })
     }
 
-    fn try_load_model(
-        weights_filename: &std::path::Path,
-        config: &Config,
-        device: &Device,
-    ) -> Result<BertModel> {
-        let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[weights_filename], candle_core::DType::F32, device)?
-        };
-        let model = BertModel::load(vb, config)?;
-        Ok(model)
+    pub fn device_name(&self) -> &'static str {
+        self.backend.device_name()
     }
 
-    pub fn device_name(&self) -> &'static str {
-        match self.device {
-            Device::Cpu => "CPU",
-            Device::Cuda(_) => "NVIDIA CUDA",
-            Device::Metal(_) => "Apple Metal",
-        }
+    pub fn is_quantized(&self) -> bool {
+        self.backend.is_quantized()
     }
 
     pub fn embed_text(&self, text: &str, prefix: Option<&str>) -> Result<Vec<f32>> {
-        let formatted = match prefix {
-            Some("query") => format!("query: {}", text),
-            Some("passage") => format!("passage: {}", text),
-            _ => text.to_string(),
-        };
-
-        let mut tokenizer = self.tokenizer.clone();
-        tokenizer
-            .with_padding(None)
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: 512,
-                ..Default::default()
-            }))
-            .map_err(|e| anyhow::anyhow!("Tokenizer truncation error: {}", e))?;
-
-        let encoding = tokenizer
-            .encode(formatted, true)
-            .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
-
-        let input_ids = encoding.get_ids();
-        let attention_mask = encoding.get_attention_mask();
-
-        let input_ids = Tensor::new(input_ids, &self.device)?.unsqueeze(0)?;
-        let token_type_ids = input_ids.zeros_like()?;
-        let attention_mask_tensor = Tensor::new(attention_mask, &self.device)?.unsqueeze(0)?;
-
-        let embeddings = self
-            .model
-            .forward(&input_ids, &token_type_ids, Some(&attention_mask_tensor))?;
-
-        // Mean pooling over token dimension
-        let mask_f32 = attention_mask_tensor.to_dtype(candle_core::DType::F32)?;
-        let mask_expanded = mask_f32.unsqueeze(2)?;
-        let sum_embeddings = embeddings.broadcast_mul(&mask_expanded)?.sum(1)?;
-        let sum_mask = mask_f32.sum(1)?.unsqueeze(1)?;
-        let mean_embedding = sum_embeddings.broadcast_div(&sum_mask)?;
-
-        // L2 normalize
-        let norm = mean_embedding.sqr()?.sum_keepdim(1)?.sqrt()?;
-        let normalized = mean_embedding.broadcast_div(&norm)?;
-
-        let vector = normalized.squeeze(0)?.to_vec1::<f32>()?;
-        Ok(vector)
+        self.backend.embed_text(text, prefix)
     }
 
     pub fn embed_batch(
@@ -140,78 +82,46 @@ impl EmbeddingModel {
         prefix: Option<&str>,
         batch_size: usize,
     ) -> Result<Vec<Vec<f32>>> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let chunk_size = if batch_size == 0 { 32 } else { batch_size };
-        let mut results = Vec::with_capacity(texts.len());
-
-        let mut tokenizer = self.tokenizer.clone();
-        tokenizer
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: 512,
-                ..Default::default()
-            }))
-            .map_err(|e| anyhow::anyhow!("Tokenizer truncation config error: {}", e))?;
-
-        for chunk in texts.chunks(chunk_size) {
-            let formatted_chunk: Vec<String> = chunk
-                .iter()
-                .map(|t| match prefix {
-                    Some("query") => format!("query: {}", t),
-                    Some("passage") => format!("passage: {}", t),
-                    _ => t.to_string(),
-                })
-                .collect();
-
-            let encodings = tokenizer
-                .encode_batch(formatted_chunk, true)
-                .map_err(|e| anyhow::anyhow!("Batch tokenization failed: {}", e))?;
-
-            let b_size = encodings.len();
-            let max_len = encodings.iter().map(|e| e.get_ids().len()).max().unwrap_or(0);
-
-            if max_len == 0 {
-                continue;
-            }
-
-            let mut batch_input_ids = vec![0u32; b_size * max_len];
-            let mut batch_attention_mask = vec![0u32; b_size * max_len];
-
-            for (i, enc) in encodings.iter().enumerate() {
-                let ids = enc.get_ids();
-                let mask = enc.get_attention_mask();
-                let len = ids.len();
-                let start = i * max_len;
-
-                batch_input_ids[start..start + len].copy_from_slice(ids);
-                batch_attention_mask[start..start + len].copy_from_slice(mask);
-            }
-
-            let input_ids = Tensor::from_vec(batch_input_ids, (b_size, max_len), &self.device)?;
-            let attention_mask = Tensor::from_vec(batch_attention_mask, (b_size, max_len), &self.device)?;
-            let token_type_ids = input_ids.zeros_like()?;
-
-            let embeddings = self
-                .model
-                .forward(&input_ids, &token_type_ids, Some(&attention_mask))?;
-
-            // Mean pooling
-            let mask_f32 = attention_mask.to_dtype(candle_core::DType::F32)?;
-            let mask_expanded = mask_f32.unsqueeze(2)?;
-            let sum_embeddings = embeddings.broadcast_mul(&mask_expanded)?.sum(1)?;
-            let sum_mask = mask_f32.sum(1)?.unsqueeze(1)?;
-            let mean_embedding = sum_embeddings.broadcast_div(&sum_mask)?;
-
-            // L2 normalize
-            let norm = mean_embedding.sqr()?.sum_keepdim(1)?.sqrt()?;
-            let normalized = mean_embedding.broadcast_div(&norm)?;
-
-            let batch_vectors = normalized.to_vec2::<f32>()?;
-            results.extend(batch_vectors);
-        }
-
-        Ok(results)
+        self.backend.embed_batch(texts, prefix, batch_size)
     }
+}
+
+fn try_load_onnx_quantized() -> Option<OnnxQuantizedModel> {
+    // 1. Check custom path via environment variable
+    if let Ok(env_path) = std::env::var("AGENT_GUIDANCE_ONNX_PATH") {
+        let p = PathBuf::from(env_path.trim());
+        if let Ok(model) = OnnxQuantizedModel::load_from_dir(&p) {
+            return Some(model);
+        }
+    }
+
+    // 2. Check local data directory (~/.agent-guidance/models/)
+    if let Some(home) = dirs::home_dir() {
+        let p = home.join(".agent-guidance").join("models");
+        if let Ok(model) = OnnxQuantizedModel::load_from_dir(&p) {
+            return Some(model);
+        }
+    }
+
+    // 3. Check HuggingFace hub cache for ONNX exports
+    let repo_names = ["BAAI/bge-small-en-v1.5", "intfloat/multilingual-e5-small"];
+    for repo_name in &repo_names {
+        let repo = Repo::new(repo_name.to_string(), RepoType::Model);
+        let cache_repo = Cache::from_env().repo(repo);
+        if let (Some(onnx), Some(_tok)) = (
+            cache_repo
+                .get("model_quantized.onnx")
+                .or_else(|| cache_repo.get("model_int8.onnx"))
+                .or_else(|| cache_repo.get("model.onnx")),
+            cache_repo.get("tokenizer.json"),
+        ) {
+            if let Some(parent) = onnx.parent() {
+                if let Ok(model) = OnnxQuantizedModel::load_from_dir(parent) {
+                    return Some(model);
+                }
+            }
+        }
+    }
+
+    None
 }

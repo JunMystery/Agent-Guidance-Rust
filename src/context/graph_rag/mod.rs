@@ -3,11 +3,13 @@ use std::path::{Path, PathBuf};
 
 pub mod community;
 pub mod leiden;
+pub mod mermaid;
 pub mod persistence;
 pub mod query;
 pub mod reusability;
 
 pub use community::{Community, CommunityHierarchy, CommunityLevel, CommunitySummary, GraphEdge, GraphEntity};
+pub use mermaid::{generate_architecture_mermaid, generate_blast_radius_mermaid};
 pub use query::{GraphRagQueryMode, QueryResult};
 pub use reusability::{format_reusable_report, is_shared_path, ReusableSymbol, SemanticClonePair};
 
@@ -107,6 +109,59 @@ impl GraphRagEngine {
     /// Analyzes codebase for reusable shared functions and ML semantic clones.
     pub fn analyze_reusability(&self) -> Result<String> {
         reusability::analyze_project_reusability(&self.project_path)
+    }
+
+    /// Generates Mermaid architecture DAG for this project
+    pub fn architecture_mermaid(&self, detected_architecture: &str) -> String {
+        let hierarchy = self.load_or_build(detected_architecture);
+        let edges = if let Ok(db) = CodeGraphDb::open_for_project(&self.project_path) {
+            let edge_stmt = db.conn.prepare(
+                "SELECT source_id, target_id, edge_type, weight FROM symbol_edges",
+            ).ok();
+            if let Some(mut stmt) = edge_stmt {
+                stmt.query_map([], |row| {
+                    Ok(GraphEdge {
+                        source_id: row.get(0)?,
+                        target_id: row.get(1)?,
+                        edge_type: row.get(2)?,
+                        weight: row.get(3)?,
+                    })
+                })
+                .ok()
+                .map(|iter| iter.filter_map(|r| r.ok()).collect())
+                .unwrap_or_default()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+        mermaid::generate_architecture_mermaid(&hierarchy, &edges)
+    }
+
+    /// Generates Mermaid blast-radius DAG for a specific target symbol
+    pub fn symbol_blast_radius_mermaid(&self, symbol_name: &str) -> Result<String> {
+        let db = CodeGraphDb::open_for_project(&self.project_path)?;
+        let mut callers = Vec::new();
+        let mut callees = Vec::new();
+
+        let mut in_stmt = db.conn.prepare(
+            "SELECT s.name FROM symbol_edges e JOIN symbols s ON e.source_id = s.id WHERE e.target_id IN (SELECT id FROM symbols WHERE name = ?1) LIMIT 10",
+        )?;
+        let in_iter = in_stmt.query_map([symbol_name], |row| row.get(0))?;
+        for caller in in_iter.flatten() {
+            callers.push(caller);
+        }
+
+        let mut out_stmt = db.conn.prepare(
+            "SELECT s.name FROM symbol_edges e JOIN symbols s ON e.target_id = s.id WHERE e.source_id IN (SELECT id FROM symbols WHERE name = ?1) LIMIT 10",
+        )?;
+        let out_iter = out_stmt.query_map([symbol_name], |row| row.get(0))?;
+        for callee in out_iter.flatten() {
+            callees.push(callee);
+        }
+
+        Ok(mermaid::generate_blast_radius_mermaid(symbol_name, &callers, &callees))
     }
 }
 

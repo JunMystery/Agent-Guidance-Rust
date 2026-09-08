@@ -1,6 +1,6 @@
 [package]
 name = "agent-guidance"
-version = "1.4.13"
+version = "1.5.0"
 edition = "2024"
 
 [dependencies]
@@ -13,7 +13,6 @@ anyhow = "1.0"
 ignore = "0.4"
 rayon = "1.10"
 rusqlite = { version = "0.31", features = ["bundled", "bundled-full"] }
-tree-sitter = "0.22"
 candle-core = "0.8"
 candle-nn = "0.8"
 candle-transformers = "0.8"
@@ -28,12 +27,18 @@ fs2 = "0.4"
 sysinfo = "0.30"
 ort = { version = "2.0.0-rc.9", default-features = false, features = ["std", "load-dynamic"] }
 ndarray = "0.15"
+tree-sitter = "0.24"
+tree-sitter-rust = "0.23"
+tree-sitter-typescript = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-go = "0.23"
 
 [features]
 default = []
 accelerate = ["candle-core/accelerate", "candle-nn/accelerate"]
-cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda", "ort/cuda"]
 metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+directml = ["ort/directml"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 candle-core = { version = "0.8", features = ["accelerate"] }
@@ -42,3 +47,10 @@ candle-nn = { version = "0.8", features = ["accelerate"] }
 [[bench]]
 name = "performance"
 harness = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

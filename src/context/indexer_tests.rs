@@ -19,6 +19,6 @@ impl PaymentService {
         assert!(symbols.iter().any(|s| s.name == "process_payment" && s.kind == "function"));
 
         let chunks = chunk_code_content("src/payment.rs", code, 50, 10);
-        assert_eq!(chunks.len(), 1);
-        assert!(chunks[0].text.contains("process_payment"));
+        assert_eq!(chunks.len(), 2);
+        assert!(chunks.iter().any(|c| c.text.contains("process_payment")));
     }

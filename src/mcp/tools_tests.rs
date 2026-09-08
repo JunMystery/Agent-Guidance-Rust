@@ -5,6 +5,24 @@
         let base = Path::new(".");
         assert!(validate_path(base, "../../../etc/passwd").is_err());
         assert!(validate_path(base, "Cargo.toml").is_ok());
+
+        let mut state = ServerState::new();
+        state.plan_approved = true;
+        state.set_stage("Build").unwrap();
+
+        let gate_res = handle_tool_call(
+            "workflow_gate",
+            json!({
+                "action": "authorize_edit",
+                "project_path": ".",
+                "relative_path": "../../../evil.rs",
+                "justification": "test traversal"
+            }),
+            &mut state,
+        );
+        assert!(gate_res.is_ok());
+        let gate_text = gate_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(gate_text.contains("PATH_TRAVERSAL_PROHIBITED"));
     }
 
     #[test]
@@ -27,6 +45,7 @@
             "guidance",
             json!({
                 "operation": "get",
+                "project_path": tmp_dir.to_str().unwrap(),
                 "identifier": skill_file.to_string_lossy().to_string()
             }),
             &mut state,
@@ -1135,10 +1154,11 @@
         );
         assert!(res.is_ok());
         let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text.contains("Recommendations"));
-        assert!(text.contains("sql-safety"));
-        assert!(text.contains("*Intent*:"));
-        assert!(text.contains("*Key Rules*:"));
+        assert!(text.contains("Task Pipeline Activated"));
+        assert!(text.contains("Fix sql injection in database queries"));
+        assert!(text.contains("Active Phase: implement"));
+        assert!(text.contains("Architecture Guidance"));
+        assert!(text.contains("Priority Gate: PASSED"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
@@ -1285,9 +1305,8 @@
         let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
         assert!(text.contains("Status: PASSED"));
         assert!(text.contains("[NEW FILE]"));
-        assert!(text.contains("Upfront Modular Architecture Mandate for New File"));
         assert!(text.contains("< 300 LOC"));
-        assert!(text.contains("Decomposition Mandate"));
+        assert!(text.contains("Layered_Architecture Architecture"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

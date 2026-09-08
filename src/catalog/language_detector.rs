@@ -97,6 +97,9 @@ pub fn detect_language_profile(files: &[FileEntry], task_prompt: &str) -> Projec
         ("golang", "go"),
         ("go", "go"),
         ("java", "java"),
+        ("kotlin", "kotlin"),
+        ("android", "kotlin"),
+        ("swift", "swift"),
         ("c++", "c++"),
         ("c#", "c#"),
         ("sql", "sql"),
@@ -115,6 +118,57 @@ pub fn detect_language_profile(files: &[FileEntry], task_prompt: &str) -> Projec
         }
     }
 
+    profile
+}
+
+/// Fast, shallow language profile detection avoiding full depth-8 directory walk (< 2ms).
+pub fn detect_language_fast(proj_path: &std::path::Path, task: &str) -> ProjectLanguageProfile {
+    let mut files = Vec::new();
+    let mut dirs_to_visit = vec![(proj_path.to_path_buf(), 0usize)];
+
+    while let Some((dir, depth)) = dirs_to_visit.pop() {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten().take(50) {
+                let path = entry.path();
+                let path_str = path.to_string_lossy().to_string();
+                let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                let file_type = if is_dir { "dir".to_string() } else { "file".to_string() };
+                files.push(FileEntry {
+                    path: path_str,
+                    file_type,
+                    size_bytes: 0,
+                });
+                if is_dir && depth < 3 {
+                    let dir_name = entry.file_name().to_string_lossy().to_lowercase();
+                    if !dir_name.starts_with('.') && dir_name != "target" && dir_name != "node_modules" && dir_name != "build" {
+                        dirs_to_visit.push((path, depth + 1));
+                    }
+                }
+            }
+        }
+        if files.len() >= 100 {
+            break;
+        }
+    }
+
+    let mut profile = detect_language_profile(&files, task);
+    if proj_path.join("Cargo.toml").exists() {
+        profile.primary_languages.insert("rust".to_string());
+    }
+    if proj_path.join("package.json").exists() {
+        profile.primary_languages.insert("javascript".to_string());
+        profile.primary_languages.insert("typescript".to_string());
+    }
+    if proj_path.join("go.mod").exists() {
+        profile.primary_languages.insert("go".to_string());
+    }
+    if proj_path.join("pyproject.toml").exists() || proj_path.join("requirements.txt").exists() {
+        profile.primary_languages.insert("python".to_string());
+    }
+    if proj_path.join("build.gradle").exists() || proj_path.join("build.gradle.kts").exists() || proj_path.join("pom.xml").exists() {
+        profile.primary_languages.insert("kotlin".to_string());
+        profile.primary_languages.insert("java".to_string());
+    }
     profile
 }
 

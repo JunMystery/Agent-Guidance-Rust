@@ -222,13 +222,14 @@ AI calls tool
 ### Task Pipeline
 
 ```
-task_pipeline(task, project_path)
+task_pipeline(task, project_path, phase)
   ├─ detect_project_path() → resolve workspace root
-  ├─ scan_project() → build file tree (capped)
-  ├─ load_all_skills() → embedded + workspace-local skills
-  ├─ hybrid_vector_search(task, skills, 8) → embedding + keyword
-  ├─ LLMSelector::rerank(task, stage1, 8) → cross-encoder scores
-  └─ format response: recs + exec sequence + tree preview
+  ├─ detect_project_architecture() → Clean_Arch / Layered / Feature / CLI
+  ├─ query SQLite code_graph.db → fast-path file count (<1ms)
+  ├─ generate_dynamic_blueprint() → upfront modularity blueprint (<300 LOC)
+  ├─ get_semantic_relevant_learnings() → inject past session learnings
+  ├─ get_phase_rules() → phase-targeted execution mandates
+  └─ unlock priority gate (PASSED)
 ```
 
 ### 3-Tier Search Fallback

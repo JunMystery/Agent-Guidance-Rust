@@ -65,7 +65,7 @@ pub fn hybrid_vector_search(
 
                 let mut score = base_score;
                 let name_lower = cand.name.to_lowercase();
-                let doc = cand.to_semantic_doc();
+                let doc = cand.get_semantic_doc();
                 let intent_lower = doc.intent.to_lowercase();
                 let actions_lower: String = doc.action_triggers.join(" ").to_lowercase();
 
@@ -103,7 +103,7 @@ pub fn hybrid_vector_search(
 
     for (i, cand) in candidates.iter().enumerate() {
         let name_lower = cand.name.to_lowercase();
-        let doc = cand.to_semantic_doc();
+        let doc = cand.get_semantic_doc();
         let intent_lower = doc.intent.to_lowercase();
         let desc_lower = doc.description.to_lowercase();
         let triggers_lower: String = doc.triggers.join(" ").to_lowercase();
@@ -171,7 +171,6 @@ pub fn hybrid_vector_search(
         .map(|(s, i)| (s, candidates[i].clone()))
         .collect()
 }
-
 
 #[cfg(test)]
 mod tests {

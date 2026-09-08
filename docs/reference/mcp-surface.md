@@ -6,86 +6,114 @@ Complete reference for every public MCP tool, resource, and prompt exposed by th
 
 ---
 
-## Tools (10)
+## Tools (12)
 
 All tools except `agent-guidance-mcp_health_check`, `agent-guidance-mcp_diagnose`, `agent-guidance-mcp_token_stats`, `agent-guidance-mcp_usage_report`, and `agent-guidance-mcp_require_edit_approval` require `agent-guidance-mcp_task_pipeline` to be called first. Gated tools return `PRIORITY_REQUIRED` if called before `agent-guidance-mcp_task_pipeline`.
 
 ### 1. `agent-guidance-mcp_task_pipeline` -- Call First (unlocks gate)
 
-One-stop context preparation. Returns standards recommendations, project tree, code search, and optional UI/UX guidance in a single optimized call. Uses parallel execution internally.
+One-stop context preparation and priority gate unlocker. Initializes workspace boundaries, detects project architectural patterns, synthesizes dynamic split blueprints (< 300 LOC mandate), and injects memorized project learnings in an ultra-fast, token-bounded response (< 250 tokens).
 
 ```
 task_pipeline(
     task: str,                         # required — description of work
-    project_path: str = ".",           # project root
-    focus: str = "general",            # "general" | "frontend" | "backend"
-    code_query: str | None = None,     # search override (auto-detected if omitted)
-    include_tree: bool = True,         # include directory tree
-    include_ui: bool = True,           # attach UI/UX guidance when task signals UI
-    limit: int = 8,                    # max recommendations
+    project_path: str = ".",           # project root (auto-detected if omitted)
+    phase: str = "plan",               # active lifecycle phase: "plan" | "context" | "build" | "test"
 ) -> dict
 ```
 
-**Returns:**
-- `task`, `focus` — echoed inputs
-- `recommendations` — skill/standard recommendations with reasons
-- `project_tree` — bounded directory tree (if `include_tree=True`)
-- `code_search` — ranked code matches (if auto-detected or provided query)
-- `agent-guidance-mcp_ui_ux` — UI/UX guidance (if UI intent detected and `include_ui=True`)
-- `execution_sequence` — recommended skills sorted by lifecycle order
+**Returns formatted markdown containing:**
+- `Task`, `Active Phase`, and `Project` summary (with total indexed file count).
+- `💡 Project Memorized Learnings` — semantically relevant past session learnings from `.agent-context/learnings.md`.
+- `📐 Dynamic Split Blueprint` — upfront modularity blueprint tailored to detected architecture (Clean Architecture, Layered Architecture, Package by Feature, CLI Pipeline, Flat Library, Orchestrator) and alerts for monolithic files ($\ge 200$ LOC).
+- `Architecture Guidance` & `Core Phase Rules` — targeted execution mandates for active phase.
+- `Priority Gate: PASSED` — confirms unlock for subsequent MCP tool calls.
+- `-> NEXT STEP` — clear directive guiding next tool execution.
 
 **Example:**
 ```
-task_pipeline(task="Add JWT auth to Express API", focus="backend")
+task_pipeline(task="Add JWT auth to Express API", phase="plan")
 ```
 
 ---
 
-### 2. `agent-guidance-mcp_guidance` -- Standards & Skill Catalog
+### 2. `agent-guidance-mcp_select_skills` -- Inject Selected Skills
 
-Standards catalog and skill lookup. 185 entries available on-demand. Supports 10 operations (the workflow/precode/verify/feedback tools were consolidated into `guidance` operations).
+Confirm which proposed or catalog skills to load into the active conversation context. Injects token-optimized markdown with fast passage slicing and dynamic token measurement. Pass skill names (e.g. `['android-clean-architecture']`), or pass an empty array `[]` to skip all.
+
+```
+select_skills(
+    skills: list[str],                 # required — skill names to load (e.g. ["android-clean-architecture"]), or [] to skip
+    task: str | None = None,           # optional active task description for semantic section slicing
+    project_path: str = ".",           # absolute path of active repository workspace
+    user_confirmed: bool = False,      # user confirmation flag (mandatory when proposals are pending)
+) -> str
+```
+
+**Returns formatted markdown containing:**
+- `Skill Selection Confirmed (<N>)` or `Skill Selection: No skills selected. Proceeding directly to task execution.`
+- Sliced, compressed skill markdown bodies (`### Skill: <name>`).
+- `🛡️ Language Safety Rules` — micro-guidelines detected for the project tech stack (< 1ms).
+- Dynamic token accounting recorded in `.agent-context/usage.db`.
+
+**Interaction Flow:**
+1. `task_pipeline` proposes matching skills.
+2. Agent prompts the user via `ask_question` tool.
+3. User selects skills.
+4. Agent invokes `select_skills(skills=[...], user_confirmed=true)`.
+
+**Example:**
+```
+select_skills(
+    skills=["android-clean-architecture"],
+    task="Implement repository pattern and domain usecases",
+    user_confirmed=True
+)
+```
+
+---
+
+### 3. `agent-guidance-mcp_guidance` -- Standards & Skill Catalog
+
+Standards catalog, 2-stage vector search, 168 embedded skills, pre-code architecture blueprints, and empirical verification contracts. Supports 9 operations.
 
 ```
 guidance(
-    operation: str,                    # required — list|get|search|recommend|reason|docs|workflow|precode|verify|feedback
-    query: str | None = None,          # search/recommend/reason/docs/precode/verify query
-    identifier: str | None = None,     # skill/document ID for "get"; library name for "docs"; mode for "workflow"; skill_id for "feedback"
-    category: str | None = None,       # filter by category
-    kind: str | None = None,           # filter by kind (skill, doc, principle, etc.)
-    limit: int = 10,                   # max results
-    include_content: bool = False,     # include full body for "get"
-    rating: int = 0,                   # 1-5 rating for "feedback"
-) -> dict | list[dict]
+    operation: str,                    # required — search|get|list|precode|verify|workflow|ui_ux|docs|reindex_skills
+    query: str | None = None,          # search query / keyword for search, docs, ui_ux, precode
+    identifier: str | None = None,     # skill name/path for get / docs, or workflow stage for workflow
+    project_path: str = ".",           # absolute path of active repository workspace
+    verification_command: str | None = None,    # required for verify: shell test command (e.g. 'cargo test')
+    expected_output_keyword: str | None = None, # required for verify: expected success keyword (e.g. 'ok')
+) -> str
 ```
 
 #### Operations
 
 | Operation | Required Args | Description |
 |---|---|---|
-| `list` | -- | List all catalog entries (filterable by `category`, `kind`) |
-| `get` | `identifier` | Load a specific skill/document. Set `include_content=True` for full body. Detects dependency cycles. |
-| `search` | `query` | Full-text search across catalog. Returns ranked results with scores + snippets. |
-| `recommend` | `query` | Auto-recommend skills/standards for a task (keyword + TASK_ANCHORS matching) |
-| `reason` | `query` | Structured reasoning framework. Classifies task into: `decision`, `bug`, `architecture`, `security`, `performance`, `general`. Returns framework template, key questions, and skill URIs. |
-| `docs` | `query`, `identifier` | Live library/API documentation via Context7. `identifier` is the library name (e.g. `"react"`, `"nextjs"`, `"express"`). |
-| `workflow` | `identifier` (mode) | Load a workflow mode with enriched context and next-step suggestion. Replaces the deprecated `workflow`/`workflow_prompt` tools. |
-| `precode` | `query` (task) | Structured pre-code checklist (conventions, security, testing, arch, deploy). Replaces the deprecated `precode_check` tool. |
-| `verify` | `query` (changes) | Post-change verification steps; infers test/review/security/audit/deploy. Replaces the deprecated `verify` tool. |
-| `feedback` | `identifier`, `rating` | Record a 1-5 skill rating to boost future recommendations. Replaces the deprecated `feedback` tool. |
+| `search` | `query` | 2-stage Candle BERT vector search + Cross-Encoder re-ranking across skills catalog. Fast shallow language profile matching (< 2ms). |
+| `get` | `identifier` | Retrieve compressed body of an embedded skill or local workspace skill. |
+| `list` | -- | List all registered skills in embedded catalog and workspace (.agents/skills). |
+| `docs` | `query` \| `identifier` | Search technical documentation cheat-sheets with token-bounded markdown slicing (< 400 tokens). |
+| `workflow` | `identifier` (stage) | Load stage workflow guide (`plan`, `context`, `build`, `test`, `review`). |
+| `precode` | `query` | Structured pre-code checklist (Upfront Architecture & 300 LOC Cap, Language Rules, Symbol Grounding, Error Boundaries). |
+| `verify` | `verification_command`, `expected_output_keyword` | Register empirical verification contract to satisfy anti-hallucination mandate. |
+| `ui_ux` | `query` | Retrieve UI/UX guidelines and design system standards. |
+| `reindex_skills` | -- | Force refresh semantic vector index for skills and clear passage caches. |
 
 **Examples:**
 ```
-guidance(operation="search", query="humanizer writing")
-guidance(operation="get", identifier="humanizer", include_content=True)
-guidance(operation="reason", query="should I use microservices vs monolith")
-guidance(operation="docs", query="jsonwebtoken sign options", identifier="node-jsonwebtoken")
+guidance(operation="search", query="jwt auth express")
+guidance(operation="get", identifier="android-clean-architecture")
+guidance(operation="docs", query="rust testing", identifier="rust-patterns")
+guidance(operation="precode", query="android kotlin UI")
+guidance(operation="verify", verification_command="cargo test", expected_output_keyword="103 passed")
 ```
-
-**Loading skills on-demand:** The built-in `skill` tool only lists a few external skills. Use `agent-guidance-mcp_guidance(operation="get", identifier="skill-name", include_content=True)` to load any of the 185 Agent Guidance skills.
 
 ---
 
-### 3. `agent-guidance-mcp_project_context` -- Code Graph & Semantic Search Engine
+### 4. `agent-guidance-mcp_project_context` -- Code Graph & Semantic Search Engine
 
 Read, search, navigate code graphs, and explore project files with built-in token budgets and persistent SQLite storage.
 
@@ -101,6 +129,7 @@ project_context(
     resolved_line: int | None = None,  # line number for learn_alias
     scope: str = "all",                # scope for navigate: "all" | "symbols" | "content" | "edges"
     view_mode: str = "auto",           # view mode for read: "auto" (default skeleton if >300 LOC) | "full" | "skeleton"
+    mode: str = "drift",               # GraphRAG query mode: "global" | "local" | "drift"
 ) -> dict
 ```
 
@@ -114,24 +143,29 @@ project_context(
 | `reindex` | -- | Force full AST re-parse and queue background Multilingual-E5 vector embedding for symbols and chunks. |
 | `read` | `relative_path` | Bounded file read with 300 line cap and auto-skeletonization for large files (`view_mode="skeleton"`). Target symbol extraction supported. |
 | `symbols` | `relative_path` | Extract functions, structs, enums, classes, and traits across 6+ languages. |
-| `references` | `query` | Find all usages of a symbol across the codebase. |
+| `references` | `query` | Instant symbol usage lookup across codebase (<5ms SQLite FTS5 index). |
 | `structure` | `relative_path` | Method-level hierarchical structure map of a specific source file. |
-| `architecture` | -- | Detects and persists architectural style in `.agent-context/architecture.json`. |
+| `architecture` | -- | Detects and persists architectural style and hierarchical community subsystems. |
+| `graph_rag` | `query` | Dual-level GraphRAG query synthesizing hierarchical community summaries with local semantic retrieval (`mode="global" \| "local" \| "drift"`). |
+| `reusable` | -- | AST and Graph-based reusability analysis to detect duplicated logic, common utilities, and candidates for shared modules across the codebase. |
 | `tree` | -- | Top-level repository structure overview (capped at depth 2). |
 
 **Examples:**
 ```
 project_context(operation="search", query="xử lý timeout API")
 project_context(operation="navigate", query="PaymentService", scope="all")
+project_context(operation="graph_rag", query="authentication flow", mode="drift")
+project_context(operation="reusable")
 project_context(operation="learn_alias", alias_term="thanh toán", relative_path="src/payment.rs", resolved_symbol="PaymentGateway")
 project_context(operation="read", relative_path="src/main.rs", target_symbol="main")
 project_context(operation="read", relative_path="src/large_service.rs", view_mode="skeleton")
+project_context(operation="references", query="handle_read")
 project_context(operation="reindex")
 ```
 
 ---
 
-### 4. `agent-guidance-mcp_ui_ux` -- Design Guidance
+### 5. `agent-guidance-mcp_ui_ux` -- Design Guidance
 
 UI/UX Pro Max design guidance. Supports 3 operations.
 
@@ -164,16 +198,18 @@ ui_ux(operation="slides", query="pitch deck", domain="landing")
 
 ---
 
-### 5. `agent-guidance-mcp_session_continuity` -- State Persistence & Handoff
+### 6. `agent-guidance-mcp_session_continuity` -- State Persistence & Handoff
 
-Persist or recover task session state, store categorized project learnings into `.agent-context/learnings.md` (FIFO 30 items), and generate cross-agent handoff summaries.
+Persist or recover task session state, switch between archived sessions, calculate file modification diffs, store categorized project learnings into `.agent-context/learnings.md` (with pinned item survival), and generate cross-agent handoff summaries.
 
 ```
 session_continuity(
-    operation: str,                    # required — save | load | clear | learn | handoff
+    operation: str,                    # required — save | load | clear | learn | handoff | diff | list | switch
     project_path: str = ".",
+    session_id: str | None = None,     # target session ID for switch
     learning: str | None = None,       # required for learn
     category: str | None = None,       # "build_test" | "environment" | "architecture" | "domain_rule" | "general"
+    pinned: bool = False,              # pin learning item to protect from FIFO eviction
     next_action: str | None = None,    # recommended next action for handoff
 ) -> dict
 ```
@@ -181,26 +217,31 @@ session_continuity(
 | Operation | Description |
 |---|---|
 | `save` | Save active session snapshot to `.agent-context/sessions/{session_id}.json` |
-| `load` | Load persisted session state and token metrics |
-| `clear` | Delete all session snapshot files |
+| `load` | Load latest session snapshot and reset permission flags |
+| `clear` | Clear all session snapshots and reset state |
 | `learn` | Record distilled project learning into `.agent-context/learnings.md` with category tag and 30-item FIFO cap |
 | `handoff` | Generate `.agent-context/handoff.md` summary for seamless multi-IDE / multi-agent handover |
+| `diff` | Generate session modification diff table with lines delta and blast-radius impact risk |
+| `list` | Display active and archived sessions with IDE client, workflow stage, architecture, and file counts |
+| `switch` | Switch active session to target `session_id` with Zero-Trust permission reset |
 
 ---
 
-### 6. `agent-guidance-mcp_workflow_gate` -- Stage Enforcement & Impact Guard
+### 7. `agent-guidance-mcp_workflow_gate` -- Stage Enforcement & Impact Guard
 
 Manage workflow stages, authorize code edits with Code Graph dependency risk checks, and restore pre-edit snapshots.
 
 ```
 workflow_gate(
-    action: str,                       # required — status | check | set_stage | advance | authorize_edit | rollback
+    action: str,                       # required — check | status | set_stage | set_architecture | advance | authorize_edit | approve_plan | pass_verification | rollback
     project_path: str = ".",
     relative_path: str | None = None,  # required for authorize_edit — target file to create or modify (enforces < 300 LOC cap and blast radius analysis)
     architecture_pattern: str | None = None, # target architecture pattern for authorize_edit (default: "Auto")
+    risk_level: str = "LOW",           # LOW | MEDIUM | HIGH (for authorize_edit / advance)
     justification: str | None = None,  # explanation/mitigation plan when editing files or decomposing monoliths
     user_message: str | None = None,   # user's approval text for check
-    target_stage: str | None = None,   # valid target stage for set_stage
+    user_confirmed: bool = False,      # user confirmation flag for approve_plan
+    target_stage: str | None = None,   # valid target stage for set_stage / advance
 ) -> dict
 ```
 
@@ -209,22 +250,19 @@ workflow_gate(
 | `check` | Check current stage and evaluate user message for plan approvals |
 | `status` | Display full workflow state, plan approval, and token metrics |
 | `set_stage` | Manually transition workflow stage |
-| `advance` | Composite check, approval, and transition in a single step |
+| `set_architecture` | Detect, lock, and persist architectural pattern in `.agent-context/architecture.json` |
+| `advance` | Composite check, approval, and transition in a single step (verifies 300 LOC cap on modified files) |
 | `authorize_edit` | Evaluate target file risk via Code Graph, enforce < 300 LOC cap, trigger zero-turn transition (Plan → Build), auto-create pre-edit snapshot, and grant file-scoped edit permission |
+| `approve_plan` | Record explicit plan approval (requires `user_confirmed=True`) and create session checkpoint |
+| `pass_verification` | Record empirical test verification pass and reset fix attempt counter |
 | `rollback` | Restore pre-edit file snapshot from `.agent-context/snapshots/{session_id}/` |
-
-| Action | Description |
-|---|---|
-| `status` | View current stage, plan approval status, fix attempts |
-| `check` | Parse user message for approval keywords ("proceed", "ok", "do it", etc.) |
-| `set_stage` | Transition to a new stage (validates rules + circuit breaker) |
 
 **Stage lifecycle:** `Context → Plan → Ask_Revise → Build → Test_Recheck → Fix → Proposal`
 Transition to `Build` requires `plan_approved=true`. The circuit breaker resets to `Ask_Revise` after 3 failed fix attempts.
 
 ---
 
-### 7. `agent-guidance-mcp_require_edit_approval` -- Edit Permission Gate
+### 8. `agent-guidance-mcp_require_edit_approval` -- Edit Permission Gate
 
 Final gate check before any write/edit/bash operation. Returns error unless workflow stage is `Build` with `plan_approved=true`.
 
@@ -238,7 +276,7 @@ require_edit_approval(
 
 ---
 
-### 8. `agent-guidance-mcp_usage_report` -- Usage Statistics
+### 9. `agent-guidance-mcp_usage_report` -- Usage Statistics
 
 ```
 usage_report(scope: str = "session") -> dict
@@ -264,7 +302,7 @@ View the dashboard in a browser: `agent-guidance-mcp --dashboard`
 
 ---
 
-### 9. `agent-guidance-mcp_token_stats` -- Session Statistics
+### 10. `agent-guidance-mcp_token_stats` -- Session Statistics
 
 ```
 token_stats() -> dict
@@ -274,7 +312,7 @@ Returns token optimization statistics: `total_calls`, `total_original_tokens`, `
 
 ---
 
-### 10. `agent-guidance-mcp_health_check` -- Server Status
+### 11. `agent-guidance-mcp_health_check` -- Server Status
 
 ```
 health_check() -> dict
@@ -284,7 +322,7 @@ Returns `status`, `server`, `version`, `entries` (catalog entry count).
 
 ---
 
-### 11. `agent-guidance-mcp_diagnose` -- Self-Diagnostics
+### 12. `agent-guidance-mcp_diagnose` -- Self-Diagnostics
 
 ```
 diagnose() -> dict

@@ -1,5 +1,4 @@
 use crate::catalog::language_detector::ProjectLanguageProfile;
-use crate::ml::embeddings::{EmbeddingModel, cosine_similarity};
 use crate::optimizer::compressor::compress_markdown;
 
 #[derive(Debug, Clone)]
@@ -40,8 +39,8 @@ fn split_markdown_into_sections(md: &str) -> Vec<MarkdownSection> {
     sections
 }
 
-/// Slices a raw Markdown skill document by task context using semantic cosine similarity.
-/// Returns the top-k most relevant sections compressed to minimize token consumption.
+/// Slices a raw Markdown skill document by task context using fast token-overlap and title relevance scoring.
+/// Returns the top-k most relevant sections compressed to minimize token consumption (< 1ms).
 pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
     if task.trim().is_empty() {
         return compress_markdown(raw_md);
@@ -52,47 +51,60 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
         return compress_markdown(raw_md);
     }
 
-    // Try embedding task and sections using the shared ML engine
-    if let Ok(model) = EmbeddingModel::load_or_download() {
-        if let Ok(query_vec) = model.embed_text(task, Some("query")) {
-            let mut scored_sections: Vec<(f32, &MarkdownSection)> = Vec::new();
+    // Extract significant keywords from task (len >= 3, excluding common stop words)
+    let stop_words = ["the", "and", "for", "with", "this", "that", "from", "have", "been", "will", "your", "about"];
+    let keywords: Vec<String> = task
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 3 && !stop_words.contains(w))
+        .map(|s| s.to_string())
+        .collect();
 
-            for sec in &sections {
-                let sec_text = format!("{} {}", sec.title, sec.content);
-                if let Ok(sec_vec) = model.embed_text(&sec_text, Some("passage")) {
-                    let score = cosine_similarity(&query_vec, &sec_vec);
-                    scored_sections.push((score, sec));
-                }
-            }
-
-            scored_sections.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-
-            let mut result = Vec::new();
-            for (score, sec) in scored_sections.into_iter().take(top_k) {
-                let compressed = compress_markdown(&sec.content);
-                result.push(format!("#### {} (Relevance: {:.2})\n{}", sec.title, score, compressed));
-            }
-
-            return result.join("\n\n---\n\n");
-        }
+    if keywords.is_empty() {
+        let compressed = sections.iter().take(top_k).map(|s| format!("#### {}\n{}", s.title, compress_markdown(&s.content))).collect::<Vec<_>>().join("\n\n---\n\n");
+        return compressed;
     }
 
-    // Fallback: lexical substring matching if ML model unavailable
-    let task_lower = task.to_lowercase();
-    let mut matched = Vec::new();
+    let mut scored: Vec<(f32, &MarkdownSection)> = Vec::new();
     for sec in &sections {
-        if sec.title.to_lowercase().contains(&task_lower) || sec.content.to_lowercase().contains(&task_lower) {
-            matched.push(format!("#### {}\n{}", sec.title, compress_markdown(&sec.content)));
-            if matched.len() >= top_k {
-                break;
+        let title_lower = sec.title.to_lowercase();
+        let content_lower = sec.content.to_lowercase();
+        let mut score = 0.0f32;
+
+        if title_lower.contains("overview") || title_lower.contains("quick start") || title_lower.contains("key rules") {
+            score += 0.5;
+        }
+
+        for kw in &keywords {
+            if title_lower.contains(kw) {
+                score += 3.0;
             }
+            if content_lower.contains(kw) {
+                score += 1.0;
+            }
+        }
+
+        if score > 0.0 {
+            scored.push((score, sec));
         }
     }
 
-    if matched.is_empty() {
-        compress_markdown(raw_md)
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    if scored.is_empty() {
+        sections
+            .iter()
+            .take(top_k)
+            .map(|s| format!("#### {}\n{}", s.title, compress_markdown(&s.content)))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n")
     } else {
-        matched.join("\n\n---\n\n")
+        scored
+            .into_iter()
+            .take(top_k)
+            .map(|(score, s)| format!("#### {} (Relevance: {:.1})\n{}", s.title, score, compress_markdown(&s.content)))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n")
     }
 }
 

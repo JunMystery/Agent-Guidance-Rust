@@ -33,6 +33,10 @@ async fn main() -> Result<()> {
         println!("  --upgrade           Download and install latest release package, update IDE configs");
         println!("  --self-update       Alias for --upgrade");
         println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000");
+        println!("  --project <PATH>    Filter dashboard to a specific project path or name");
+        println!("  --prune-missing     Prune deleted/moved projects from usage tracking registry");
+        println!("  --cleanup           Auto-clean expired logs, prune dead projects, and vacuum DB");
+        println!("  --retention-days <N> Retention window in days for detail logs (default: 7)");
         println!("  --reindex-skills    Precompute and build rich semantic vector index for all skills");
         println!("  --uninstall         Remove MCP server configurations from all IDE clients");
         println!("  --help, -h          Print this help message");
@@ -41,9 +45,62 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    if args.contains(&"--cleanup".to_string()) {
+        let db_path = dirs::home_dir()
+            .map(|h| h.join(".agent-guidance").join("usage.db"))
+            .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
+
+        let retention = args
+            .iter()
+            .position(|a| a == "--retention-days")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(mcp::db::cleanup::DEFAULT_RETENTION_DAYS);
+
+        let conn = rusqlite::Connection::open_with_flags(
+            &db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+        )?;
+
+        let summary = mcp::db::run_auto_cleanup(&conn, retention)?;
+        let db_bytes = mcp::db::get_db_size_bytes();
+        println!("✓ Auto-Cleanup & Database Vacuum Completed:");
+        println!("  • Tool calls pruned: {}", summary.tool_calls_pruned);
+        println!("  • Skill loads pruned: {}", summary.skill_loads_pruned);
+        println!("  • Queries pruned: {}", summary.embed_queries_pruned + summary.llm_queries_pruned);
+        println!("  • Daily summaries pruned: {}", summary.daily_summaries_pruned);
+        println!("  • Dead projects pruned: {}", summary.dead_projects_pruned);
+        if summary.lru_tool_calls_pruned > 0 {
+            println!("  • LRU cap pruned: {}", summary.lru_tool_calls_pruned);
+        }
+        println!("  • Current DB size on disk: {:.2} MB", db_bytes as f64 / (1024.0 * 1024.0));
+        return Ok(());
+    }
+
+    if args.contains(&"--prune-missing".to_string()) {
+        let db_path = dirs::home_dir()
+            .map(|h| h.join(".agent-guidance").join("usage.db"))
+            .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
+        let count = dashboard::projects::prune_missing_projects(&db_path)?;
+        println!("✓ Pruned {} missing/deleted projects from registry.", count);
+        if !args.contains(&"--dashboard".to_string()) {
+            return Ok(());
+        }
+    }
+
     if args.contains(&"--dashboard".to_string()) {
+        let mut proj_arg = None;
+        let mut idx = 0;
+        while idx < args.len() {
+            if (args[idx] == "--project" || args[idx] == "-p") && idx + 1 < args.len() {
+                proj_arg = Some(args[idx + 1].clone());
+                break;
+            }
+            idx += 1;
+        }
+
         let port = 3000;
-        dashboard::run_dashboard_server(port, None)?;
+        dashboard::run_dashboard_server(port, proj_arg)?;
         return Ok(());
     }
 

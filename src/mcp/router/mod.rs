@@ -124,13 +124,14 @@ pub fn handle_request(
                 },
                 {
                     "name": "workflow_gate",
-                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'set_architecture', 'advance'), authorize code edit permissions with diff impact guard ('authorize_edit'), or restore snapshots ('rollback').",
+                    "description": "Manage active workflow stage ('check', 'status', 'set_stage', 'set_architecture', 'advance', 'approve_plan', 'pass_verification'), authorize code edit permissions with diff impact guard ('authorize_edit'), or restore snapshots ('rollback').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance", "rollback"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', 'advance', or 'rollback' (restore pre-edit session snapshot)" },
+                            "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance", "rollback", "approve_plan", "approve", "pass_verification"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', 'advance', 'rollback' (restore pre-edit session snapshot), 'approve_plan' (record plan approval), or 'pass_verification' (reset fix attempts)" },
                             "target_stage": { "type": "string", "description": "Target workflow stage to transition into: 'Context', 'Plan', 'Ask_Revise', 'Build', 'Test_Recheck', 'Fix', 'Proposal', or 'Review'" },
                             "user_message": { "type": "string" },
+                            "user_confirmed": { "type": "boolean", "description": "Confirm plan approval or stage change (required for approve_plan)" },
                             "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance / rollback)" },
                             "relative_path": { "type": "string", "description": "Specific file relative path to authorize edit on (triggers Code Graph Diff Impact Guard)" },
                             "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit / advance)" },
@@ -142,18 +143,22 @@ pub fn handle_request(
                 },
                 {
                     "name": "session_continuity",
-                    "description": "Persist, restore, or clear task session states, record project learnings into .agent-context/learnings.md, or generate cross-agent handoff summaries.",
+                    "description": "Persist, restore, or clear task session states, switch sessions, generate session modification diffs, record project learnings into .agent-context/learnings.md, or generate cross-agent handoff summaries.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["save", "load", "clear", "learn", "handoff"],
-                                "description": "Operation to perform: 'save' (snapshot current session state), 'load' (restore most recent session state), 'clear' (erase all saved snapshots), 'learn' (record distilled project rule/knowledge), 'handoff' (generate cross-agent handoff protocol file)"
+                                "enum": ["save", "load", "clear", "learn", "handoff", "diff", "changes", "list", "sessions", "switch"],
+                                "description": "Operation to perform: 'save' (snapshot current session state), 'load' (restore most recent session state), 'clear' (erase all saved snapshots), 'learn' (record distilled project rule/knowledge), 'handoff' (generate cross-agent handoff protocol file), 'diff' (session file modification summary with line deltas), 'list' (list active and archived session states), or 'switch' (switch to target session ID)"
                             },
                             "project_path": {
                                 "type": "string",
                                 "description": "Absolute path of active repository workspace"
+                            },
+                            "session_id": {
+                                "type": "string",
+                                "description": "Target session ID to switch to (for 'switch' operation)"
                             },
                             "learning": {
                                 "type": "string",
@@ -163,6 +168,10 @@ pub fn handle_request(
                                 "type": "string",
                                 "enum": ["build_test", "environment", "architecture", "domain_rule", "general"],
                                 "description": "Category tag for the learning item (for 'learn' operation)"
+                            },
+                            "pinned": {
+                                "type": "boolean",
+                                "description": "Pin the learning item to protect it from FIFO eviction (for 'learn' operation)"
                             },
                             "next_action": {
                                 "type": "string",

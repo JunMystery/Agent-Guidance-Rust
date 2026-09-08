@@ -12,12 +12,21 @@ pub use helpers::*;
 mod pipeline;
 mod skills;
 mod guidance;
+mod guidance_docs;
 mod guidance_precode;
+mod guidance_search;
+mod guidance_verify;
 mod context;
 mod context_read;
 mod context_search;
+mod context_graph;
+mod context_symbols;
+pub(crate) mod context_lsp;
 mod continuity;
+mod continuity_sessions;
 mod gate;
+mod gate_stage;
+mod gate_approval;
 pub(crate) mod gate_edit;
 mod gate_edit_modularity;
 
@@ -69,12 +78,14 @@ pub fn handle_tool_call(
             }
 
             state.record_call(orig_tokens, opt_tokens);
-            crate::mcp::db::log_tool_call(name, op.as_deref(), orig_tokens, opt_tokens, duration, None);
+            let proj_path = state.project_path.as_deref().or_else(|| state.workspace_roots.first().map(|s| s.as_str()));
+            crate::mcp::db::log_tool_call(name, op.as_deref(), orig_tokens, opt_tokens, duration, None, proj_path);
             Ok(val)
         }
         Err(err) => {
             let duration = start_time.elapsed().as_millis() as u64;
-            crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, Some(&err.1));
+            let proj_path = state.project_path.as_deref().or_else(|| state.workspace_roots.first().map(|s| s.as_str()));
+            crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, Some(&err.1), proj_path);
             Err(err)
         }
     };

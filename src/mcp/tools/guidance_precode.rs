@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::context::cache::project_snapshot;
+use crate::catalog::language_detector::detect_language_fast;
 use crate::mcp::state::ServerState;
 use super::helpers::{detect_project_architecture, detect_project_path};
 
@@ -14,11 +14,7 @@ pub(crate) fn handle_precode(
         .and_then(|p| p.as_str())
         .unwrap_or(".");
     let proj_path = detect_project_path(proj_path_arg, state);
-    let snapshot = project_snapshot(&proj_path);
-    let profile = crate::catalog::language_detector::detect_language_profile(
-        snapshot.files.as_ref(),
-        query,
-    );
+    let profile = detect_language_fast(&proj_path, query);
     let active_arch = state
         .active_architecture_pattern
         .clone()

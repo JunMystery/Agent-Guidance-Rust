@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
-const CACHE_TTL: Duration = Duration::from_secs(2);
+const CACHE_TTL: Duration = Duration::from_secs(60);
 
 pub struct ProjectSnapshot {
     pub files: Arc<Vec<FileEntry>>,
@@ -82,7 +82,6 @@ pub fn invalidate_snapshot(root: &Path) {
         guard.remove(&canonical_root);
     }
 }
-
 
 #[cfg(test)]
 mod tests {

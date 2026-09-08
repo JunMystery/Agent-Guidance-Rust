@@ -18,15 +18,16 @@ Open the printed URL, usually `http://localhost:5173`, and inspect the registere
 
 At the start of a coding session:
 
-1. Call `task_pipeline(task, project_path, phase="plan")` to unlock the priority gate, initialize language/architecture detection, and load relevant standards and skill proposals.
-2. For large refactors, upgrades, audits, or unfamiliar code, use `project_context(operation="search", project_path=..., query=...)`, `project_context(operation="symbols", ...)`, and `project_context(operation="tree", project_path=...)`.
-3. Use `guidance(operation="precode", query=task)` to get a structured upfront sub-module decomposition blueprint tailored to the project's architecture.
-4. Before editing any file, verify the workflow stage allows edits: `workflow_gate(action="check")` → present implementation plan to user.
-5. Authorize the edit using composite `workflow_gate(action="authorize_edit", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"CLI_Pipeline"|"Flat_Library"|"Orchestrator"|"Auto")` once approved.
-6. Inspect target files with `project_context(operation="read", relative_path=..., target_symbol=...)` (bounded at 300 LOC max).
-7. Run empirical verification tests after changes (`cargo test`, `npm test`).
-8. Register verification results using `guidance(operation="verify", verification_command=..., expected_output_keyword=...)`.
-9. Use `session_continuity(operation="save", ...)` to persist task state across interruptions.
+1. Call `task_pipeline(task, project_path, phase="plan")` to unlock the priority gate, initialize language/architecture detection, and propose relevant skills.
+2. If skills are proposed, ask the user via IDE/CLI `ask_question` tool to select which skills to load, then invoke `select_skills(skills=[...], user_confirmed=true)`. If no skills are needed, call `select_skills(skills=[])`.
+3. For large refactors, upgrades, audits, or unfamiliar code, use `project_context(operation="search", project_path=..., query=...)`, `project_context(operation="symbols", ...)`, and `project_context(operation="tree", project_path=...)`.
+4. Use `guidance(operation="precode", query=task)` to get a structured upfront sub-module decomposition blueprint tailored to the project's architecture.
+5. Before editing any file, verify the workflow stage allows edits: `workflow_gate(action="check")` → present implementation plan to user.
+6. Authorize the edit using composite `workflow_gate(action="authorize_edit", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"CLI_Pipeline"|"Flat_Library"|"Orchestrator"|"Auto")` once approved.
+7. Inspect target files with `project_context(operation="read", relative_path=..., target_symbol=...)` (bounded at 300 LOC max).
+8. Run empirical verification tests after changes (`cargo test`, `npm test`).
+9. Register verification results using `guidance(operation="verify", verification_command=..., expected_output_keyword=...)`.
+10. Use `session_continuity(operation="save", ...)` to persist task state across interruptions.
 
 Avoid repeated broad scans during the same session unless the project changed significantly.
 
@@ -36,11 +37,11 @@ Avoid repeated broad scans during the same session unless the project changed si
 {
   "task": "Build a secure API endpoint with tests",
   "project_path": "/absolute/path/to/project",
-  "limit": 6
+  "phase": "plan"
 }
 ```
 
-Use `agent-guidance-mcp_task_pipeline` for the normal first call. Use `agent-guidance-mcp_guidance(operation="recommend", query=...)` when you only need catalog recommendations.
+Use `agent-guidance-mcp_task_pipeline` for the normal first call to unlock gates and initialize architectural context. Use `agent-guidance-mcp_guidance(operation="search", query=...)` when you need catalog standards.
 
 ## Example: Project Code Context
 

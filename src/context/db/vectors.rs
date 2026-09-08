@@ -84,8 +84,6 @@ impl CodeGraphDb {
         Ok(results)
     }
 
-    pub const HNSW_DISPATCH_THRESHOLD: usize = 10_000;
-
     pub fn vector_search_symbols(
         &self,
         query_vector: &[f32],
@@ -108,42 +106,10 @@ impl CodeGraphDb {
             Ok((blob, name, kind, file_path, start_line, signature))
         })?;
 
-        let mut all_items = Vec::new();
-        for r in rows {
-            all_items.push(r?);
-        }
-
-        // Dual-Engine: Use HNSW Graph for massive repositories (>10,000 vectors)
-        if all_items.len() > Self::HNSW_DISPATCH_THRESHOLD {
-            let mut hnsw = super::super::hnsw::HnswIndex::new(16, 64, 32);
-            for (blob, name, kind, file_path, start_line, signature) in all_items {
-                let vec = bytes_to_f32_vec(&blob);
-                hnsw.insert(vec, SymbolSearchResult {
-                    name,
-                    kind,
-                    file_path,
-                    start_line,
-                    signature,
-                    score: 0.0,
-                });
-            }
-
-            let hnsw_results = hnsw.search(query_vector, top_k, threshold);
-            return Ok(hnsw_results
-                .into_iter()
-                .map(|(score, payload)| {
-                    let mut item = payload.clone();
-                    item.score = score;
-                    item
-                })
-                .collect());
-        }
-
-        // Default: Fast Flat Scan for standard repositories (<=10,000 vectors)
         let mut matches = Vec::new();
-        for (blob, name, kind, file_path, start_line, signature) in all_items {
-            let vec = bytes_to_f32_vec(&blob);
-            let score = cosine_similarity(query_vector, &vec);
+        for r in rows {
+            let (blob, name, kind, file_path, start_line, signature) = r?;
+            let score = dot_similarity_bytes(query_vector, &blob);
             if score >= threshold {
                 matches.push(SymbolSearchResult {
                     name,
@@ -181,40 +147,10 @@ impl CodeGraphDb {
             Ok((blob, file_path, start_line, end_line))
         })?;
 
-        let mut all_items = Vec::new();
-        for r in rows {
-            all_items.push(r?);
-        }
-
-        // Dual-Engine: Use HNSW Graph for massive repositories (>10,000 vectors)
-        if all_items.len() > Self::HNSW_DISPATCH_THRESHOLD {
-            let mut hnsw = super::super::hnsw::HnswIndex::new(16, 64, 32);
-            for (blob, file_path, start_line, end_line) in all_items {
-                let vec = bytes_to_f32_vec(&blob);
-                hnsw.insert(vec, ChunkSearchResult {
-                    file_path,
-                    start_line,
-                    end_line,
-                    score: 0.0,
-                });
-            }
-
-            let hnsw_results = hnsw.search(query_vector, top_k, threshold);
-            return Ok(hnsw_results
-                .into_iter()
-                .map(|(score, payload)| {
-                    let mut item = payload.clone();
-                    item.score = score;
-                    item
-                })
-                .collect());
-        }
-
-        // Default: Fast Flat Scan for standard repositories (<=10,000 vectors)
         let mut matches = Vec::new();
-        for (blob, file_path, start_line, end_line) in all_items {
-            let vec = bytes_to_f32_vec(&blob);
-            let score = cosine_similarity(query_vector, &vec);
+        for r in rows {
+            let (blob, file_path, start_line, end_line) = r?;
+            let score = dot_similarity_bytes(query_vector, &blob);
             if score >= threshold {
                 matches.push(ChunkSearchResult {
                     file_path,
@@ -256,6 +192,18 @@ pub fn bytes_to_f32_vec(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+/// Computes dot product directly over raw little-endian f32 byte slice without heap allocation.
+#[inline]
+pub fn dot_similarity_bytes(v1: &[f32], bytes: &[u8]) -> f32 {
+    if v1.len() * 4 != bytes.len() || v1.is_empty() {
+        return 0.0;
+    }
+    v1.iter()
+        .zip(bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])))
+        .map(|(a, b)| a * b)
+        .sum()
+}
+
 pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     if v1.len() != v2.len() || v1.is_empty() {
         return 0.0;
@@ -268,4 +216,3 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     }
     dot / (norm1 * norm2)
 }
-

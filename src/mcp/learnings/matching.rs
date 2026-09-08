@@ -153,11 +153,12 @@ pub fn get_semantic_relevant_learnings(
 
 /// Computes simple line delta (additions, deletions) between two texts.
 pub fn compute_line_delta(original: &str, current: &str) -> (usize, usize) {
-    let orig_lines: Vec<&str> = original.lines().collect();
-    let curr_lines: Vec<&str> = current.lines().collect();
+    use std::collections::HashSet;
+    let orig_set: HashSet<&str> = original.lines().collect();
+    let curr_set: HashSet<&str> = current.lines().collect();
 
-    let additions = curr_lines.iter().filter(|l| !orig_lines.contains(l)).count();
-    let deletions = orig_lines.iter().filter(|l| !curr_lines.contains(l)).count();
+    let additions = current.lines().filter(|l| !orig_set.contains(l)).count();
+    let deletions = original.lines().filter(|l| !curr_set.contains(l)).count();
     (additions, deletions)
 }
 
