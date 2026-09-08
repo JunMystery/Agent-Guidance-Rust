@@ -8,8 +8,10 @@ use crate::context::db::CodeGraphDb;
 use crate::context::scanner::scan_project;
 
 pub mod chunking;
+pub mod cross_edges;
 pub mod embedder;
 pub mod parsers;
+pub mod resolver;
 pub use parsers::{
     CodeChunk, ExtractedEdge, ExtractedSymbol, chunk_code_content,
     extract_edges_from_content, extract_symbols_from_content,
@@ -63,6 +65,10 @@ impl IncrementalIndexer {
             }
         }
 
+        if let Ok(cross_count) = cross_edges::resolve_all_cross_edges(&mut self.db.conn, &self.project_path) {
+            report.edges_created += cross_count;
+        }
+
         report.duration_ms = start.elapsed().as_millis() as u64;
         Ok(report)
     }
@@ -112,6 +118,12 @@ impl IncrementalIndexer {
             }
         }
 
+        if report.files_indexed > 0 {
+            if let Ok(cross_count) = cross_edges::resolve_all_cross_edges(&mut self.db.conn, &self.project_path) {
+                report.edges_created += cross_count;
+            }
+        }
+
         report.duration_ms = start.elapsed().as_millis() as u64;
         Ok(report)
     }
@@ -137,6 +149,12 @@ impl IncrementalIndexer {
                 report.files_indexed += 1;
             } else {
                 report.files_skipped += 1;
+            }
+        }
+
+        if report.files_indexed > 0 {
+            if let Ok(cross_count) = cross_edges::resolve_all_cross_edges(&mut self.db.conn, &self.project_path) {
+                report.edges_created += cross_count;
             }
         }
 

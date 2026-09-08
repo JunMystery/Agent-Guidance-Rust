@@ -1,7 +1,7 @@
 {
-  "catalog_fingerprint": 18357352080241181740,
+  "catalog_fingerprint": 11291416659636773985,
   "count": 440,
-  "created_at": 1787838020,
+  "created_at": 1788881687,
   "dimension": 384,
   "model": "intfloat/multilingual-e5-small",
   "skills": [
@@ -4502,21 +4502,19 @@
     },
     {
       "action_triggers": [
-        "humanizer",
-        "optimize",
-        "perf"
+        "humanizer"
       ],
       "applicable_phases": [
         "implement",
         "refactor"
       ],
       "file_patterns": [],
-      "intent": "Remove signs of AI-generated writing from text",
+      "intent": "Rewrite AI-sounding text so it reads like the writer without changing what it says",
       "micro_rules": [
-        "Remove signs of AI-generated writing from text"
+        "Rewrite AI-sounding text so it reads like the writer without changing what it says"
       ],
       "name": "humanizer",
-      "title": "Humanizer: Remove AI Writing Patterns"
+      "title": "Humanizer: remove AI writing patterns"
     },
     {
       "action_triggers": [
@@ -6399,12 +6397,12 @@
         "review"
       ],
       "file_patterns": [],
-      "intent": "Install, detect, and operate the optional Nasiko agent control plane through ECC with pinned artifacts, explicit consent, and telemetry and secrets boundaries",
+      "intent": "Use the experimental Nasiko CLI lifecycle bridge for pinned installation, read-only status, and qualified uninstall with explicit consent and telemetry and secrets boundaries",
       "micro_rules": [
-        "Install, detect, and operate the optional Nasiko agent control plane through ECC with pinned artifacts, explicit consent, and telemetry and secrets boundaries"
+        "Use the experimental Nasiko CLI lifecycle bridge for pinned installation, read-only status, and qualified uninstall with explicit consent and telemetry and secrets boundaries"
       ],
       "name": "nasiko-control-plane",
-      "title": "Nasiko Control Plane"
+      "title": "Nasiko CLI Lifecycle Bridge"
     },
     {
       "action_triggers": [

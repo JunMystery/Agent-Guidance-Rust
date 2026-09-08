@@ -202,6 +202,73 @@ pub(crate) fn init_schema(conn: &mut Connection) -> Result<()> {
             [],
         )?;
 
+        // Semantic edges added by AI Agents / Subagents
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS semantic_edges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_symbol TEXT NOT NULL,
+                target_symbol TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                description TEXT,
+                confidence REAL DEFAULT 0.9,
+                created_by TEXT DEFAULT 'agent',
+                created_at INTEGER NOT NULL,
+                UNIQUE(source_symbol, target_symbol, relation_type)
+            );",
+            [],
+        )?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_semantic_edges_src ON semantic_edges(source_symbol);",
+            [],
+        )?;
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_semantic_edges_tgt ON semantic_edges(target_symbol);",
+            [],
+        )?;
+
+        // Domain summaries and architectural notes added by AI Agents
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS domain_summaries (
+                module_path TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                tags TEXT,
+                updated_at INTEGER NOT NULL,
+                updated_by TEXT NOT NULL
+            );",
+            [],
+        )?;
+        tx.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS domain_summaries_fts USING fts5(
+                module_path UNINDEXED,
+                title,
+                summary,
+                tags,
+                content='domain_summaries',
+                content_rowid='rowid'
+            );",
+            [],
+        )?;
+        tx.execute(
+            "CREATE TRIGGER IF NOT EXISTS domain_summaries_ai AFTER INSERT ON domain_summaries BEGIN
+                INSERT INTO domain_summaries_fts(rowid, module_path, title, summary, tags) VALUES (new.rowid, new.module_path, new.title, new.summary, new.tags);
+            END;",
+            [],
+        )?;
+        tx.execute(
+            "CREATE TRIGGER IF NOT EXISTS domain_summaries_ad AFTER DELETE ON domain_summaries BEGIN
+                INSERT INTO domain_summaries_fts(domain_summaries_fts, rowid, module_path, title, summary, tags) VALUES('delete', old.rowid, old.module_path, old.title, old.summary, old.tags);
+            END;",
+            [],
+        )?;
+        tx.execute(
+            "CREATE TRIGGER IF NOT EXISTS domain_summaries_au AFTER UPDATE ON domain_summaries BEGIN
+                INSERT INTO domain_summaries_fts(domain_summaries_fts, rowid, module_path, title, summary, tags) VALUES('delete', old.rowid, old.module_path, old.title, old.summary, old.tags);
+                INSERT INTO domain_summaries_fts(rowid, module_path, title, summary, tags) VALUES (new.rowid, new.module_path, new.title, new.summary, new.tags);
+            END;",
+            [],
+        )?;
+
         tx.commit()?;
         Ok(())
     }

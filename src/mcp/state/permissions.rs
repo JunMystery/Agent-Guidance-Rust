@@ -15,7 +15,7 @@ impl ServerState {
         // 2. Whitelisted & Not Gated tools bypass priority gate check
         let is_whitelisted_or_ungated = matches!(
             tool_name,
-            "workflow_gate" | "session_continuity" | "select_skills"
+            "workflow_gate" | "session_continuity" | "select_skills" | "select_skill"
         );
 
         if !is_whitelisted_or_ungated {

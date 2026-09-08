@@ -18,12 +18,17 @@ pub fn build_semantic_chunks(
         return Vec::new();
     }
 
-    if symbols.is_empty() {
+    let code_symbols: Vec<&ExtractedSymbol> = symbols
+        .iter()
+        .filter(|s| s.kind != "module")
+        .collect();
+
+    if code_symbols.is_empty() {
         return build_sliding_window_chunks(&lines, window_size, overlap);
     }
 
     let mut chunks = Vec::new();
-    let mut sorted_syms: Vec<&ExtractedSymbol> = symbols.iter().collect();
+    let mut sorted_syms = code_symbols;
     sorted_syms.sort_by_key(|s| s.start_line);
 
     let mut cursor = 1;

@@ -37,5 +37,6 @@ export function activeView() {
 export function pollSpanFor(view) {
   if (view === 'actions') return 'actions-poll';
   if (view === 'recent-calls') return 'recent-calls-poll';
+  if (view === 'top-skills') return 'skills-poll';
   return null;
 }

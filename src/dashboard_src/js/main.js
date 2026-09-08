@@ -2,10 +2,10 @@ import { qsa, el } from './dom.js';
 import { fetchData, refreshEmbedStatus, fetchProjects, pruneProjects, setSelectedProject, triggerAutoCleanup, fetchGraphData } from './api.js';
 import { renderGraphView } from './render/graphView.js';
 import { startPoll, stopPoll } from './poll.js';
+import { showConfirm, showAlert } from './dialog.js';
+import { changeProjectPath, closeDirBrowser, selectDirPath } from './dirBrowser.js';
 
-
-
-const VIEWS = ['dashboard', 'top-skills', 'actions', 'recent-calls', 'guides', 'graph'];
+const VIEWS = ['dashboard', 'top-skills', 'actions', 'recent-calls', 'graph'];
 
 export async function loadAndRenderGraph() {
   const data = await fetchGraphData();
@@ -29,15 +29,16 @@ function syncView(view, { push = true } = {}) {
   if (push && location.hash.slice(1) !== view) {
     history.replaceState(null, '', '#' + view);
   }
-  if (view === 'graph') loadAndRenderGraph();
-  if (view === 'actions' || view === 'recent-calls') startPoll();
-  else stopPoll();
+  if (view === 'graph') {
+    stopPoll();
+    loadAndRenderGraph();
+  } else {
+    startPoll();
+  }
 }
 
 function initA11y() {
-  // Static header cells act as column headers.
   qsa('table th').forEach(th => { if (!th.hasAttribute('scope')) th.setAttribute('scope', 'col'); });
-  // Roving tabindex: arrow keys move between view tabs.
   const tabs = Array.from(qsa('.sidebar nav a'));
   tabs.forEach((tab, i) => {
     tab.addEventListener('keydown', (e) => {
@@ -71,51 +72,89 @@ export function toggleSidebar() {
 
 async function initProjectSelector() {
   const select = el('project-selector');
+  const headerSelect = el('header-project-selector');
   const badge = el('project-status-badge');
+  const headerBadge = el('header-project-badge');
   const pruneBtn = el('btn-prune-projects');
   if (!select) return;
 
   const projects = await fetchProjects();
-  select.innerHTML = '<option value="all">🌐 All Projects (Global)</option>';
+  const optionsHtml = ['<option value="all">🌐 All Projects (Global Analytics)</option>'];
+  const seenPaths = new Set();
 
   projects.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.path;
+    let norm = (p.path || '').trim().replace(/\//g, '\\');
+    while (norm.length > 3 && norm.endsWith('\\')) norm = norm.slice(0, -1);
+    const key = norm.toLowerCase();
+    if (seenPaths.has(key)) return;
+    seenPaths.add(key);
+
     const statusIcon = p.status === 'active' ? '🟢' : '⚠️ [Missing]';
-    opt.textContent = `${statusIcon} ${p.name} (${p.path})`;
-    select.appendChild(opt);
+    optionsHtml.push(`<option value="${p.path}">${statusIcon} ${p.name} (${p.path})</option>`);
   });
 
-  select.addEventListener('change', () => {
-    setSelectedProject(select.value);
-    const chosen = projects.find(p => p.path === select.value);
-    if (chosen && chosen.status === 'missing') {
-      badge.textContent = '⚠️ Missing on disk (Showing historical records)';
-      badge.style.display = 'block';
+  const fullHtml = optionsHtml.join('');
+  select.innerHTML = fullHtml;
+  if (headerSelect) headerSelect.innerHTML = fullHtml;
+
+  const onProjectChange = (val) => {
+    select.value = val;
+    if (headerSelect) headerSelect.value = val;
+    setSelectedProject(val);
+
+    const chosen = projects.find(p => p.path === val);
+    const isMissing = chosen && chosen.status === 'missing';
+    const msg = isMissing ? '⚠️ Missing on disk (Showing historical records)' : (val === 'all' ? '🌐 All Tracked Projects' : `📂 Active: ${chosen?.name || val}`);
+
+    if (badge) {
+      badge.textContent = isMissing ? '⚠️ Missing on disk' : '';
+      badge.style.display = isMissing ? 'block' : 'none';
       badge.style.color = '#ffbd2e';
-    } else {
-      badge.style.display = 'none';
     }
+    if (headerBadge) {
+      headerBadge.textContent = msg;
+      headerBadge.style.display = 'inline-block';
+      headerBadge.style.color = isMissing ? '#ffbd2e' : 'var(--accent-primary)';
+    }
+
     fetchData();
     if (location.hash.slice(1) === 'graph') {
       loadAndRenderGraph();
     }
-  });
+  };
+
+  select.addEventListener('change', () => onProjectChange(select.value));
+  if (headerSelect) {
+    headerSelect.addEventListener('change', () => onProjectChange(headerSelect.value));
+  }
 
   const defaultProj = el('sidebar-proj')?.textContent?.trim();
   if (defaultProj && defaultProj !== '--') {
     const match = projects.find(p => p.path === defaultProj || p.name === defaultProj);
     if (match) {
       select.value = match.path;
+      if (headerSelect) headerSelect.value = match.path;
       setSelectedProject(match.path);
     }
   }
 
   if (pruneBtn) {
     pruneBtn.addEventListener('click', async () => {
-      if (confirm('Prune missing/deleted projects from tracking registry?')) {
+      const ok = await showConfirm({
+        title: 'Prune Missing Projects',
+        message: 'Remove missing/deleted projects from the tracking registry?',
+        subtext: 'This removes project records whose paths no longer exist on disk.',
+        confirmText: 'Prune Projects',
+        cancelText: 'Cancel',
+        variant: 'danger',
+      });
+      if (ok) {
         const res = await pruneProjects();
-        alert(res.message || `Pruned ${res.pruned_count || 0} projects`);
+        await showAlert({
+          title: 'Pruning Complete',
+          message: res.message || `Pruned ${res.pruned_count || 0} projects.`,
+          variant: 'success',
+        });
         await initProjectSelector();
         fetchData();
       }
@@ -125,119 +164,32 @@ async function initProjectSelector() {
   const cleanupBtn = el('btn-auto-cleanup');
   if (cleanupBtn) {
     cleanupBtn.addEventListener('click', async () => {
-      cleanupBtn.disabled = true;
-      cleanupBtn.textContent = 'Optimizing…';
-      try {
-        const res = await triggerAutoCleanup();
-        if (res.success) {
-          const s = res.summary || {};
-          const msg = `✓ Cleanup & Vacuum Complete!\n• Tool calls pruned: ${s.tool_calls_pruned}\n• Skill loads pruned: ${s.skill_loads_pruned}\n• Queries pruned: ${s.embed_queries_pruned + s.llm_queries_pruned}\n• Daily summaries pruned: ${s.daily_summaries_pruned}\n• Dead projects pruned: ${s.dead_projects_pruned}\n• Current DB size: ${res.db_size_mb || '--'}`;
-          alert(msg);
-          await initProjectSelector();
-          fetchData();
-        } else {
-          alert('Cleanup failed: ' + (res.error || 'unknown error'));
-        }
-      } finally {
-        cleanupBtn.disabled = false;
-        cleanupBtn.textContent = '⚡ Vacuum & Optimize DB';
-      }
+      const ok = await showConfirm({
+        title: 'Optimize Database',
+        message: 'Run automated log cleanup and vacuum SQLite database?',
+        subtext: 'Prunes expired tool calls, vacuum tables, and reclaims disk space.',
+        confirmText: '⚡ Optimize Now',
+        cancelText: 'Cancel',
+        variant: 'info',
+      });
+      if (!ok) return;
+
+      const res = await triggerAutoCleanup();
+      await showAlert({
+        title: 'Database Optimized',
+        message: res.message || 'Cleanup complete.',
+        variant: res.success ? 'success' : 'danger',
+      });
+      fetchData();
     });
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  initRouter();
   initA11y();
+  initRouter();
   initProjectSelector();
-  qsa('.sidebar nav a').forEach(a => {
-    a.addEventListener('click', () => {
-      if (window.innerWidth <= 768) el('sidebar').classList.remove('open');
-    });
-  });
 });
-
-document.addEventListener('visibilitychange', () => {
-  const view = document.querySelector('.sidebar nav a.active')?.dataset?.view;
-  const onPollView = view === 'actions' || view === 'recent-calls';
-  if (document.hidden) stopPoll();
-  else if (onPollView) startPoll();
-});
-
-let currentBrowserPath = '.';
-
-async function changeProjectPath() {
-  try {
-    const resp = await fetch('/api/dirs/choose', { method: 'POST' });
-    const data = await resp.json();
-    if (data.success && data.path) {
-      fetchData();
-    } else {
-      openDirBrowser();
-    }
-  } catch (e) {
-    openDirBrowser();
-  }
-}
-
-async function openDirBrowser(path = '.') {
-  currentBrowserPath = path;
-  el('dir-modal').classList.add('open');
-  await renderDirBrowser(path);
-}
-
-async function renderDirBrowser(path) {
-  try {
-    const resp = await fetch('/api/dirs?path=' + encodeURIComponent(path));
-    const data = await resp.json();
-    el('dir-current').textContent = data.current || path;
-    currentBrowserPath = data.current || path;
-    
-    const list = el('dir-list');
-    list.innerHTML = '';
-    
-    if (data.parent) {
-      const pdiv = document.createElement('div');
-      pdiv.className = 'dir-item parent';
-      pdiv.textContent = '📁 .. (Up one directory)';
-      pdiv.onclick = () => renderDirBrowser(data.parent);
-      list.appendChild(pdiv);
-    }
-    
-    if (data.dirs && data.dirs.length) {
-      data.dirs.forEach(d => {
-        const ddiv = document.createElement('div');
-        ddiv.className = 'dir-item';
-        ddiv.textContent = '📁 ' + d.name;
-        ddiv.onclick = () => renderDirBrowser(d.path);
-        list.appendChild(ddiv);
-      });
-    } else if (!data.parent) {
-      list.innerHTML = '<div class="dir-empty">No directories found or permission denied.</div>';
-    }
-  } catch (e) {
-    el('dir-list').innerHTML = '<div class="dir-error">Error loading directory.</div>';
-  }
-}
-
-function closeDirBrowser() {
-  el('dir-modal').classList.remove('open');
-}
-
-async function selectDirPath() {
-  try {
-    const resp = await fetch('/api/dirs/select?path=' + encodeURIComponent(currentBrowserPath), { method: 'POST' });
-    const data = await resp.json();
-    if (data.success) {
-      closeDirBrowser();
-      fetchData();
-    } else {
-      alert('Failed to select directory: ' + (data.error || 'unknown'));
-    }
-  } catch (e) {
-    alert('Error selecting directory: ' + e.message);
-  }
-}
 
 window.toggleSidebar = toggleSidebar;
 window.refreshEmbedStatus = refreshEmbedStatus;

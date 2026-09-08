@@ -10,3 +10,5 @@ pub mod tools;
 
 #[cfg(test)]
 mod tests_exemptions;
+#[cfg(test)]
+mod tools_graph_tests;

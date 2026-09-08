@@ -5,10 +5,12 @@ use std::path::Path;
 
 pub mod schema;
 pub mod aliases;
+pub mod semantic;
 pub mod storage;
 pub mod vectors;
 
 pub use aliases::AliasResult;
+pub use semantic::{DomainSummary, SemanticEdge};
 pub use vectors::{ChunkSearchResult, SymbolSearchResult, bytes_to_f32_vec, cosine_similarity};
 
 pub struct CodeGraphDb {

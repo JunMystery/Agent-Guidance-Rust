@@ -14,7 +14,7 @@ export function getSelectedProject() {
 }
 
 async function fetchStats() {
-  const projParam = selectedProject && selectedProject !== 'all' ? `&project=${encodeURIComponent(selectedProject)}` : '';
+  const projParam = selectedProject ? `&project=${encodeURIComponent(selectedProject)}` : '&project=all';
   const resp = await fetch(`/api/stats?window=24h${projParam}`);
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   return resp.json();

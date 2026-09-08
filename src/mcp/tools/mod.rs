@@ -21,6 +21,7 @@ mod context_read;
 mod context_search;
 mod context_graph;
 mod context_symbols;
+pub(crate) mod context_enrich;
 pub(crate) mod context_lsp;
 mod continuity;
 mod continuity_sessions;
@@ -29,6 +30,33 @@ mod gate_stage;
 mod gate_approval;
 pub(crate) mod gate_edit;
 mod gate_edit_modularity;
+
+fn extract_target(args: &Value) -> Option<String> {
+    if let Some(p) = args.get("relative_path").or_else(|| args.get("file_path")).or_else(|| args.get("path")).and_then(|v| v.as_str()) {
+        if let Some(sym) = args.get("target_symbol").and_then(|v| v.as_str()) {
+            return Some(format!("{}#{}", p, sym));
+        }
+        return Some(p.to_string());
+    }
+    if let Some(sym) = args.get("target_symbol").and_then(|v| v.as_str()) {
+        return Some(format!("#{}", sym));
+    }
+    if let Some(q) = args.get("query").or_else(|| args.get("alias_term")).or_else(|| args.get("key")).and_then(|v| v.as_str()) {
+        let trimmed = q.trim();
+        if trimmed.len() > 60 {
+            return Some(format!("{}...", &trimmed[..60]));
+        }
+        return Some(trimmed.to_string());
+    }
+    if let Some(t) = args.get("task").and_then(|v| v.as_str()) {
+        let trimmed = t.trim();
+        if trimmed.len() > 60 {
+            return Some(format!("{}...", &trimmed[..60]));
+        }
+        return Some(trimmed.to_string());
+    }
+    None
+}
 
 pub fn handle_tool_call(
     name: &str,
@@ -39,12 +67,32 @@ pub fn handle_tool_call(
     ensure_not_cancelled(state)?;
 
     let start_time = std::time::Instant::now();
+    let target = extract_target(&arguments);
     let op = arguments
         .get("operation")
         .or_else(|| arguments.get("action"))
         .or_else(|| arguments.get("phase"))
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .or_else(|| {
+            if name == "select_skills" || name == "select_skill" {
+                let skills_val = arguments.get("skills").or_else(|| arguments.get("skill"));
+                if let Some(arr) = skills_val.and_then(|v| v.as_array()) {
+                    let names: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+                    if !names.is_empty() {
+                        Some(names.join(", "))
+                    } else {
+                        Some("none".to_string())
+                    }
+                } else if let Some(s) = skills_val.and_then(|v| v.as_str()) {
+                    Some(s.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
 
     let res = match handle_tool_call_internal(name, arguments, state) {
         Ok(mut val) => {
@@ -79,13 +127,13 @@ pub fn handle_tool_call(
 
             state.record_call(orig_tokens, opt_tokens);
             let proj_path = state.project_path.as_deref().or_else(|| state.workspace_roots.first().map(|s| s.as_str()));
-            crate::mcp::db::log_tool_call(name, op.as_deref(), orig_tokens, opt_tokens, duration, None, proj_path);
+            crate::mcp::db::log_tool_call(name, op.as_deref(), target.as_deref(), orig_tokens, opt_tokens, duration, None, proj_path);
             Ok(val)
         }
         Err(err) => {
             let duration = start_time.elapsed().as_millis() as u64;
             let proj_path = state.project_path.as_deref().or_else(|| state.workspace_roots.first().map(|s| s.as_str()));
-            crate::mcp::db::log_tool_call(name, op.as_deref(), 0, 0, duration, Some(&err.1), proj_path);
+            crate::mcp::db::log_tool_call(name, op.as_deref(), target.as_deref(), 0, 0, duration, Some(&err.1), proj_path);
             Err(err)
         }
     };
@@ -99,7 +147,7 @@ fn handle_tool_call_internal(
 ) -> Result<Value, (i32, String)> {
     let raw_result = match name {
         "task_pipeline" => pipeline::handle(arguments, state),
-        "select_skills" => skills::handle(arguments, state),
+        "select_skills" | "select_skill" => skills::handle(arguments, state),
         "guidance" => guidance::handle(arguments, state),
         "ui_ux" => {
             let query = arguments

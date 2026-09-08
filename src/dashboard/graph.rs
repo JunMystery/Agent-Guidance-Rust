@@ -65,50 +65,109 @@ pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
     )?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, name, kind, file_path, start_line, end_line
-         FROM symbols ORDER BY (end_line - start_line) DESC LIMIT 250",
+        "SELECT s.id, s.name, s.kind, s.file_path, s.start_line, s.end_line,
+                (SELECT COUNT(*) FROM symbol_edges e WHERE e.source_id = s.id OR e.target_id = s.id) as degree
+         FROM symbols s
+         ORDER BY degree DESC, (s.end_line - s.start_line) DESC
+         LIMIT 250",
     )?;
 
+    let mut node_set = std::collections::HashSet::new();
     let nodes: Vec<serde_json::Value> = stmt
         .query_map([], |row| {
+            let id: String = row.get(0)?;
             let s_line: usize = row.get(4)?;
             let e_line: usize = row.get(5)?;
             let loc = (e_line.saturating_sub(s_line) + 1) as i64;
-            Ok(json!({
-                "id": row.get::<_, String>(0)?,
-                "label": row.get::<_, String>(1)?,
-                "kind": row.get::<_, String>(2)?,
-                "file": row.get::<_, String>(3)?,
-                "loc": loc,
-            }))
+            let deg: i64 = row.get(6).unwrap_or(0);
+            Ok((
+                id.clone(),
+                json!({
+                    "id": id,
+                    "label": row.get::<_, String>(1)?,
+                    "kind": row.get::<_, String>(2)?,
+                    "file": row.get::<_, String>(3)?,
+                    "loc": loc,
+                    "deg": deg,
+                }),
+            ))
         })?
         .filter_map(|r| r.ok())
+        .map(|(id, v)| {
+            node_set.insert(id);
+            v
+        })
         .collect();
 
     let mut stmt = conn.prepare(
         "SELECT source_id, target_id, edge_type, weight
-         FROM symbol_edges LIMIT 500",
+         FROM symbol_edges LIMIT 1000",
     )?;
 
-    let edges: Vec<serde_json::Value> = stmt
+    let mut edges: Vec<serde_json::Value> = stmt
         .query_map([], |row| {
-            Ok(json!({
-                "source": row.get::<_, String>(0)?,
-                "target": row.get::<_, String>(1)?,
-                "type": row.get::<_, String>(2)?,
-                "weight": row.get::<_, f64>(3)?,
-            }))
+            let src: String = row.get(0)?;
+            let tgt: String = row.get(1)?;
+            let etype: String = row.get(2)?;
+            let weight: f64 = row.get(3)?;
+            Ok((src, tgt, etype, weight))
         })?
         .filter_map(|r| r.ok())
+        .filter(|(src, tgt, _, _)| node_set.contains(src) && node_set.contains(tgt))
+        .map(|(src, tgt, etype, weight)| {
+            json!({
+                "source": src,
+                "target": tgt,
+                "type": etype,
+                "weight": weight,
+                "origin": "ast",
+                "dashed": false,
+            })
+        })
         .collect();
 
-    // Read communities if available
+    // Query semantic edges contributed by AI Agents
+    if let Ok(mut sem_stmt) = conn.prepare(
+        "SELECT source_symbol, target_symbol, relation_type, confidence, description
+         FROM semantic_edges LIMIT 500",
+    ) {
+        if let Ok(sem_edges) = sem_stmt.query_map([], |row| {
+            let src: String = row.get(0)?;
+            let tgt: String = row.get(1)?;
+            let rel: String = row.get(2)?;
+            let conf: f64 = row.get(3)?;
+            let desc: Option<String> = row.get(4)?;
+            Ok(json!({
+                "source": src,
+                "target": tgt,
+                "type": rel,
+                "weight": conf,
+                "origin": "semantic",
+                "dashed": true,
+                "description": desc,
+            }))
+        }) {
+            for se in sem_edges.filter_map(|r| r.ok()) {
+                edges.push(se);
+            }
+        }
+    }
+
+    // Read communities if available, extracting array from CommunityHierarchy object
     let comm_path = project_path.join(".agent-context").join("communities.json");
-    let communities: serde_json::Value = if comm_path.exists() {
+    let raw_comm: serde_json::Value = if comm_path.exists() {
         std::fs::read_to_string(&comm_path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_else(|| json!([]))
+    } else {
+        json!([])
+    };
+
+    let communities = if let Some(arr) = raw_comm.get("communities").and_then(|c| c.as_array()) {
+        json!(arr)
+    } else if raw_comm.is_array() {
+        raw_comm
     } else {
         json!([])
     };

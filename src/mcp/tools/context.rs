@@ -1,12 +1,17 @@
 use serde_json::Value;
 
+use crate::context::graph_rag::ensure_fresh_graph;
 use crate::context::indexer::IncrementalIndexer;
 use crate::context::scanner::scan_project;
 use crate::mcp::state::ServerState;
-use super::context_graph::{handle_architecture, handle_graph_rag, handle_reusable};
+use super::context_graph::{
+    handle_architecture, handle_blast_radius, handle_callees, handle_callers, handle_graph_rag,
+    handle_reusable,
+};
 use super::context_lsp::{handle_definition, handle_type_definition};
 use super::context_read::handle_read;
 use super::context_search::{handle_navigate, handle_search};
+use super::context_enrich::{handle_enrich_graph, handle_query_semantic};
 use super::context_symbols::{handle_learn_alias, handle_references, handle_symbols};
 use super::helpers::{detect_project_path, ensure_not_cancelled};
 
@@ -34,6 +39,20 @@ pub(crate) fn handle(
         .and_then(|r| r.as_str())
         .unwrap_or("");
 
+    let sync_notice = if op != "reindex" && op != "tree" {
+        match ensure_fresh_graph(&proj_path, 3) {
+            Ok(Some(report)) if report.files_indexed > 0 => {
+                format!(
+                    "> [!NOTE]\n> **GraphRAG Auto-Sync**: Fresh code graph updated ({} files indexed, {} symbols, {} edges in {}ms).\n\n",
+                    report.files_indexed, report.symbols_extracted, report.edges_created, report.duration_ms
+                )
+            }
+            _ => String::new(),
+        }
+    } else {
+        String::new()
+    };
+
     let resp = match op {
         "tree" => {
             let files = scan_project(&proj_path, 2);
@@ -50,6 +69,8 @@ pub(crate) fn handle(
         "search" => handle_search(query, &proj_path, state),
         "navigate" => handle_navigate(&arguments, query, &proj_path, state),
         "learn_alias" => handle_learn_alias(&arguments, &proj_path, rel_path),
+        "enrich_graph" | "enrich" => handle_enrich_graph(&arguments, &proj_path),
+        "semantic_query" | "semantic" => handle_query_semantic(&arguments, &proj_path),
         "reindex" => {
             match IncrementalIndexer::new(&proj_path) {
                 Ok(mut indexer) => {
@@ -82,10 +103,13 @@ pub(crate) fn handle(
         }
         "symbols" | "structure" => handle_symbols(&proj_path, rel_path),
         "references" => handle_references(&arguments, &proj_path, query, rel_path),
+        "callers" | "incoming_calls" => handle_callers(&proj_path, query),
+        "callees" | "outgoing_calls" => handle_callees(&proj_path, query),
+        "blast_radius" | "impact" => handle_blast_radius(&proj_path, query),
         "definition" | "goto_definition" => handle_definition(&arguments, &proj_path, query, rel_path),
         "type_definition" => handle_type_definition(&arguments, &proj_path, query, rel_path),
         _ => format!("Project context operation '{}' completed.", op),
     };
 
-    Ok(resp)
+    Ok(format!("{}{}", sync_notice, resp))
 }

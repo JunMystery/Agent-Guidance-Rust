@@ -1,15 +1,17 @@
 import { setText, el, emptyState } from '../dom.js';
-import { fmtTokens, fmtPct, timeAgo, savingsBadge } from '../format.js';
+import { fmtTokens, fmtPct, timeAgo } from '../format.js';
 import { renderHourlyChart } from './chart/index.js';
 import { renderRecentCalls } from './recent.js';
+import { renderActionsView } from './actionsView.js';
 import { makeSortable, filterRows, bindFilter } from '../interactions.js';
+import { paginate, renderPagination, resetPage } from '../pagination.js';
 import { store } from '../state.js';
 
 let activeTimeframe = 'past_24h';
 
 export function renderDashboard(data) {
   store.dashboard_data = data;
-  
+
   setText('out-client-name', 'global');
   setText('out-session-label', 'per-call tracking');
 
@@ -17,8 +19,12 @@ export function renderDashboard(data) {
   const projEl = el('sidebar-proj');
   if (projEl) projEl.title = data.project_path || '';
   setText('sidebar-port', 'port: ' + (data.server_port || '--'));
+  setText('sidebar-port-badge', data.server_port || '3000');
   setText('sidebar-version', 'version: v' + (data.version || '--'));
-  setText('sys-project', data.project_path || '--');
+  const projName = data.project_path ? data.project_path.replace(/\\/g, '/').split('/').filter(Boolean).pop() : '--';
+  setText('sys-project', projName);
+  const sysProjEl = el('sys-project');
+  if (sysProjEl) sysProjEl.title = data.project_path || '';
   setText('sys-version', 'v' + (data.version || '--'));
   setText('sys-db-status', data.db_status || '--');
 
@@ -27,7 +33,7 @@ export function renderDashboard(data) {
 
   renderSkillsTable(data.top_skills);
   renderRecentSkillCalls(data.recent_skill_calls);
-  renderActionsTable(data.tool_breakdown);
+  renderActionsView(data);
   renderHourlyChart(data, data.totals || {});
   renderRecentCalls(data.recent_actions);
 }
@@ -56,16 +62,25 @@ function updateTimeframeSummary(tf) {
   setText('out-tool-calls', s.tool_calls || 0);
   setText('out-skills-loaded', s.skills_loaded || 0);
   setText('out-embed-queries', s.embed_queries || 0);
+  setText('out-embed-metrics-queries', s.embed_queries || 0);
 
   setText('out-original-tokens', fmtTokens(s.tokens_original));
   setText('out-optimized-tokens', fmtTokens(s.tokens_optimized));
-  setText('out-token-savings', fmtTokens(s.token_savings) + ' (' + fmtPct(s.savings_pct) + ' savings)');
+  setText('out-token-savings', fmtTokens(s.token_savings));
+  setText('out-savings-pct', '+' + fmtPct(s.savings_pct));
+
+  if (data.top_skills) {
+    setText('out-skills-catalog', String(data.top_skills.length));
+  }
 }
 
 function renderSkillsTable(topSkills) {
   store.top_skills = topSkills || [];
-  bindFilter('skills-filter', () => drawSkillsTable());
-  makeSortable('dash-skills', store.top_skills);
+  bindFilter('skills-filter', () => {
+    resetPage('dash-skills');
+    drawSkillsTable();
+  });
+  makeSortable('dash-skills', store.top_skills, drawSkillsTable);
   drawSkillsTable();
 }
 
@@ -74,12 +89,14 @@ function drawSkillsTable() {
   if (!body) return;
   const query = el('skills-filter')?.value || '';
   const rows = filterRows(store.top_skills, query, ['skill_id']);
+  const paged = paginate('dash-skills', rows);
   body.innerHTML = '';
-  if (rows.length) {
-    rows.forEach((sk, idx) => {
-      const rankBadge = idx < 3 ? 'badge green' : 'badge';
+  if (paged.pagedRows.length) {
+    paged.pagedRows.forEach((sk, idx) => {
+      const globalIdx = paged.startIdx + idx;
+      const rankBadge = globalIdx < 3 ? 'badge green' : 'badge';
       body.innerHTML += '<tr>' +
-        '<td><span class="' + rankBadge + '">#' + (idx + 1) + '</span></td>' +
+        '<td><span class="' + rankBadge + '">#' + (globalIdx + 1) + '</span></td>' +
         '<td><strong>' + sk.skill_id + '</strong></td>' +
         '<td>' + sk.cnt + '</td>' +
         '</tr>';
@@ -87,14 +104,22 @@ function drawSkillsTable() {
   } else {
     emptyState('dash-skills', 3, 'No matching skills loaded.');
   }
+  renderPagination('dash-skills-pagination', 'dash-skills', paged, drawSkillsTable);
 }
 
 function renderRecentSkillCalls(recentSkillCalls) {
+  store.recent_skill_calls = recentSkillCalls || [];
+  makeSortable('recent-skills-body', store.recent_skill_calls, drawRecentSkillCalls);
+  drawRecentSkillCalls();
+}
+
+function drawRecentSkillCalls() {
   const body = el('recent-skills-body');
   if (!body) return;
+  const paged = paginate('recent-skills-body', store.recent_skill_calls);
   body.innerHTML = '';
-  if (recentSkillCalls && recentSkillCalls.length) {
-    recentSkillCalls.slice(0, 10).forEach(sk => {
+  if (paged.pagedRows.length) {
+    paged.pagedRows.forEach(sk => {
       body.innerHTML += '<tr>' +
         '<td>' + timeAgo(sk.loaded_at) + '</td>' +
         '<td><strong>' + sk.skill_id + '</strong></td>' +
@@ -103,34 +128,5 @@ function renderRecentSkillCalls(recentSkillCalls) {
   } else {
     emptyState('recent-skills-body', 2, 'No skill activations recorded yet.');
   }
+  renderPagination('recent-skills-pagination', 'recent-skills-body', paged, drawRecentSkillCalls);
 }
-
-function renderActionsTable(toolBreakdown) {
-  store.tool_breakdown = (toolBreakdown || []).map(r => {
-    const saved = (r.tok_orig || 0) - (r.tok_opt || 0);
-    return { ...r, savings: saved, status: r.error_message ? 'error' : 'ok' };
-  });
-  bindFilter('actions-filter', () => drawActionsTable());
-  makeSortable('actions-body', store.tool_breakdown);
-  drawActionsTable();
-}
-
-function drawActionsTable() {
-  const body = el('actions-body');
-  if (!body) return;
-  const query = el('actions-filter')?.value || '';
-  const rows = filterRows(store.tool_breakdown, query, ['tool_name', 'operation']);
-  body.innerHTML = '';
-  if (rows.length) {
-    rows.forEach(r => {
-      const saved = r.savings;
-      const { pct, badgeClass } = savingsBadge(saved, r.tok_orig);
-      const opText = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
-      body.innerHTML += '<tr><td><code>' + r.tool_name + '</code></td><td><span class="badge">' + opText + '</span></td><td>' + r.cnt + '</td><td>' + fmtTokens(r.tok_orig) + '</td><td>' + fmtTokens(r.tok_opt) + '</td><td><span class="' + badgeClass + '">' + pct + '%</span></td></tr>';
-    });
-  } else {
-    emptyState('actions-body', 6, 'No matching tool calls.');
-  }
-}
-
-

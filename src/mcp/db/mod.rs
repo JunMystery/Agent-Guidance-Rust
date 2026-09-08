@@ -60,7 +60,8 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
             duration_ms INTEGER,
             tokens_original INTEGER DEFAULT 0,
             tokens_optimized INTEGER DEFAULT 0,
-            error_message TEXT
+            error_message TEXT,
+            target TEXT
         );
         CREATE TABLE IF NOT EXISTS skill_loads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +103,7 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
     )?;
 
     let _ = conn.execute("ALTER TABLE tool_calls ADD COLUMN project_path TEXT", []);
+    let _ = conn.execute("ALTER TABLE tool_calls ADD COLUMN target TEXT", []);
 
     Ok(())
 }

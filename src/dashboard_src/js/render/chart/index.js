@@ -1,47 +1,45 @@
-// Hourly savings combo chart orchestrator. Public API: renderHourlyChart(data, totals).
+// Glass Stream Wave & Heatmap Ribbon chart orchestrator.
+// Public API: renderHourlyChart(data, totals).
 
 import { el } from '../../dom.js';
-import { plotBox, maxOf, linScale } from './scale.js';
+import { plotBox, maxOf, roundUpDomain, linScale, CHART_W, CHART_H } from './scale.js';
 import {
-  buildGrid, buildDaySeps, buildAxes, buildCols, buildLines, buildDots, buildXLabels, buildNowPill,
+  buildDefs, buildGrid, buildAxes, buildWaves, buildHeatRibbon, buildXLabels, buildHoverOverlay,
 } from './builders.js';
 import { buildKpi, buildLegend } from './kpi.js';
 import { bindChartTooltip } from './tooltip.js';
-import { CHART_W, CHART_H } from './scale.js';
 
 export function renderHourlyChart(data, totals) {
   const chart = el('hourly-chart');
   if (!chart) return;
 
   const hours = (data.hourly_savings || []);
-  const maxSaved = maxOf(hours, ['saved']);
-  const maxLine = maxOf(hours, ['original', 'optimized']);
+  const maxRaw = maxOf(hours, ['saved', 'original', 'optimized']);
 
-  if (!hours.length || (maxSaved === 0 && maxLine === 0)) {
+  if (!hours.length || maxRaw === 0) {
     chart.innerHTML = '<div class="chart-empty">No token data in the last 24h — make a tool call to start saving tokens.</div>';
     return;
   }
 
-  chart.innerHTML = buildChartHtml(hours, maxSaved, maxLine, totals);
+  const maxDomain = roundUpDomain(maxRaw);
+  chart.innerHTML = buildChartHtml(hours, maxDomain, totals);
   bindChartTooltip(chart);
 }
 
-function buildChartHtml(hours, maxSaved, maxLine, t) {
+function buildChartHtml(hours, maxDomain, t) {
   const box = plotBox();
-  const ySaved = linScale(maxSaved, box.y0, box.yMax);
-  const yLine = linScale(maxLine, box.y0, box.yMax);
+  const yVal = linScale(maxDomain, box.y0, box.yMax);
 
+  const defs = buildDefs(hours);
   const grid = buildGrid(box);
-  const seps = buildDaySeps(hours, box);
-  const axes = buildAxes(box, maxSaved, maxLine);
-  const cols = buildCols(hours, box, ySaved, maxSaved);
-  const lines = buildLines(hours, box, yLine);
-  const dots = buildDots(hours, box, yLine);
+  const axes = buildAxes(box, maxDomain);
+  const waves = buildWaves(hours, box, yVal);
+  const ribbon = buildHeatRibbon(hours, box);
   const xlabels = buildXLabels(hours, box);
-  const nowPill = buildNowPill(hours, box);
+  const overlay = buildHoverOverlay(hours, box, yVal);
 
-  const svg = '<svg viewBox="-20 -12 760 232" class="combo-chart" preserveAspectRatio="xMidYMid meet">' +
-    grid + axes + seps + cols + lines + dots + nowPill + xlabels + '</svg>';
+  const svg = '<svg viewBox="-10 -5 ' + (CHART_W + 20) + ' ' + (CHART_H + 20) + '" class="glass-stream-chart" preserveAspectRatio="xMidYMid meet">' +
+    defs + grid + axes + waves + ribbon + xlabels + overlay + '</svg>';
 
-  return buildKpi(t) + buildLegend() + '<div class="chart-wrap">' + svg + '<div class="chart-tip" id="chart-tip"></div></div>';
+  return buildKpi(t, hours) + buildLegend() + '<div class="chart-wrap">' + svg + '<div class="chart-tip" id="chart-tip"></div></div>';
 }

@@ -104,8 +104,8 @@ pub fn handle_request(
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["search", "navigate", "graph_rag", "reusable", "detect_duplicates", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex"],
-                                "description": "Operation: 'reusable'/'detect_duplicates' (GraphRAG & ML shared function and semantic clone analysis), 'graph_rag' (hierarchical Leiden community RAG), 'search' (5-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (structure), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh)"
+                                "enum": ["search", "navigate", "graph_rag", "reusable", "detect_duplicates", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex", "enrich_graph", "semantic_query"],
+                                "description": "Operation: 'reusable'/'detect_duplicates' (GraphRAG & ML shared function and semantic clone analysis), 'graph_rag' (hierarchical Leiden community RAG), 'search' (5-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (structure), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh), 'enrich_graph' (push Agent semantic edges & domain summaries), 'semantic_query' (query Agent semantic knowledge)"
                             },
                             "mode": { "type": "string", "enum": ["global", "local", "drift", "basic"], "description": "Query mode for 'graph_rag' operation: 'global' (community summaries), 'local' (entity fan-out), 'drift' (dual-route), or 'basic'" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
@@ -116,6 +116,8 @@ pub fn handle_request(
                             "alias_term": { "type": "string", "description": "The natural language term to learn as alias (for learn_alias)" },
                             "resolved_symbol": { "type": "string", "description": "The symbol name resolved from grep (for learn_alias)" },
                             "resolved_line": { "type": "integer", "description": "Line number of resolved symbol (for learn_alias)" },
+                            "edges": { "type": "array", "description": "Array of semantic edges for enrich_graph: [{source, target, relation, description, confidence}]" },
+                            "summaries": { "type": "array", "description": "Array of domain summaries for enrich_graph: [{module_path, title, summary, tags}]" },
                             "scope": { "type": "string", "enum": ["symbols", "files", "edges", "content"], "description": "Scope filter for navigate operation" },
                             "view_mode": { "type": "string", "enum": ["full", "skeleton"], "description": "View mode for 'read' operation: 'full' (capped 300 LOC) or 'skeleton' (AST structural outline with function bodies collapsed to line ranges)" }
                         },

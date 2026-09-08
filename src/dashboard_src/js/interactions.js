@@ -4,10 +4,12 @@ import { qsa } from './dom.js';
 
 // Sort state per table id: { key, dir }
 const sortState = {};
+const sortTargetRows = {};
 
-export function makeSortable(tbodyId, rows) {
+export function makeSortable(tbodyId, rows, onSort) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
+  sortTargetRows[tbodyId] = rows;
   const headers = tbody.closest('table')?.querySelectorAll('th[data-sort]');
   if (!headers) return;
   headers.forEach(th => {
@@ -15,25 +17,26 @@ export function makeSortable(tbodyId, rows) {
     th.dataset.sortBound = '1';
     th.setAttribute('role', 'columnheader');
     th.setAttribute('tabindex', '0');
-    th.addEventListener('click', () => toggleSort(tbodyId, rows, th.dataset.sort));
+    th.addEventListener('click', () => toggleSort(tbodyId, th.dataset.sort, onSort));
     th.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(tbodyId, rows, th.dataset.sort); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(tbodyId, th.dataset.sort, onSort); }
     });
   });
   applySort(tbodyId, rows);
 }
 
-function toggleSort(tbodyId, rows, key) {
+function toggleSort(tbodyId, key, onSort) {
   const prev = sortState[tbodyId] || { key: null, dir: 1 };
   const dir = prev.key === key ? -prev.dir : 1;
   sortState[tbodyId] = { key, dir };
+  const rows = sortTargetRows[tbodyId] || [];
   applySort(tbodyId, rows);
-  qsa(`#${tbodyId}`).forEach(() => {});
   const tbody = document.getElementById(tbodyId);
   tbody?.closest('table')?.querySelectorAll('th[data-sort]').forEach(th => {
     th.classList.toggle('sorted', th.dataset.sort === key);
     th.setAttribute('aria-sort', th.dataset.sort === key ? (dir === 1 ? 'ascending' : 'descending') : 'none');
   });
+  if (typeof onSort === 'function') onSort();
 }
 
 function applySort(tbodyId, rows) {
@@ -55,5 +58,7 @@ export function filterRows(rows, query, fields) {
 export function bindFilter(inputId, onInput) {
   const input = document.getElementById(inputId);
   if (!input) return;
+  if (input.dataset.bound) return;
+  input.dataset.bound = '1';
   input.addEventListener('input', () => onInput(input.value));
 }

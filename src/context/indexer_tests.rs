@@ -22,3 +22,23 @@ impl PaymentService {
         assert_eq!(chunks.len(), 2);
         assert!(chunks.iter().any(|c| c.text.contains("process_payment")));
     }
+
+    #[test]
+    fn test_extract_edges_uses_symbol_id() {
+        let code = r#"
+pub fn helper() -> bool {
+    true
+}
+
+pub fn main_runner() {
+    helper();
+}
+"#;
+        let symbols = extract_symbols_from_content("src/app.rs", code);
+        let edges = extract_edges_from_content("src/app.rs", code, &symbols);
+        assert!(!edges.is_empty(), "Should extract at least 1 call edge");
+        let edge = &edges[0];
+        assert_eq!(edge.edge_type, "calls");
+        assert!(edge.source_id.contains("src/app.rs::function::main_runner"), "source_id must be caller symbol ID: {}", edge.source_id);
+        assert!(edge.target_id.contains("src/app.rs::function::helper"), "target_id must be callee symbol ID: {}", edge.target_id);
+    }

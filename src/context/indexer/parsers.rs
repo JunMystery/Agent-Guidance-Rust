@@ -28,11 +28,26 @@ pub struct CodeChunk {
 
 /// Extract symbols across languages (Rust, Python, TS/JS, Go, Kotlin, Java)
 pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<ExtractedSymbol> {
+    let total_lines = content.lines().count().max(1);
+    let file_name = std::path::Path::new(rel_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| rel_path.to_string());
+    let mod_sym = ExtractedSymbol {
+        id: format!("{}::module::{}::L1", rel_path, file_name),
+        name: file_name,
+        kind: "module".to_string(),
+        parent: None,
+        start_line: 1,
+        end_line: total_lines,
+        signature: Some(format!("mod {}", rel_path)),
+    };
+
     let lang = crate::context::ast::AstLanguage::from_path(rel_path);
     if lang.is_supported() {
         let ast_symbols = crate::context::ast::AstEngine::extract_symbols(content, lang);
         if !ast_symbols.is_empty() {
-            return ast_symbols
+            let mut symbols: Vec<ExtractedSymbol> = ast_symbols
                 .into_iter()
                 .map(|s| {
                     let id = format!("{}::{}::{}::L{}", rel_path, s.kind, s.name, s.start_line);
@@ -47,6 +62,8 @@ pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<Extrac
                     }
                 })
                 .collect();
+            symbols.push(mod_sym);
+            return symbols;
         }
     }
 
@@ -99,48 +116,55 @@ pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<Extrac
         }
     }
 
+    symbols.push(mod_sym);
     symbols
 }
 
 fn extract_name_after(line: &str, prefixes: &[&str], kind: &'static str) -> Option<(String, &'static str)> {
     for prefix in prefixes {
         if let Some(rest) = line.strip_prefix(prefix) {
-            let name: String = rest
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
+            let name = rest
+                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                .next()
+                .unwrap_or("")
+                .trim();
             if !name.is_empty() {
-                return Some((name, kind));
+                return Some((name.to_string(), kind));
             }
         }
     }
     None
 }
 
-/// Extract edge relationships (imports + calls heuristic)
+/// Extract call edges and import edges for a file
 pub fn extract_edges_from_content(
     rel_path: &str,
     content: &str,
     symbols: &[ExtractedSymbol],
 ) -> Vec<ExtractedEdge> {
     let mut edges = Vec::new();
+    let mod_id = super::resolver::find_module_symbol(symbols)
+        .map(|s| s.id.as_str())
+        .unwrap_or("");
 
     // 1. Imports extraction
-    for (idx, line) in content.lines().enumerate() {
+    for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("use ") || trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            let imported_target = trimmed
-                .split_whitespace()
-                .nth(1)
-                .unwrap_or("")
-                .trim_end_matches(';');
-            if !imported_target.is_empty() {
-                edges.push(ExtractedEdge {
-                    source_id: format!("{}::L{}", rel_path, idx + 1),
-                    target_id: imported_target.to_string(),
-                    edge_type: "imports".to_string(),
-                    weight: 1.0,
-                });
+            let token = trimmed.split(|c: char| !c.is_alphanumeric() && c != '_')
+                .filter(|s| !s.is_empty() && *s != "use" && *s != "import" && *s != "from" && *s != "crate" && *s != "super")
+                .last();
+            if let Some(target_name) = token {
+                if let Some(target) = super::resolver::resolve_local_callee(symbols, target_name, mod_id) {
+                    if !mod_id.is_empty() && mod_id != target.id {
+                        edges.push(ExtractedEdge {
+                            source_id: mod_id.to_string(),
+                            target_id: target.id.clone(),
+                            edge_type: "imports".to_string(),
+                            weight: 1.0,
+                        });
+                    }
+                }
             }
         }
     }
@@ -150,23 +174,30 @@ pub fn extract_edges_from_content(
     if lang.is_supported() {
         let ast_calls = crate::context::ast::AstEngine::extract_calls(content, lang);
         for call in ast_calls {
-            for sym in symbols {
-                if sym.name == call.callee_name && sym.start_line != call.line {
-                    edges.push(ExtractedEdge {
-                        source_id: format!("{}::L{}", rel_path, call.line),
-                        target_id: sym.id.clone(),
-                        edge_type: "calls".to_string(),
-                        weight: 1.0,
-                    });
-                }
+            let caller = super::resolver::find_enclosing_symbol(symbols, call.line);
+            let caller_id = caller.map(|c| c.id.as_str()).unwrap_or(mod_id);
+            if caller_id.is_empty() { continue; }
+
+            if let Some(target) = super::resolver::resolve_local_callee(symbols, &call.callee_name, caller_id) {
+                edges.push(ExtractedEdge {
+                    source_id: caller_id.to_string(),
+                    target_id: target.id.clone(),
+                    edge_type: "calls".to_string(),
+                    weight: 1.0,
+                });
             }
         }
     } else {
         for (idx, line) in content.lines().enumerate() {
+            let line_num = idx + 1;
+            let caller = super::resolver::find_enclosing_symbol(symbols, line_num);
+            let caller_id = caller.map(|c| c.id.as_str()).unwrap_or(mod_id);
+            if caller_id.is_empty() { continue; }
+
             for sym in symbols {
-                if sym.start_line != (idx + 1) && line.contains(&format!("{}(", sym.name)) {
+                if sym.kind != "module" && sym.id != caller_id && line.contains(&format!("{}(", sym.name)) {
                     edges.push(ExtractedEdge {
-                        source_id: format!("{}::L{}", rel_path, idx + 1),
+                        source_id: caller_id.to_string(),
                         target_id: sym.id.clone(),
                         edge_type: "calls".to_string(),
                         weight: 1.0,

@@ -105,6 +105,7 @@ fn update_daily_summary(
 pub fn log_tool_call(
     tool_name: &str,
     operation: Option<&str>,
+    target: Option<&str>,
     orig_tokens: u64,
     opt_tokens: u64,
     duration_ms: u64,
@@ -123,8 +124,8 @@ pub fn log_tool_call(
         maybe_prune(conn, now);
 
         conn.execute(
-            "INSERT INTO tool_calls (tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, error_message, project_path)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO tool_calls (tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, error_message, project_path, target)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 tool_name,
                 operation,
@@ -133,14 +134,15 @@ pub fn log_tool_call(
                 orig_tokens as i64,
                 opt_tokens as i64,
                 error_message,
-                project_path
+                project_path,
+                target
             ],
         )?;
 
         if let Some(proj) = project_path {
-            let trimmed = proj.trim();
-            if !trimmed.is_empty() {
-                let p = std::path::Path::new(trimmed);
+            let normalized = crate::dashboard::projects::normalize_project_path(proj);
+            if !normalized.is_empty() && !crate::dashboard::projects::is_temp_project_path(&normalized) {
+                let p = std::path::Path::new(&normalized);
                 let proj_name = p
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -153,7 +155,7 @@ pub fn log_tool_call(
                          last_active = ?3,
                          total_calls = total_calls + 1,
                          total_tokens_saved = total_tokens_saved + ?4",
-                    params![trimmed, proj_name, now, tokens_saved as i64],
+                    params![normalized, proj_name, now, tokens_saved as i64],
                 );
             }
         }

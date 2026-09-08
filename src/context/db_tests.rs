@@ -10,6 +10,8 @@
     #[test]
     fn test_alias_learning_and_lookup() -> Result<()> {
         let temp_dir = std::env::temp_dir().join(format!("ag_alias_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
         let db_path = temp_dir.join("test_code_graph.db");
         let db = CodeGraphDb::open(&db_path)?;
 
@@ -47,6 +49,8 @@
     #[test]
     fn test_alias_decay() -> Result<()> {
         let temp_dir = std::env::temp_dir().join(format!("ag_decay_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
         let db_path = temp_dir.join("test_decay.db");
         let db = CodeGraphDb::open(&db_path)?;
 
@@ -71,6 +75,8 @@
     #[test]
     fn test_file_symbols_edges_and_chunks() -> Result<()> {
         let temp_dir = std::env::temp_dir().join(format!("ag_graph_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
         let db_path = temp_dir.join("test_graph.db");
         let db = CodeGraphDb::open(&db_path)?;
 
@@ -118,6 +124,8 @@
     #[test]
     fn test_vector_storage_and_search() -> Result<()> {
         let temp_dir = std::env::temp_dir().join(format!("ag_vec_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
         let db_path = temp_dir.join("test_vec.db");
         let db = CodeGraphDb::open(&db_path)?;
 
@@ -150,6 +158,8 @@
     #[test]
     fn test_hnsw_dispatch_threshold_vector_search() -> Result<()> {
         let temp_dir = std::env::temp_dir().join(format!("hnsw_dispatch_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
         let db_path = temp_dir.join("test_hnsw.db");
         let db = CodeGraphDb::open(&db_path)?;
 
@@ -167,6 +177,50 @@
         assert_eq!(results.len(), 1);
         assert_eq!(*results[0].1, "verify_token");
         assert!(results[0].0 > 0.9);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        Ok(())
+    }
+
+    #[test]
+    fn test_semantic_edges_and_domain_summaries() -> Result<()> {
+        let temp_dir = std::env::temp_dir().join(format!("ag_semantic_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let db_path = temp_dir.join("test_semantic.db");
+        let db = CodeGraphDb::open(&db_path)?;
+
+        // 1. Upsert semantic edge
+        db.upsert_semantic_edge(
+            "src/auth/service.rs::login",
+            "src/payment/stripe.rs::charge",
+            "business_flow",
+            Some("Triggers payment check after successful login"),
+            0.95,
+            "agent",
+        )?;
+
+        // 2. Query edges
+        let edges = db.query_semantic_edges_for_symbol("login")?;
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].relation_type, "business_flow");
+        assert_eq!(edges[0].target_symbol, "src/payment/stripe.rs::charge");
+        assert!((edges[0].confidence - 0.95).abs() < 1e-5);
+
+        // 3. Upsert domain summary
+        db.upsert_domain_summary(
+            "src/auth",
+            "Authentication Domain",
+            "Handles JWT issuing, OAuth2 login and session token rotation",
+            Some("auth,jwt,security"),
+            "agent",
+        )?;
+
+        // 4. Search domain summary via FTS
+        let hits = db.search_domain_summaries_fts("token rotation", 5)?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].module_path, "src/auth");
+        assert_eq!(hits[0].title, "Authentication Domain");
 
         let _ = std::fs::remove_dir_all(&temp_dir);
         Ok(())

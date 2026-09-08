@@ -22,6 +22,13 @@ pub fn parse_file_uri(uri: &str) -> String {
             decoded = decoded.trim_start_matches('/').to_string();
         }
         decoded = decoded.replace('/', "\\");
+        if decoded.len() >= 2 && decoded.as_bytes()[1] == b':' {
+            let first = decoded.chars().next().unwrap();
+            if first.is_ascii_lowercase() {
+                let upper = first.to_ascii_uppercase().to_string();
+                decoded.replace_range(..1, &upper);
+            }
+        }
     }
 
     decoded

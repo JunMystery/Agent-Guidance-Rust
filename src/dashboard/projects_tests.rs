@@ -38,10 +38,12 @@ fn test_list_tracked_projects_active_and_missing() {
     ).unwrap();
 
     let list = list_tracked_projects(&db_path).unwrap();
-    let active_item = list.iter().find(|p| p.path == real_proj_str).expect("Active project found");
+    let norm_real = normalize_project_path(real_proj_str);
+    let active_item = list.iter().find(|p| p.path == real_proj_str || p.path == norm_real).expect("Active project found");
     assert_eq!(active_item.status, "active");
 
-    let missing_item = list.iter().find(|p| p.path == fake_proj_str).expect("Missing project found");
+    let norm_fake = normalize_project_path(fake_proj_str);
+    let missing_item = list.iter().find(|p| p.path == fake_proj_str || p.path == norm_fake).expect("Missing project found");
     assert_eq!(missing_item.status, "missing");
 
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -85,8 +87,19 @@ fn test_prune_missing_projects() {
     assert_eq!(pruned, 1);
 
     let list = list_tracked_projects(&db_path).unwrap();
-    assert!(list.iter().any(|p| p.path == real_proj_str));
+    let norm_real = normalize_project_path(real_proj_str);
+    assert!(list.iter().any(|p| p.path == real_proj_str || p.path == norm_real));
     assert!(!list.iter().any(|p| p.path == fake_proj_str));
 
     let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_normalize_project_path_deduplication() {
+    let p1 = normalize_project_path("e:/Github/Agent-Guidance-Rust");
+    let p2 = normalize_project_path("E:\\Github\\Agent-Guidance-Rust");
+    let p3 = normalize_project_path("e:\\Github\\Agent-Guidance-Rust\\");
+    assert_eq!(p1, p2);
+    assert_eq!(p2, p3);
+    assert!(p1.starts_with("E:"));
 }

@@ -20,4 +20,18 @@ export function stopPoll() {
   if (aEl) aEl.textContent = '';
   const rEl = el('recent-calls-poll');
   if (rEl) rEl.textContent = '';
+  const sEl = el('skills-poll');
+  if (sEl) sEl.textContent = '';
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  } else {
+    const view = activeView();
+    if (view && view !== 'graph') {
+      fetchData();
+      startPoll();
+    }
+  }
+});

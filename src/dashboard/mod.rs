@@ -8,6 +8,7 @@ use tiny_http::{Header, Response, Server, StatusCode};
 pub mod graph;
 pub mod projects;
 pub mod stats;
+pub mod stats_query;
 use stats::handle_api_stats;
 
 #[derive(Embed)]
@@ -22,6 +23,7 @@ const DASHBOARD_QUEUE: usize = 32;
 pub(crate) struct StatsCache {
     pub(crate) generated_at: Option<Instant>,
     pub(crate) data: Option<serde_json::Value>,
+    pub(crate) project_key: Option<String>,
 }
 
 pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<()> {
@@ -44,6 +46,7 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
     } else {
         println!("  ↳ Viewing all tracked projects. Use project dropdown in UI to filter.");
     }
+    let _ = projects::prune_missing_projects(&crate::mcp::db::get_db_path());
     let stats_cache = Arc::new(Mutex::new(StatsCache::default()));
 
     let (sender, receiver) = sync_channel(DASHBOARD_QUEUE);
@@ -88,6 +91,11 @@ fn handle_dashboard_request(
     match path {
         "/" | "/index.html" => serve_asset(request, "index.html", "text/html; charset=utf-8"),
         "/dashboard.css" => serve_asset(request, "dashboard.css", "text/css; charset=utf-8"),
+        "/favicon.ico" => {
+            let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚡</text></svg>"#;
+            let header = Header::from_bytes(&b"Content-Type"[..], &b"image/svg+xml"[..]).unwrap();
+            let _ = request.respond(Response::from_string(svg).with_header(header));
+        }
         "/api/stats" => handle_api_stats(request, project_path, cache),
         "/api/projects" => {
             let db_path = dirs::home_dir()

@@ -115,7 +115,7 @@
         assert_eq!(
             parse_file_uri("file:///e:/Github/Agent-Guidance-Rust"),
             if cfg!(windows) {
-                "e:\\Github\\Agent-Guidance-Rust"
+                "E:\\Github\\Agent-Guidance-Rust"
             } else {
                 "/e:/Github/Agent-Guidance-Rust"
             }

@@ -88,7 +88,7 @@ pub fn execute_global_search(query: &str, hierarchy: &CommunityHierarchy) -> Que
     }
 }
 
-/// Local Search: targeted entity search and fan-out across 1-hop & 2-hop DAG neighbors.
+/// Local Search: targeted entity search and multi-hop neighborhood traversal.
 pub fn execute_local_search(
     query: &str,
     db: &CodeGraphDb,
@@ -96,46 +96,95 @@ pub fn execute_local_search(
 ) -> Result<QueryResult> {
     let mut sections = Vec::new();
 
-    // 1. Find matching target symbols
-    let symbols = db.search_symbols(query, 5)?;
-    if symbols.is_empty() {
-        sections.push(format!("No matching entity symbols found for query '{}'.", query));
-        return Ok(QueryResult {
-            mode: GraphRagQueryMode::Local,
-            title: format!("GraphRAG Local Search for '{}'", query),
-            sections,
-        });
+    // 0. AI Agent Domain Summaries & Semantic Knowledge
+    if let Ok(summaries) = db.search_domain_summaries_fts(query, 3) {
+        if !summaries.is_empty() {
+            let mut summary_block = String::from("### 🧠 AI Agent Domain Summaries\n");
+            for s in summaries {
+                summary_block.push_str(&format!("- **{}** (`{}`): {}\n", s.title, s.module_path, s.summary));
+            }
+            sections.push(summary_block);
+        }
     }
 
-    for (file_path, sym_name, line) in &symbols {
-        let mut entity_block = format!("### Entity: `{}` (`{}:L{}`)\n", sym_name, file_path, line);
-
-        // Check community membership
-        if let Some(comm) = hierarchy.find_community_for_file(file_path) {
-            entity_block.push_str(&format!("- Community: **{}** (Layer: {})\n", comm.summary.title, comm.summary.layer));
+    // 1. Direct Multi-Hop Neighborhood Fetch
+    if let Ok(Some(n)) = super::neighborhood::fetch_symbol_neighborhood(db, hierarchy, query) {
+        let mut block = format!(
+            "### Target Entity: `{}` (`{}`)\n- File: `{}:L{}-L{}`\n",
+            n.name, n.kind, n.file_path, n.start_line, n.end_line
+        );
+        if let (Some(title), Some(layer)) = (&n.community_title, &n.community_layer) {
+            block.push_str(&format!("- Community Subsystem: **{}** (Layer: {})\n", title, layer));
+        }
+        if let Some(sig) = &n.signature {
+            block.push_str(&format!("- Signature: `{}`\n", sig));
         }
 
-        // 2. Query 1-hop & 2-hop DAG relations
-        if let Ok(related) = db.search_related_symbols(sym_name) {
-            if !related.is_empty() {
-                entity_block.push_str("#### Graph Relations (1-Hop Fan-out):\n");
-                for (s1, edge, s2) in related.iter().take(8) {
-                    entity_block.push_str(&format!("- `{}` --[{}]--> `{}`\n", s1, edge, s2));
-                }
+        if let Some(code) = &n.code_excerpt {
+            let bounded: Vec<&str> = code.lines().take(20).collect();
+            block.push_str(&format!("\n#### Code Implementation Excerpt:\n```text\n{}\n```\n", bounded.join("\n")));
+        }
+
+        if !n.callers.is_empty() {
+            block.push_str(&format!("\n#### 🎯 1-Hop Callers ({})\n", n.callers.len()));
+            for c in n.callers.iter().take(8) {
+                block.push_str(&format!("- `{}` in `{}:L{}` [{}, weight: {:.1}]\n", c.name, c.file_path, c.start_line, c.edge_type, c.weight));
             }
         }
 
-        sections.push(entity_block);
+        if !n.callees.is_empty() {
+            block.push_str(&format!("\n#### ⚡ 1-Hop Dependencies ({})\n", n.callees.len()));
+            for c in n.callees.iter().take(8) {
+                block.push_str(&format!("- `{}` in `{}:L{}` [{}, weight: {:.1}]\n", c.name, c.file_path, c.start_line, c.edge_type, c.weight));
+            }
+        }
+
+        if !n.transitive_chains.is_empty() {
+            block.push_str("\n#### 🔗 2-Hop Transitive Dependency Chains:\n");
+            for (s1, s2, s3) in n.transitive_chains.iter().take(4) {
+                block.push_str(&format!("- `{}` ➔ `{}` ➔ `{}`\n", s1, s2, s3));
+            }
+        }
+
+        block.push_str(&format!("\n#### 🕸️ Subgraph Neighborhood DAG:\n```mermaid\n{}\n```", n.mermaid_dag));
+        sections.push(block);
+    } else {
+        // Fallback: search symbols matching query
+        let symbols = db.search_symbols(query, 3).unwrap_or_default();
+        if symbols.is_empty() {
+            sections.push(format!("No matching entity symbols or code chunks found for query '{}'.", query));
+        } else {
+            for (file_path, sym_name, line) in symbols {
+                if let Ok(Some(sub_n)) = super::neighborhood::fetch_symbol_neighborhood(db, hierarchy, &sym_name) {
+                    sections.push(format!(
+                        "### Entity: `{}` (`{}:L{}`)\n- Callers: {} | Callees: {}\n- Community: {}\n",
+                        sub_n.name, file_path, line, sub_n.callers.len(), sub_n.callees.len(),
+                        sub_n.community_title.as_deref().unwrap_or("Core")
+                    ));
+                }
+            }
+        }
+    }
+
+    if let Ok(edges) = db.query_semantic_edges_for_symbol(query) {
+        if !edges.is_empty() {
+            let mut edge_block = String::from("#### 💡 Semantic Edges (AI Inferred)\n");
+            for e in edges.iter().take(6) {
+                let desc = e.description.as_deref().unwrap_or("—");
+                edge_block.push_str(&format!("- `{}` --[{}]--> `{}`: {}\n", e.source_symbol, e.relation_type, e.target_symbol, desc));
+            }
+            sections.push(edge_block);
+        }
     }
 
     Ok(QueryResult {
         mode: GraphRagQueryMode::Local,
-        title: format!("GraphRAG Local Search for '{}'", query),
+        title: format!("GraphRAG Local Multi-Hop Search for '{}'", query),
         sections,
     })
 }
 
-/// DRIFT Search: Dual-route combining Community Hierarchy context + exact AST traversal.
+/// DRIFT Search: Dual-route combining Community Hierarchy context + exact AST multi-hop traversal.
 pub fn execute_drift_search(
     query: &str,
     db: &CodeGraphDb,
@@ -146,16 +195,16 @@ pub fn execute_drift_search(
     // Route 1: Top-down Community Context
     let global_res = execute_global_search(query, hierarchy);
     if !global_res.sections.is_empty() {
-        sections.push("## Route 1: High-Level Community Context (Top-Down)".to_string());
+        sections.push("## Route 1: High-Level Community Architecture (Top-Down)".to_string());
         for sec in global_res.sections.into_iter().take(3) {
             sections.push(sec);
         }
     }
 
-    // Route 2: Bottom-up Factual Entity Traversal
+    // Route 2: Bottom-up Multi-hop Entity Neighborhood Traversal
     let local_res = execute_local_search(query, db, hierarchy)?;
     if !local_res.sections.is_empty() {
-        sections.push("## Route 2: Entity & Dependency Fan-out (Bottom-Up)".to_string());
+        sections.push("## Route 2: AST Multi-Hop Neighborhood & Call Graph (Bottom-Up)".to_string());
         for sec in local_res.sections.into_iter().take(3) {
             sections.push(sec);
         }
@@ -163,7 +212,7 @@ pub fn execute_drift_search(
 
     Ok(QueryResult {
         mode: GraphRagQueryMode::Drift,
-        title: format!("GraphRAG DRIFT Search (Dual-Route) for '{}'", query),
+        title: format!("GraphRAG DRIFT Search (Dual-Route Multi-Hop) for '{}'", query),
         sections,
     })
 }
