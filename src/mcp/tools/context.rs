@@ -62,7 +62,7 @@ pub(crate) fn handle(
                         }
                     });
                     format!(
-                        "# Project Re-Indexed Successfully ✓\n\n- Files Scanned: {}\n- Files Indexed: {}\n- Files Skipped: {}\n- Symbols Extracted: {}\n- Edges Created: {}\n- Content Chunks: {}\n- Duration: {}ms\n- Background Embedding: Rayon ML pool active\n- Persistence: `.agent-context/code_graph.db`",
+                        "# Project Re-Indexed Successfully\n\n- Files Scanned: {}\n- Files Indexed: {}\n- Files Skipped: {}\n- Symbols Extracted: {}\n- Edges Created: {}\n- Content Chunks: {}\n- Duration: {}ms\n- Background Embedding: Rayon ML pool active\n- Persistence: `.agent-context/code_graph.db`",
                         report.files_scanned,
                         report.files_indexed,
                         report.files_skipped,

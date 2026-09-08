@@ -17,7 +17,7 @@ pub(crate) fn handle_verify(
         state.expected_output_keyword = Some(kw.to_string());
         state.verification_passed = false;
         Ok(format!(
-            "# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED (Awaiting test execution output)\n\n✓ Run verification command to satisfy anti-hallucination requirement.",
+            "# Empirical Verification Contract Registered\n\n- Verification Command: `{}`\n- Expected Output Keyword: `{}`\n- Verification Status: REGISTERED (Awaiting test execution output)\n\nRun verification command to satisfy anti-hallucination requirement.",
             cmd, kw
         ))
     } else {

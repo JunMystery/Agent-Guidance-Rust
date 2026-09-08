@@ -182,11 +182,11 @@ pub fn record_project_learning(
     }
 
     write_learnings_file(proj_path, &items)?;
-    let pin_label = if is_pinned { " (PINNED 📌)" } else { "" };
+    let pin_label = if is_pinned { " (PINNED)" } else { "" };
     info!("Saved project learning in category '{}{}'", clean_cat, pin_label);
 
     Ok(format!(
-        "# Project Learning Saved ✓\n\n- Category: `{}`{}\n- Learning: {}\n- Total Memorized Items: {}\n- File: `.agent-context/learnings.md`",
+        "# Project Learning Saved\n\n- Category: `{}`{}\n- Learning: {}\n- Total Memorized Items: {}\n- File: `.agent-context/learnings.md`",
         clean_cat, pin_label, clean_learning, items.len()
     ))
 }

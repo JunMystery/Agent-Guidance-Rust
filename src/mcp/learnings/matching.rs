@@ -166,7 +166,7 @@ pub fn compute_line_delta(original: &str, current: &str) -> (usize, usize) {
 pub fn generate_session_diff_summary(proj_path: &Path, state: &ServerState) -> String {
     if state.modified_files.is_empty() {
         return format!(
-            "# 🔍 Session Modification Summary\n\n- Active Session ID: `{}`\n- Total Files Modified: 0\n\n*No files have been modified in this session yet.*",
+            "# Session Modification Summary\n\n- Active Session ID: `{}`\n- Total Files Modified: 0\n\n*No files have been modified in this session yet.*",
             state.session_id
         );
     }
@@ -179,7 +179,7 @@ pub fn generate_session_diff_summary(proj_path: &Path, state: &ServerState) -> S
         let mangled = file.replace('/', "_").replace('\\', "_");
         let snap_file = snapshots_dir.join(format!("{}.snapshot", mangled));
         let has_snap = snap_file.exists();
-        let snap_str = if has_snap { "✅ Yes" } else { "❌ No" };
+        let snap_str = if has_snap { "Yes" } else { "No" };
 
         let curr_file_path = proj_path.join(file);
         let curr_content = fs::read_to_string(&curr_file_path).unwrap_or_default();
@@ -200,7 +200,7 @@ pub fn generate_session_diff_summary(proj_path: &Path, state: &ServerState) -> S
     }
 
     format!(
-        "# 🔍 Session Modification Summary\n\n- Active Session ID: `{}`\n- Total Files Modified: {}\n\n{}\n💡 **Handoff Command**: Call `session_continuity(operation=\"handoff\", next_action=\"...\")` to conclude session.",
+        "# Session Modification Summary\n\n- Active Session ID: `{}`\n- Total Files Modified: {}\n\n{}\n**Handoff Command**: Call `session_continuity(operation=\"handoff\", next_action=\"...\")` to conclude session.",
         state.session_id,
         state.modified_files.len(),
         table
@@ -229,14 +229,14 @@ pub fn write_handoff_summary(proj_path: &Path, state: &ServerState, next_action:
             let impact = crate::mcp::impact::assess_file_risk(proj_path, file);
             let mangled = file.replace('/', "_").replace('\\', "_");
             let snap_file = snapshots_dir.join(format!("{}.snapshot", mangled));
-            let has_snap = if snap_file.exists() { "✅ Yes" } else { "❌ No" };
+            let has_snap = if snap_file.exists() { "Yes" } else { "No" };
             table.push_str(&format!("| `{}` | {:?} | {} |\n", file, impact.risk_level, has_snap));
         }
         table
     };
 
     let summary = format!(
-        "# 🤝 Cross-Agent Handoff Protocol\n\n- Active Session ID: `{}`\n- Workflow Stage: `{}` (Plan Approved: {})\n- Active Architecture Pattern: `{}`\n- Total Tool Calls: {}\n\n## 📁 Modified Files in This Session:\n{}\n\n## 🎯 Target Goal / Intent:\n{}\n\n## 🚀 Next Action for Incoming Agent:\n{}\n\n---\n*Written to `.agent-context/handoff.md` for zero-delay multi-IDE handoff.*",
+        "# Cross-Agent Handoff Protocol\n\n- Active Session ID: `{}`\n- Workflow Stage: `{}` (Plan Approved: {})\n- Active Architecture Pattern: `{}`\n- Total Tool Calls: {}\n\n## Modified Files in This Session:\n{}\n\n## Target Goal / Intent:\n{}\n\n## Next Action for Incoming Agent:\n{}\n\n---\n*Written to `.agent-context/handoff.md` for zero-delay multi-IDE handoff.*",
         state.session_id,
         state.workflow_stage,
         state.plan_approved,

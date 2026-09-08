@@ -32,7 +32,7 @@ pub(crate) fn handle_architecture(proj_path: &Path, state: &mut ServerState) -> 
     let mermaid_dag = engine.architecture_mermaid(&arch_pattern);
 
     format!(
-        "# Project Architecture Analysis (GraphRAG)\n\n- Detected / Memorized Pattern: **{}**\n- Workspace Root: {}\n- Total Hierarchical Communities: {}\n- Persistence: Memorized in `.agent-context/architecture.json`\n\n### Core Community Subsystems:\n{}\n\n### 🕸️ Architecture Dependency DAG:\n```mermaid\n{}\n```",
+        "# Project Architecture Analysis (GraphRAG)\n\n- Detected / Memorized Pattern: **{}**\n- Workspace Root: {}\n- Total Hierarchical Communities: {}\n- Persistence: Memorized in `.agent-context/architecture.json`\n\n### Core Community Subsystems:\n{}\n\n### Architecture Dependency DAG:\n```mermaid\n{}\n```",
         arch_pattern,
         proj_path.display(),
         hierarchy.communities.len(),
@@ -55,7 +55,7 @@ pub(crate) fn handle_graph_rag(
     let engine = GraphRagEngine::new(proj_path);
     let blast_radius = if let Ok(dag) = engine.symbol_blast_radius_mermaid(query.trim()) {
         if dag.lines().count() > 2 {
-            format!("\n\n### 🎯 Dependency Flow & Blast Radius (Mermaid DAG):\n```mermaid\n{}\n```", dag)
+            format!("\n\n### Dependency Flow & Blast Radius (Mermaid DAG):\n```mermaid\n{}\n```", dag)
         } else {
             String::new()
         }

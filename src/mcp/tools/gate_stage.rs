@@ -62,7 +62,7 @@ pub(crate) fn handle_advance(
                 let loc = count_file_lines(&full);
                 if loc >= 300 {
                     return format!(
-                        "# Workflow Gate: BLOCKED (300_LOC_CAP_EXCEEDED)\n\n- Target File: `{}` (Current Length: **{} lines** / limit: 300 lines)\n\n⚠️ **Error: 300_LOC_LIMIT_EXCEEDED**: Newly created or modified code file '{}' has {} lines, which breaches the 300 LOC limit. You cannot advance workflow stages until this file is decomposed into modular sub-files (< 150 LOC each).\n\n👉 **Action Required**: Decompose `{}` into focused sub-modules using `workflow_gate(action=\"authorize_edit\", justification=\"Refactor/Decompose: ...\")`.",
+                        "# Workflow Gate: BLOCKED (300_LOC_CAP_EXCEEDED)\n\n- Target File: `{}` (Current Length: **{} lines** / limit: 300 lines)\n\n**Error: 300_LOC_LIMIT_EXCEEDED**: Newly created or modified code file '{}' has {} lines, which breaches the 300 LOC limit. You cannot advance workflow stages until this file is decomposed into modular sub-files (< 150 LOC each).\n\n**Action Required**: Decompose `{}` into focused sub-modules using `workflow_gate(action=\"authorize_edit\", justification=\"Refactor/Decompose: ...\")`.",
                         file_rel, loc, file_rel, loc, file_rel
                     );
                 }
@@ -113,7 +113,7 @@ pub(crate) fn handle_advance(
                 .as_deref()
                 .unwrap_or("NONE")
         ),
-        Err(err) => format!("# Workflow Gate: [advance]\n\n⚠️ Error: {}", err),
+        Err(err) => format!("# Workflow Gate: [advance]\n\nError: {}", err),
     }
 }
 
@@ -128,10 +128,10 @@ pub(crate) fn handle_check(state: &ServerState) -> String {
         status_str, state.plan_approved, state.workflow_stage, state.fix_attempts
     );
     if state.workflow_stage == "Build" && !state.plan_approved {
-        resp.push_str("\n\n⚠️ Trigger IDE/CLI `ask_question` tool to request explicit user plan approval before editing code.");
+        resp.push_str("\n\nTrigger IDE/CLI `ask_question` tool to request explicit user plan approval before editing code.");
     }
     if state.workflow_stage == "Test_Recheck" {
-        resp.push_str("\n\n⚠ **ANTI-HALLUCINATION ENFORCER ACTIVE**: Re-read the original user prompt & verify all requested features against real build/test outputs before declaring task complete.");
+        resp.push_str("\n\n**ANTI-HALLUCINATION ENFORCER ACTIVE**: Re-read the original user prompt & verify all requested features against real build/test outputs before declaring task complete.");
     }
     resp
 }

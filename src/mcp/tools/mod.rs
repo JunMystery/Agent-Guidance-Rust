@@ -130,3 +130,7 @@ fn handle_tool_call_internal(
 #[cfg(test)]
 #[path = "../tools_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../tools_read_tests.rs"]
+mod read_tests;

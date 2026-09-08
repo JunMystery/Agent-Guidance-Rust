@@ -83,13 +83,13 @@ pub(crate) fn handle(
     let learnings_section = if relevant_learnings.is_empty() {
         String::new()
     } else {
-        format!("\n\n## 💡 Project Memorized Learnings\n{}", relevant_learnings.join("\n"))
+        format!("\n\n## Project Memorized Learnings\n{}", relevant_learnings.join("\n"))
     };
 
     let blueprint_section = if dynamic_blueprint.trim().is_empty() {
         String::new()
     } else {
-        format!("\n\n## 📐 Dynamic Split Blueprint\n{}", dynamic_blueprint)
+        format!("\n\n## Dynamic Split Blueprint\n{}", dynamic_blueprint)
     };
 
     let next_step_prompt = "-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning.";

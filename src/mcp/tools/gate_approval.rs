@@ -29,7 +29,7 @@ pub(crate) fn handle_pass_verification(
     state.fix_attempts = 0;
     let _ = state.auto_checkpoint(proj_path);
     format!(
-        "# Workflow Gate: [pass_verification]\n\nStatus: PASSED | Plan Approved: {} | Stage: {} | Fix Attempts: 0\n\n✓ Verification passed and recorded in session checkpoint.",
+        "# Workflow Gate: [pass_verification]\n\nStatus: PASSED | Plan Approved: {} | Stage: {} | Fix Attempts: 0\n\nVerification passed and recorded in session checkpoint.",
         state.plan_approved, state.workflow_stage
     )
 }
@@ -50,7 +50,7 @@ pub(crate) fn handle_set_architecture(
     let _ = ServerState::save_persisted_architecture(proj_path, &arch_pattern);
     let _ = state.auto_checkpoint(proj_path);
     format!(
-        "# Architecture Pattern Locked\n\n- Project: {}\n- Confirmed Architecture: {}\n- Persistence: Saved to `.agent-context/architecture.json`\n\n✓ Pattern memorized for all workflow stages and future sessions.",
+        "# Architecture Pattern Locked\n\n- Project: {}\n- Confirmed Architecture: {}\n- Persistence: Saved to `.agent-context/architecture.json`\n\nPattern memorized for all workflow stages and future sessions.",
         proj_path.display(),
         arch_pattern
     )
@@ -69,13 +69,13 @@ pub(crate) fn handle_rollback(
                 )
             } else {
                 format!(
-                    "# Rollback Guard: [rollback] ✓\n\nSuccessfully restored {} file(s) to their pre-edit state for session '{}':\n\n{}",
+                    "# Rollback Guard: [rollback] SUCCESS\n\nSuccessfully restored {} file(s) to their pre-edit state for session '{}':\n\n{}",
                     restored.len(),
                     state.session_id,
                     restored.iter().map(|f| format!("- `{}`", f)).collect::<Vec<_>>().join("\n")
                 )
             }
         }
-        Err(e) => format!("# Rollback Guard: [rollback] ⚠️\n\nFailed to restore session snapshots: {}", e),
+        Err(e) => format!("# Rollback Guard: [rollback] ERROR\n\nFailed to restore session snapshots: {}", e),
     }
 }

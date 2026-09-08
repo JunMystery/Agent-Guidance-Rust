@@ -144,7 +144,7 @@ pub(crate) fn handle_learn_alias(
             Ok(db) => match db.upsert_alias(alias_term, rel_path, resolved_symbol, resolved_line) {
                 Ok(()) => {
                     format!(
-                        "# Alias Learned Successfully ✓\n\n- Alias Term: `{}`\n- Resolved Path: `{}`\n- Symbol: `{}`\n- Line: {}\n- Persistence: Saved in `.agent-context/code_graph.db`",
+                        "# Alias Learned Successfully\n\n- Alias Term: `{}`\n- Resolved Path: `{}`\n- Symbol: `{}`\n- Line: {}\n- Persistence: Saved in `.agent-context/code_graph.db`",
                         alias_term,
                         rel_path,
                         resolved_symbol.unwrap_or("—"),

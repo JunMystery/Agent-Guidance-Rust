@@ -25,8 +25,8 @@ pub(crate) fn validate_new_file_modularity(rel_path: &str, justification: &str) 
                 return Err(format!(
                     "# Edit Approval Gate: BLOCKED (COMPOUND_FILE_NAME_PROHIBITED)\n\n\
                     - Target File: `{}` [NEW FILE]\n\n\
-                    ⚠️ **Error: COMPOUND_FILE_NAME_PROHIBITED**: New file name '{}' is a compound plural container (matches '*{}'). Monolithic container files are strictly forbidden because they bundle multiple components/services and cause 300 LOC limit violations.\n\n\
-                    👉 **Action Required**: Authorize and create discrete single-responsibility files (< 150 LOC each), for example:\n\
+                    **Error: COMPOUND_FILE_NAME_PROHIBITED**: New file name '{}' is a compound plural container (matches '*{}'). Monolithic container files are strictly forbidden because they bundle multiple components/services and cause 300 LOC limit violations.\n\n\
+                    **Action Required**: Authorize and create discrete single-responsibility files (< 150 LOC each), for example:\n\
                     - `CreateItemModal.tsx` and `AdjustStockModal.tsx` instead of `InventoryModals.tsx`\n\
                     - `user_service.rs` and `order_service.rs` instead of `services.rs`\n\
                     - `login_handler.go` and `register_handler.go` instead of `auth_handlers.go`",
@@ -57,8 +57,8 @@ pub(crate) fn validate_new_file_modularity(rel_path: &str, justification: &str) 
                 "# Edit Approval Gate: BLOCKED (MULTI_COMPONENT_NEW_FILE_PROHIBITED)\n\n\
                 - Target File: `{}` [NEW FILE]\n\
                 - Justification: {}\n\n\
-                ⚠️ **Error: MULTI_COMPONENT_NEW_FILE_PROHIBITED**: Your authorization justification declares {} distinct components/services in a single new file. Packing multiple components into one file violates Single Responsibility and breaches the 300 LOC hard cap.\n\n\
-                👉 **Action Required**: Authorize and create EACH component in its own dedicated file (< 150 LOC each):\n\
+                **Error: MULTI_COMPONENT_NEW_FILE_PROHIBITED**: Your authorization justification declares {} distinct components/services in a single new file. Packing multiple components into one file violates Single Responsibility and breaches the 300 LOC hard cap.\n\n\
+                **Action Required**: Authorize and create EACH component in its own dedicated file (< 150 LOC each):\n\
                 - Call `workflow_gate(action=\"authorize_edit\", relative_path=\"<path>/ComponentA\", ...)`\n\
                 - Call `workflow_gate(action=\"authorize_edit\", relative_path=\"<path>/ComponentB\", ...)`",
                 rel_path, justification, entity_count

@@ -78,7 +78,7 @@ impl ServerState {
         if now > ts && now - ts > SESSION_STALE_TIMEOUT_SECS {
             let mins = (now - ts) / 60;
             Some(format!(
-                "⚠ Session may be stale — {}m since last task_pipeline. Consider re-calling task_pipeline for fresh context.",
+                "Notice: Session may be stale — {}m since last task_pipeline. Consider re-calling task_pipeline for fresh context.",
                 mins
             ))
         } else {

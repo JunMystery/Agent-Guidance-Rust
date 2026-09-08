@@ -179,14 +179,14 @@ pub fn format_reusable_report(
     clone_pairs: &[SemanticClonePair],
 ) -> String {
     let mut out = String::new();
-    out.push_str("# ♻️ Code Reusability & Shared Function Analysis\n\n");
+    out.push_str("# Code Reusability & Shared Function Analysis\n\n");
 
     if !reusable_symbols.is_empty() {
-        out.push_str("### 🌟 Identified Shared / Highly-Reusable Functions\n\n");
+        out.push_str("### Identified Shared / Highly-Reusable Functions\n\n");
         out.push_str("| Symbol | Location | Kind | Fan-in (Callers) | Shared Path | Score |\n");
         out.push_str("|---|---|---|---|---|---|\n");
         for sym in reusable_symbols.iter().take(15) {
-            let shared_tag = if sym.is_shared_location { "✅ Yes" } else { "No" };
+            let shared_tag = if sym.is_shared_location { "Yes" } else { "No" };
             out.push_str(&format!(
                 "| `{}` | `{}` | `{}` | {} | {} | {:.1} |\n",
                 sym.name, sym.file_path, sym.symbol_kind, sym.fan_in, shared_tag, sym.reusability_score
@@ -196,7 +196,7 @@ pub fn format_reusable_report(
     }
 
     if !clone_pairs.is_empty() {
-        out.push_str("### ⚠️ Potential Duplicate Logic / Semantic Clones (DRY Warning)\n\n");
+        out.push_str("### Potential Duplicate Logic / Semantic Clones (DRY Warning)\n\n");
         out.push_str("| Function A | Function B | Semantic Similarity | Recommended Action |\n");
         out.push_str("|---|---|---|---|\n");
         for clone in clone_pairs.iter().take(10) {
@@ -206,7 +206,7 @@ pub fn format_reusable_report(
                 clone.similarity * 100.0, clone.recommendation
             ));
         }
-        out.push_str("\n💡 **Action**: Unify duplicated logic into a shared helper module.\n");
+        out.push_str("\n**Action**: Unify duplicated logic into a shared helper module.\n");
     }
 
     if reusable_symbols.is_empty() && clone_pairs.is_empty() {

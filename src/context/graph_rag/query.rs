@@ -146,7 +146,7 @@ pub fn execute_drift_search(
     // Route 1: Top-down Community Context
     let global_res = execute_global_search(query, hierarchy);
     if !global_res.sections.is_empty() {
-        sections.push("## 🌐 Route 1: High-Level Community Context (Top-Down)".to_string());
+        sections.push("## Route 1: High-Level Community Context (Top-Down)".to_string());
         for sec in global_res.sections.into_iter().take(3) {
             sections.push(sec);
         }
@@ -155,7 +155,7 @@ pub fn execute_drift_search(
     // Route 2: Bottom-up Factual Entity Traversal
     let local_res = execute_local_search(query, db, hierarchy)?;
     if !local_res.sections.is_empty() {
-        sections.push("## 🎯 Route 2: Entity & Dependency Fan-out (Bottom-Up)".to_string());
+        sections.push("## Route 2: Entity & Dependency Fan-out (Bottom-Up)".to_string());
         for sec in local_res.sections.into_iter().take(3) {
             sections.push(sec);
         }

@@ -59,7 +59,7 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
     let mut blueprint = String::new();
 
     if !large_files.is_empty() {
-        blueprint.push_str("### ⚠️ Monolithic File Split Alerts (LOC >= 200):\n");
+        blueprint.push_str("### Monolithic File Split Alerts (LOC >= 200):\n");
         for (file, sym, loc) in &large_files {
             blueprint.push_str(&format!(
                 "- `{}` ({} LOC — near/over limit) containing `{}`\n",
@@ -72,7 +72,7 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
         blueprint.push_str("\n");
     }
 
-    blueprint.push_str(&format!("### 📐 Upfront Modular Blueprint for [{}]:\n", arch_pattern));
+    blueprint.push_str(&format!("### Upfront Modular Blueprint for [{}]:\n", arch_pattern));
     match arch_pattern {
         "Clean_Architecture" => {
             blueprint.push_str("- `domain/`: Pure data models and trait definitions (< 150 LOC)\n");
@@ -111,7 +111,7 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
             blueprint.push_str("- UI Components: Dedicated sub-components for dialogs/tables (< 120 LOC each)\n");
         }
     }
-    blueprint.push_str("\n⚠️ **Hard Constraint**: Every new or modified file MUST remain < 300 LOC. Decompose complex views or services into sub-components/sub-modules from line 1.\n");
+    blueprint.push_str("\n**Hard Constraint**: Every new or modified file MUST remain < 300 LOC. Decompose complex views or services into sub-components/sub-modules from line 1.\n");
 
     blueprint
 }
@@ -124,8 +124,8 @@ pub fn format_decomposition_guidance(rel_path: &str, loc: usize, arch_pattern: &
         - Target File: `{}`\n\
         - Current Length: **{} lines** (hard limit: 300 lines)\n\
         - Architecture Pattern: **{}**\n\n\
-        ⚠️ **Error: 300_LOC_LIMIT_EXCEEDED**: Adding new logic directly into a file that has reached or exceeded 300 LOC is strictly forbidden to prevent monolithic degradation.\n\n\
-        ### 📐 Mandatory Architectural Decomposition Guide for [{}]\n",
+        **Error: 300_LOC_LIMIT_EXCEEDED**: Adding new logic directly into a file that has reached or exceeded 300 LOC is strictly forbidden to prevent monolithic degradation.\n\n\
+        ### Mandatory Architectural Decomposition Guide for [{}]\n",
         rel_path, loc, arch_pattern, arch_pattern
     );
 

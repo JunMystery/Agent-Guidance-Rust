@@ -72,7 +72,7 @@ fn test_generate_blast_radius_mermaid() {
     let mermaid = generate_blast_radius_mermaid("UserService", &callers, &callees);
 
     assert!(mermaid.starts_with("graph LR\n"));
-    assert!(mermaid.contains("🎯 UserService"));
+    assert!(mermaid.contains("[\"UserService\"]"));
     assert!(mermaid.contains("handle_request[\"handle_request\"] --> UserService"));
     assert!(mermaid.contains("UserService --> query_db[\"query_db\"]"));
     assert!(mermaid.contains("style UserService fill:#4a3b2b"));

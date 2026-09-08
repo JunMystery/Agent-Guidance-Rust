@@ -820,8 +820,7 @@
         );
         assert!(res.is_ok());
         let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text.contains("## 🍳 Task-Specific Skill Recipe"));
-        assert!(text.contains("## 📐 Dynamic Split Blueprint"));
+        assert!(text.contains("Dynamic Split Blueprint"));
         assert!(text.contains("Upfront Modular Blueprint"));
     }
 
@@ -845,7 +844,7 @@
         assert!(res.is_ok());
         let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
         assert!(text.contains("Skill Selection Confirmed"));
-        assert!(text.contains("## 🛡️ Language Safety Rules"));
+        assert!(text.contains("## Language Safety Rules"));
     }
 
     #[test]

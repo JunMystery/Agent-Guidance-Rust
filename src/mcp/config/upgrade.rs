@@ -56,7 +56,7 @@ pub fn run_upgrade() -> Result<()> {
     let download_url = format!("https://github.com/{}/releases/latest/download/{}", REPO, asset_name);
     let archive_path = tmp_dir.join(asset_name);
 
-    println!("  ↓ Downloading {}...", download_url);
+    println!("  Downloading {}...", download_url);
 
     let downloaded = if cfg!(windows) {
         let ps_cmd = format!(
@@ -88,7 +88,7 @@ pub fn run_upgrade() -> Result<()> {
         anyhow::bail!("Failed to download release archive from {}", download_url);
     }
 
-    println!("  ✓ Download complete. Extracting binary...");
+    println!("  Download complete. Extracting binary...");
     let extracted_bin = if cfg!(windows) {
         let ps_cmd = format!(
             "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
@@ -124,7 +124,7 @@ pub fn run_upgrade() -> Result<()> {
         fs::create_dir_all(parent)?;
     }
 
-    println!("  ✓ Installing updated binary to {:?}", target_bin);
+    println!("  Installing updated binary to {:?}", target_bin);
 
     // On Windows, if replacing a locked binary, move the existing binary out of the way first
     if target_bin.exists() {
@@ -145,11 +145,11 @@ pub fn run_upgrade() -> Result<()> {
 
     let _ = fs::remove_dir_all(&tmp_dir);
 
-    println!("✓ Successfully installed the latest release binary!");
+    println!("Successfully installed the latest release binary!");
     println!();
     println!("Configuring MCP server and syncing skills across all IDE clients...");
     run_setup(&target_bin)?;
 
-    println!("✓ Agent Guidance successfully upgraded to the latest version!");
+    println!("Agent Guidance successfully upgraded to the latest version!");
     Ok(())
 }

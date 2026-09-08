@@ -2,6 +2,16 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.1] - 2026-09-08
+
+### Bounded Line Range Read & Indentation Preservation
+- **Explicit Line Slicing**: Added `start_line` and `end_line` parameters to `project_context(operation="read")` allowing exact range reads up to 300 LOC.
+- **Line Numbering Format**: Each line is output with `L{line_no}: <content>` format for precise AI location targeting.
+- **Whitespace & Indentation Integrity**: Fully preserved whitespace and indentation structure across all bounded reads; added automated warnings for indentation-sensitive languages (`.py`, `.yaml`, `.yml`, `Makefile`, `.nim`).
+
+### Guidance Protocol & Emoji Removal
+- **Emoji-Free MCP Surface**: Removed all decorative emojis from MCP guidance messages, templates, rules, and CLI tools across the repository to ensure strict token efficiency and clean markdown parsing.
+
 ## [1.5.0] - 2026-09-08
 
 ### ⚡ Int8 Quantized Vector Acceleration with DirectML/CUDA (Proposal 10)

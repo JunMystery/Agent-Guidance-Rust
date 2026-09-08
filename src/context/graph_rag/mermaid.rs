@@ -96,7 +96,7 @@ pub fn generate_blast_radius_mermaid(
     let safe_target = sanitize_mermaid_id(target_symbol);
     let target_label = sanitize_mermaid_label(target_symbol);
 
-    out.push_str(&format!("    {}[\"🎯 {}\"]\n", safe_target, target_label));
+    out.push_str(&format!("    {}[\"{}\"]\n", safe_target, target_label));
 
     for caller in callers {
         let s_id = sanitize_mermaid_id(caller);

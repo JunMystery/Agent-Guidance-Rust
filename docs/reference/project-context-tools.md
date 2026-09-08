@@ -6,7 +6,7 @@ The `agent-guidance-mcp_project_context` tool provides a token-budgeted, persist
 
 ---
 
-## ⚡ 5-Phase Instant Search Cascade (<100ms)
+## 5-Phase Instant Search Cascade (<100ms)
 
 When `operation="search"` is invoked, the engine processes queries through a 5-tier cascade:
 
@@ -27,7 +27,7 @@ Query: "xử lý timeout khi gọi API bên thứ 3"
 
 ---
 
-## 🛠️ Operations Reference
+## Operations Reference
 
 ### 1. `operation="search"`
 Executes the 5-phase search cascade across symbols, code content, and learned aliases.
@@ -74,14 +74,27 @@ Forces a full re-scan and AST re-indexing of the project code graph, spawning ba
 ```
 
 ### 5. `operation="read"`
-Reads a bounded file range (enforcing the hard 300 LOC cap).
+Reads a bounded file range (enforcing the hard 300 LOC cap). Outputs lines with `L{line_no}: <content>` prefixes and preserves exact indentation.
 ```json
 {
   "operation": "read",
   "project_path": "/path/to/project",
-  "relative_path": "src/main.rs"
+  "relative_path": "src/main.rs",
+  "start_line": 1,
+  "end_line": 100,
+  "target_symbol": "main"
 }
 ```
+*Parameters*:
+- `relative_path` (required): File path relative to project root.
+- `start_line` (optional): 1-indexed starting line number.
+- `end_line` (optional): 1-indexed ending line number (range cannot exceed 300 LOC).
+- `target_symbol` (optional): Precise symbol name to extract via Tree-sitter.
+- `view_mode` (optional): `"auto"` (default), `"full"`, or `"skeleton"` (folds sibling function bodies if file > 300 LOC).
+
+*Indentation & Formatting Integrity*:
+- Outputs lines formatted as `L{line_no}: <line>`, preserving exact leading spaces and tabs.
+- Includes automatic syntax notices on indentation-sensitive files (`.py`, `.yaml`, `.yml`, `Makefile`, `.nim`) to guarantee AI code generation correctness.
 
 ### 6. `operation="symbols"` / `operation="structure"`
 Extracts top-level function, struct, enum, and class declarations from a specific file.
@@ -130,7 +143,7 @@ Executes Hierarchical Leiden GraphRAG across multi-level community hierarchies a
 
 ---
 
-## 🔄 Proactive Background File Watcher
+## Proactive Background File Watcher
 
 The engine automatically runs an OS-level inotify/file watcher in the background:
 - **5s Debounce**: File edits are buffered for 5 seconds before triggering incremental indexing and GraphRAG community re-clustering.

@@ -133,7 +133,7 @@ pub(crate) fn handle(
         let safety_rules = crate::catalog::slicing::get_language_safety_rules(&profile);
 
         let mut resp = format!(
-            "# Skill Selection Confirmed ({})\n\nLoaded Skills Content:\n\n{}\n\n## 🛡️ Language Safety Rules\n{}",
+            "# Skill Selection Confirmed ({})\n\nLoaded Skills Content:\n\n{}\n\n## Language Safety Rules\n{}",
             loaded_sections.len(),
             loaded_sections.join("\n\n---\n\n"),
             safety_rules
@@ -141,7 +141,7 @@ pub(crate) fn handle(
 
         if !not_found.is_empty() {
             resp.push_str(&format!(
-                "\n\n⚠️ Skills not found:\n{}",
+                "\n\nSkills not found:\n{}",
                 not_found.iter().map(|n| format!("- {}", n)).collect::<Vec<_>>().join("\n")
             ));
         }

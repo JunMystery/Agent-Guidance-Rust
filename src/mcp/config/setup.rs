@@ -179,7 +179,7 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
     println!("Pre-downloading ML models for skill search...");
     if let Err(e) = crate::ml::download_models() {
         println!(
-            "  ⚠  Model download failed: {}. Models will download on first use.",
+            "  Warning: Model download failed: {}. Models will download on first use.",
             e
         );
     }

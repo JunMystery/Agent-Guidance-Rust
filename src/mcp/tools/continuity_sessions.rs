@@ -46,9 +46,9 @@ pub(crate) fn handle_clear(state: &mut ServerState, proj_path: &Path) -> String 
 pub(crate) fn handle_list(state: &ServerState, proj_path: &Path) -> String {
     let sessions = ServerState::list_sessions(proj_path);
     if sessions.is_empty() {
-        "# 🗂️ Active & Archived Sessions\n\nNo session snapshots found in `.agent-context/sessions/`.".to_string()
+        "# Active & Archived Sessions\n\nNo session snapshots found in `.agent-context/sessions/`.".to_string()
     } else {
-        let mut table = String::from("# 🗂️ Active & Archived Sessions\n\n| Session ID | Client / IDE | Workflow Stage | Architecture | Modified Files |\n| :--- | :--- | :--- | :--- | :---: |\n");
+        let mut table = String::from("# Active & Archived Sessions\n\n| Session ID | Client / IDE | Workflow Stage | Architecture | Modified Files |\n| :--- | :--- | :--- | :--- | :---: |\n");
         for s in &sessions {
             let is_current = s.session_id == state.session_id;
             let id_str = if is_current {
@@ -64,7 +64,7 @@ pub(crate) fn handle_list(state: &ServerState, proj_path: &Path) -> String {
                 id_str, client_str, s.workflow_stage, arch_str, mod_count
             ));
         }
-        table.push_str("\n💡 **To switch**: Run `session_continuity(operation=\"switch\", session_id=\"<session_id>\")`");
+        table.push_str("\n**To switch**: Run `session_continuity(operation=\"switch\", session_id=\"<session_id>\")`");
         table
     }
 }
@@ -81,7 +81,7 @@ pub(crate) fn handle_switch(
         .unwrap_or("");
 
     if target_id.trim().is_empty() {
-        "# Session Continuity: [switch] ⚠️\n\nError: `session_id` parameter is required for switch operation. Call `session_continuity(operation=\"list\")` to view available sessions.".to_string()
+        "# Session Continuity: [switch]\n\nError: `session_id` parameter is required for switch operation. Call `session_continuity(operation=\"list\")` to view available sessions.".to_string()
     } else {
         match ServerState::load_session_by_id(proj_path, target_id.trim()) {
             Ok(mut loaded) => {
@@ -93,7 +93,7 @@ pub(crate) fn handle_switch(
                 *state = loaded;
 
                 format!(
-                    "# Session Continuity: [switch] ✓\n\nSuccessfully switched active session from `{}` to `{}`.\n\n- Active Workflow Stage: `{}`\n- Client / IDE: `{}`\n- Architecture Pattern: `{}`\n- Modified Files: {}\n- Zero-Trust Security: `plan_approved=false`, `edit_authorized=false` (Call `task_pipeline` or `workflow_gate` to proceed).",
+                    "# Session Continuity: [switch]\n\nSuccessfully switched active session from `{}` to `{}`.\n\n- Active Workflow Stage: `{}`\n- Client / IDE: `{}`\n- Architecture Pattern: `{}`\n- Modified Files: {}\n- Zero-Trust Security: `plan_approved=false`, `edit_authorized=false` (Call `task_pipeline` or `workflow_gate` to proceed).",
                     prev_id,
                     state.session_id,
                     state.workflow_stage,
@@ -102,7 +102,7 @@ pub(crate) fn handle_switch(
                     state.modified_files.len()
                 )
             }
-            Err(err) => format!("# Session Continuity: [switch] ⚠️\n\nFailed to switch session: {}", err),
+            Err(err) => format!("# Session Continuity: [switch]\n\nFailed to switch session: {}", err),
         }
     }
 }

@@ -18,7 +18,7 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
     let exists = binary_path.exists();
     println!(
         "[{}] Binary: {} ({})",
-        if exists { "✓" } else { "✗" },
+        if exists { "OK" } else { "FAIL" },
         bin_str,
         if exists { "found" } else { "NOT FOUND" }
     );
@@ -96,7 +96,7 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
         let registered = check_mcp_registration(path, key);
         println!(
             "[{}] {}: {}",
-            if registered { "✓" } else { " " },
+            if registered { "OK" } else { "  " },
             name,
             path.display()
         );
@@ -126,7 +126,7 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
             && fs::read_to_string(path)
                 .map(|c| c.contains(AGENT_GUIDANCE_TAG_START))
                 .unwrap_or(false);
-        println!("[{}] {}", if has_tag { "✓" } else { " " }, name);
+        println!("[{}] {}", if has_tag { "OK" } else { "  " }, name);
     }
 
     println!("\n=== Verification Complete ===");

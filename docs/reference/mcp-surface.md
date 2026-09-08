@@ -124,6 +124,8 @@ project_context(
     query: str | None = None,          # search query / natural language / symbol name
     relative_path: str | None = None,  # file path for read/symbols/structure/learn_alias
     target_symbol: str | None = None,  # precise symbol extraction for read
+    start_line: int | None = None,     # 1-indexed start line for read slice
+    end_line: int | None = None,       # 1-indexed end line for read slice (max 300 LOC range)
     alias_term: str | None = None,     # natural language term for learn_alias
     resolved_symbol: str | None = None,# symbol name for learn_alias
     resolved_line: int | None = None,  # line number for learn_alias
@@ -141,7 +143,7 @@ project_context(
 | `navigate` | `query` | Comprehensive code graph traversal gathering aliases, symbols, RAG code chunks, and DAG call/import edges simultaneously. |
 | `learn_alias` | `alias_term`, `relative_path` | Explicitly record natural language query mappings with auto-decay (30/90 days). |
 | `reindex` | -- | Force full AST re-parse and queue background Multilingual-E5 vector embedding for symbols and chunks. |
-| `read` | `relative_path` | Bounded file read with 300 line cap and auto-skeletonization for large files (`view_mode="skeleton"`). Target symbol extraction supported. |
+| `read` | `relative_path` | Bounded file read with 300 line cap, line numbering (`L{n}:`), and auto-skeletonization for large files (`view_mode="skeleton"`). Supports `start_line`/`end_line` slicing and `target_symbol` extraction. Preserves exact indentation. |
 | `symbols` | `relative_path` | Extract functions, structs, enums, classes, and traits across 6+ languages. |
 | `references` | `query` | Instant symbol usage lookup across codebase (<5ms SQLite FTS5 index). |
 | `structure` | `relative_path` | Method-level hierarchical structure map of a specific source file. |
@@ -157,6 +159,7 @@ project_context(operation="navigate", query="PaymentService", scope="all")
 project_context(operation="graph_rag", query="authentication flow", mode="drift")
 project_context(operation="reusable")
 project_context(operation="learn_alias", alias_term="thanh toán", relative_path="src/payment.rs", resolved_symbol="PaymentGateway")
+project_context(operation="read", relative_path="src/main.rs", start_line=1, end_line=100)
 project_context(operation="read", relative_path="src/main.rs", target_symbol="main")
 project_context(operation="read", relative_path="src/large_service.rs", view_mode="skeleton")
 project_context(operation="references", query="handle_read")

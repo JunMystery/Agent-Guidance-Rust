@@ -32,7 +32,7 @@ pub(crate) fn handle_authorize_edit(
 
     if rel_path.is_empty() {
         return format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (RELATIVE_PATH_REQUIRED)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ **Error: RELATIVE_PATH_REQUIRED**: `workflow_gate(action=\"authorize_edit\")` is file-scoped and strictly requires the target `relative_path` (e.g. `relative_path: \"src/services/order_service.rs\"` or `relative_path: \"frontend/src/views/ProcurementView.tsx\"`).\n\nBlanket or global edit authorizations without a specific target file are prohibited to enforce:\n1. **< 300 LOC Cap & Decomposition**: Preventing monolithic files from being created or expanded.\n2. **Code Graph Diff Impact Guard**: Evaluating module blast radius and incoming dependencies.\n3. **Pre-Edit Rollback Snapshot**: Creating safe checkpoints for rollback protection.\n4. **Scanned Architecture Alignment**: Guiding modular sub-module placement from line 1.\n\n👉 **Action**: Call `workflow_gate(action=\"authorize_edit\", project_path=\"...\", relative_path=\"<path>\", risk_level=\"LOW\", justification=\"...\", architecture_pattern=\"Auto\")` for EACH individual file before modifying or creating it.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (RELATIVE_PATH_REQUIRED)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n**Error: RELATIVE_PATH_REQUIRED**: `workflow_gate(action=\"authorize_edit\")` is file-scoped and strictly requires the target `relative_path` (e.g. `relative_path: \"src/services/order_service.rs\"` or `relative_path: \"frontend/src/views/ProcurementView.tsx\"`).\n\nBlanket or global edit authorizations without a specific target file are prohibited to enforce:\n1. **< 300 LOC Cap & Decomposition**: Preventing monolithic files from being created or expanded.\n2. **Code Graph Diff Impact Guard**: Evaluating module blast radius and incoming dependencies.\n3. **Pre-Edit Rollback Snapshot**: Creating safe checkpoints for rollback protection.\n4. **Scanned Architecture Alignment**: Guiding modular sub-module placement from line 1.\n\n**Action**: Call `workflow_gate(action=\"authorize_edit\", project_path=\"...\", relative_path=\"<path>\", risk_level=\"LOW\", justification=\"...\", architecture_pattern=\"Auto\")` for EACH individual file before modifying or creating it.",
             proj_path.display(),
             if arch_pattern.is_empty() {
                 "Auto"
@@ -44,7 +44,7 @@ pub(crate) fn handle_authorize_edit(
 
     if let Err(err_msg) = crate::mcp::tools::helpers::validate_path(&proj_path, rel_path) {
         return format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (PATH_TRAVERSAL_PROHIBITED)\n- Project Path: {}\n- Target File: `{}`\n\n⚠️ **Security Error: PATH_TRAVERSAL_PROHIBITED**: {}. Edits outside workspace root are strictly prohibited.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (PATH_TRAVERSAL_PROHIBITED)\n- Project Path: {}\n- Target File: `{}`\n\n**Security Error: PATH_TRAVERSAL_PROHIBITED**: {}. Edits outside workspace root are strictly prohibited.",
             proj_path.display(),
             rel_path,
             err_msg
@@ -101,7 +101,7 @@ pub(crate) fn handle_authorize_edit(
             | "Flat_Library"
     ) {
         format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n⚠️ Error: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', 'CLI_Pipeline', 'Flat_Library', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...) `.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\nError: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', 'CLI_Pipeline', 'Flat_Library', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...) `.",
             proj_path.display(),
             if arch_pattern.is_empty() {
                 "NONE"
@@ -121,14 +121,14 @@ pub(crate) fn handle_authorize_edit(
     } else if impact.risk_level == crate::mcp::impact::RiskLevel::High && (justification.trim().len() < 10 || justification == "No justification provided") {
         // Strict Gate for Critical Hub: mandatory explanation
         format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (CRITICAL HUB IMPACT GUARD)\n- Target File: `{}`\n- Incoming Dependencies: {}\n- Impacted Modules: {}\n\n⚠️ **Error: HIGH_RISK_JUSTIFICATION_REQUIRED**: This file is a Critical Hub (referenced by >8 modules). You MUST provide a specific `justification` parameter explaining how your changes avoid breaking downstream modules, along with your planned test verification.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (CRITICAL HUB IMPACT GUARD)\n- Target File: `{}`\n- Incoming Dependencies: {}\n- Impacted Modules: {}\n\n**Error: HIGH_RISK_JUSTIFICATION_REQUIRED**: This file is a Critical Hub (referenced by >8 modules). You MUST provide a specific `justification` parameter explaining how your changes avoid breaking downstream modules, along with your planned test verification.",
             rel_path,
             impact.dependent_count,
             if impact.dependent_files.is_empty() { "—".to_string() } else { impact.dependent_files.join(", ") }
         )
     } else if declared_risk == "HIGH" && !state.plan_approved {
         format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\n⚠️ Error: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\nError: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
             proj_path.display(),
             if justification.is_empty() { "No justification provided" } else { justification }
         )
@@ -144,7 +144,7 @@ pub(crate) fn handle_authorize_edit(
         let _ = state.auto_checkpoint(&proj_path);
 
         let mut resp = format!(
-            "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: `{}`{}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\n✓ File edits are fully authorized under {} Architecture.",
+            "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: `{}`{}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\nFile edits are fully authorized under {} Architecture.",
             if target_loc >= 300 && !is_exempt { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
             proj_path.display(),
             rel_path,
@@ -158,22 +158,22 @@ pub(crate) fn handle_authorize_edit(
         );
 
         if is_new_file && !is_exempt {
-            resp.push_str("\n\n📐 [LOC Limit: strictly < 300 LOC (target < 150 LOC)]");
+            resp.push_str("\n\n[LOC Limit: strictly < 300 LOC (target < 150 LOC)]");
         } else if target_loc >= 300 && !is_exempt {
             resp.push_str(&format!(
-                "\n\n📐 **300 LOC Modular Refactoring Mandate**: {} lines (>= 300 LOC limit). Refactoring/decomposition only.",
+                "\n\n**300 LOC Modular Refactoring Mandate**: {} lines (>= 300 LOC limit). Refactoring/decomposition only.",
                 target_loc
             ));
         }
 
         if let Some(warn) = impact.warning {
-            resp.push_str(&format!("\n\n⚠️ **Impact Guard**: {}", warn));
+            resp.push_str(&format!("\n\n**Impact Guard**: {}", warn));
         }
 
         resp
     } else {
         format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\n⚠️ Error: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\nError: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
             proj_path.display(),
             state.workflow_stage,
             state.plan_approved
