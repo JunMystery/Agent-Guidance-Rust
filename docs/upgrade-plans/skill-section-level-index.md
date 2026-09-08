@@ -3,7 +3,7 @@
 > Tracking file for the skill browsing / skill proposal mechanism upgrade.
 > Status: **APPROVED** (plan_approved = true, stage = Build) — 2026-08-18
 > Owner: user + agent-guidance
-> Target release: v1.5.1 (planned)
+> Target release: v1.5.2 (planned)
 >
 > **UPDATE 2026-08-18 (user directive):** Indexing of skill files is performed **by the agent itself, file by file** (not by an external agent). Progress tracked in §12. The prompt skeleton (§5) is retained as regeneration tooling.
 

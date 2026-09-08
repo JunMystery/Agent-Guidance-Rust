@@ -33,13 +33,32 @@ fn test_context_read_start_and_end_line_range() {
     // Verify header metadata contains line range
     assert!(text.contains("(Lines 10-15 of 50)"), "Missing range header: {}", text);
 
-    // Verify line number prefixes
-    assert!(text.contains("L10: fn line_test_10()"), "Missing L10 prefix: {}", text);
-    assert!(text.contains("L15: fn line_test_15()"), "Missing L15 prefix: {}", text);
+    // Verify default output is raw lines (no L10: prefix to save tokens)
+    assert!(text.contains("fn line_test_10()"), "Missing line_test_10: {}", text);
+    assert!(!text.contains("L10: "), "Should not contain L10: by default: {}", text);
+    assert!(!text.contains("L15: "), "Should not contain L15: by default: {}", text);
+
+    // Verify line_numbers: true option adds line prefixes
+    let res_with_ln = handle_tool_call(
+        "project_context",
+        json!({
+            "operation": "read",
+            "relative_path": "sample.rs",
+            "start_line": 10,
+            "end_line": 15,
+            "line_numbers": true,
+            "project_path": temp_dir.to_str().unwrap()
+        }),
+        &mut state,
+    );
+    assert!(res_with_ln.is_ok());
+    let text_ln = res_with_ln.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(text_ln.contains("L10: fn line_test_10()"), "Missing L10 prefix with line_numbers=true: {}", text_ln);
+    assert!(text_ln.contains("L15: fn line_test_15()"), "Missing L15 prefix with line_numbers=true: {}", text_ln);
 
     // Verify it did not include lines outside range
-    assert!(!text.contains("L9: "), "Should not contain L9: {}", text);
-    assert!(!text.contains("L16: "), "Should not contain L16: {}", text);
+    assert!(!text_ln.contains("L9: "), "Should not contain L9: {}", text_ln);
+    assert!(!text_ln.contains("L16: "), "Should not contain L16: {}", text_ln);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
@@ -79,10 +98,11 @@ fn test_context_read_python_indent_preservation_and_tag() {
     assert!(text.contains("Language Note"), "Missing indent-sensitive note: {}", text);
     assert!(text.contains("Indent-sensitive syntax (Python/YAML/Makefile)"), "Missing py note: {}", text);
 
-    // Verify indentation preserved with line numbers
-    assert!(text.contains("L1: class UserService:"), "Missing L1: {}", text);
-    assert!(text.contains("L2:     def __init__(self):"), "Indentation lost at L2: {}", text);
-    assert!(text.contains("L7:             return None"), "Indentation lost at L7: {}", text);
+    // Verify indentation preserved cleanly without line numbers
+    assert!(text.contains("class UserService:"), "Missing UserService: {}", text);
+    assert!(text.contains("    def __init__(self):"), "Indentation lost at def __init__: {}", text);
+    assert!(text.contains("            return None"), "Indentation lost at return None: {}", text);
+    assert!(!text.contains("L1: "), "Should not contain L1 prefix: {}", text);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -163,16 +163,29 @@ pub(crate) fn handle_read(
             let count = display_lines.len();
             let was_capped = !has_range && total_lines > 300;
 
-            let bounded = display_lines
-                .into_iter()
-                .take(300)
-                .enumerate()
-                .map(|(i, line)| {
-                    let line_no = line_offset + i;
-                    format!("L{}: {}", line_no, line)
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
+            let show_line_numbers = arguments
+                .get("line_numbers")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            let bounded = if show_line_numbers {
+                display_lines
+                    .into_iter()
+                    .take(300)
+                    .enumerate()
+                    .map(|(i, line)| {
+                        let line_no = line_offset + i;
+                        format!("L{}: {}", line_no, line)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            } else {
+                display_lines
+                    .into_iter()
+                    .take(300)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
 
             let slice_end = if count == 0 { 0 } else { (line_offset + count.min(300)).saturating_sub(1) };
             let slice_start = if count == 0 { 0 } else { line_offset };

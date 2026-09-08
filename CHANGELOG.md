@@ -2,6 +2,19 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.2] - 2026-09-08
+
+### AI Agent Direct Orchestration for GraphRAG Semantic Layer
+- **Semantic Edges & Domain Summaries Schema**: Added `semantic_edges`, `domain_summaries`, and FTS5 virtual tables with SQLite triggers ensuring real-time bidirectional synchronization.
+- **Agent Context Enrichment Tools**: Added `project_context(operation="enrich_graph")` and `project_context(operation="semantic_query")` enabling autonomous agents to inject high-level architectural insights and semantic relations directly into the GraphRAG knowledge base without relying on external MCP layers.
+- **Drift & Local Search Semantic Integration**: Integrated semantic domain summaries and agent-curated edges into DRIFT and Local GraphRAG search pipelines.
+
+### Dashboard Real-Time Capabilities & Visual Enhancements
+- **Top Skills Real-Time Polling**: Added auto-refresh polling on the Top Skills tab with `visibilitychange` lifecycle pause/resume, zero-flicker table rendering, and dynamic `skills-poll` status badge.
+- **Interactive Force-Directed Canvas**: Added animated dotted semantic edges with energy particles (`#ec4899`), dynamic responsive auto-centering, and layout optimization.
+- **Project Duplication & Normalization Fix**: Fixed project path partition casing bug (`e:` vs `E:`) to guarantee unique project identity across Windows drive letters.
+- **Skills Vector Index Refresh**: Recomputed and refreshed full Candle-BERT semantic vector index for all 440 skills.
+
 ## [1.5.1] - 2026-09-08
 
 ### Bounded Line Range Read & Indentation Preservation
