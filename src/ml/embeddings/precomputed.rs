@@ -36,21 +36,6 @@ pub fn load_precomputed_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
     }
 
     let manifest: serde_json::Value = serde_json::from_slice(PRECOMPUTED_MANIFEST).ok()?;
-    let manifest_count = manifest.get("count")?.as_u64()? as usize;
-    if manifest_count != skills.len() {
-        return None;
-    }
-
-    let manifest_fp = manifest.get("catalog_fingerprint")?.as_u64()?;
-    let current_fp = catalog_fingerprint(skills);
-    if manifest_fp != current_fp {
-        tracing::debug!(
-            "Catalog fingerprint differs (manifest: {}, current: {}), using precomputed vectors baseline",
-            manifest_fp,
-            current_fp
-        );
-    }
-
     let data = PRECOMPUTED_VECTORS;
     if data.len() < 8 {
         return None;
@@ -59,13 +44,35 @@ pub fn load_precomputed_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
     let count = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
     let dim = u32::from_le_bytes(data[4..8].try_into().ok()?) as usize;
     let expected_len = 8 + count * dim * 4;
-    if data.len() != expected_len || count != skills.len() {
+    if data.len() != expected_len {
         return None;
     }
 
-    let mut vectors = Vec::with_capacity(count);
+    let manifest_fp = manifest.get("catalog_fingerprint").and_then(|v| v.as_u64());
+    let current_fp = catalog_fingerprint(skills);
+
+    // Fast path: exact match in length and catalog fingerprint
+    if count == skills.len() && manifest_fp == Some(current_fp) {
+        let mut vectors = Vec::with_capacity(count);
+        let mut offset = 8;
+        for _ in 0..count {
+            let mut vec = Vec::with_capacity(dim);
+            for _ in 0..dim {
+                let mut bytes = [0u8; 4];
+                bytes.copy_from_slice(&data[offset..offset + 4]);
+                vec.push(f32::from_le_bytes(bytes));
+                offset += 4;
+            }
+            vectors.push(vec);
+        }
+        return Some(vectors);
+    }
+
+    // Dynamic alignment path: when workspace skills slightly differ from binary manifest
+    let manifest_skills = manifest.get("skills")?.as_array()?;
+    let mut name_to_vec = std::collections::HashMap::with_capacity(count);
     let mut offset = 8;
-    for _ in 0..count {
+    for i in 0..count {
         let mut vec = Vec::with_capacity(dim);
         for _ in 0..dim {
             let mut bytes = [0u8; 4];
@@ -73,10 +80,22 @@ pub fn load_precomputed_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
             vec.push(f32::from_le_bytes(bytes));
             offset += 4;
         }
-        vectors.push(vec);
+        if let Some(skill_name) = manifest_skills.get(i).and_then(|s| s.get("name")).and_then(|n| n.as_str()) {
+            name_to_vec.insert(skill_name.to_lowercase(), vec);
+        }
     }
 
-    Some(vectors)
+    let mut aligned_vectors = Vec::with_capacity(skills.len());
+    let zero_vec = vec![0.0f32; dim];
+    for skill in skills {
+        if let Some(v) = name_to_vec.get(&skill.name.to_lowercase()) {
+            aligned_vectors.push(v.clone());
+        } else {
+            aligned_vectors.push(zero_vec.clone());
+        }
+    }
+
+    Some(aligned_vectors)
 }
 
 pub use super::precomputed_gen::{generate_manifest_only, generate_precomputed_cache};

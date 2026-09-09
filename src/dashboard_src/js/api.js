@@ -2,6 +2,7 @@ import { setText, setDisplay, setLoading, activeView, pollSpanFor } from './dom.
 import { renderDashboard } from './render/statsView.js';
 import { renderHealthPanel } from './render/health.js';
 import { pollBackoff, setBackoff, resetBackoff } from './state.js';
+import { t } from './i18n/index.js';
 
 let selectedProject = 'all';
 
@@ -68,11 +69,11 @@ async function fetchHealth() {
 
 async function showFetchError(e) {
   setBackoff(Math.min(pollBackoff * 2, 30000));
-  setText('error-banner', 'Failed to connect to stats: ' + (e.message || 'unknown'));
+  setText('error-banner', t('api.connect_failed', { error: e.message || t('status.unknown') }));
   setDisplay('error-banner', 'block');
   const pollSpanId = pollSpanFor(activeView());
   if (pollSpanId) {
-    setText(pollSpanId, '(retry in ' + (pollBackoff / 1000).toFixed(0) + 's)');
+    setText(pollSpanId, t('api.retry_in', { sec: (pollBackoff / 1000).toFixed(0) }));
   }
 }
 
@@ -98,7 +99,7 @@ export async function fetchData() {
     renderHealthPanel(hdata, data?.totals?.embed_queries);
     if (hdata.db_size_bytes !== undefined) {
       const mb = (hdata.db_size_bytes / (1024 * 1024)).toFixed(2);
-      setText('sidebar-db-size', `db size: ${mb} MB`);
+      setText('sidebar-db-size', t('sidebar.db_size_val', { size: mb }));
     }
   } catch (e) {
     renderHealthPanel({ status: 'unknown' }, data?.totals?.embed_queries);
@@ -108,13 +109,13 @@ export async function fetchData() {
 
 export async function refreshEmbedStatus() {
   const btn = document.getElementById('btn-embed-refresh');
-  if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('deck.refreshing'); }
   try {
     const [stats, health] = await Promise.all([fetchStats().catch(() => null), fetchHealth().catch(() => null)]);
     if (stats) renderDashboard(stats);
     if (health) renderHealthPanel(health, stats?.totals?.embed_queries);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Refresh Model Status'; }
+    if (btn) { btn.disabled = false; btn.textContent = t('deck.refresh_model'); }
   }
 }
 

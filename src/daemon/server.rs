@@ -2,40 +2,12 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tracing::{error, info};
 
-use super::{ACTIVE_CLIENTS, acquire_daemon_lock};
+use super::{
+    ACTIVE_CLIENTS, CLIENT_NOTIFY, acquire_daemon_lock, client_connected, client_disconnected,
+};
 use super::handler::handle_mcp_lines;
 
-pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 60;
-
-async fn monitor_idle_cooldown(timeout_secs: u64) {
-    let mut idle_elapsed = 0u64;
-    loop {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let active = ACTIVE_CLIENTS.load(Ordering::SeqCst);
-        if active == 0 {
-            idle_elapsed += 1;
-            if idle_elapsed % 15 == 0 || (timeout_secs.saturating_sub(idle_elapsed) <= 10 && idle_elapsed % 2 == 0) {
-                info!(
-                    "No active IDE clients connected. Daemon shutdown in {}s...",
-                    timeout_secs.saturating_sub(idle_elapsed)
-                );
-            }
-            if idle_elapsed >= timeout_secs {
-                info!(
-                    "Idle cooldown reached ({}s with 0 active IDEs). Shutting down singleton daemon cleanly.",
-                    timeout_secs
-                );
-                break;
-            }
-        } else if idle_elapsed > 0 {
-            info!(
-                "Active IDE client reconnected ({} active). Cancelled shutdown cooldown.",
-                active
-            );
-            idle_elapsed = 0;
-        }
-    }
-}
+use super::lifecycle::{DEFAULT_STARTUP_TIMEOUT_SECS, monitor_client_lifecycle};
 
 #[cfg(unix)]
 pub async fn daemon_main(port: u16, project_path: Option<String>) {
@@ -50,6 +22,7 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
             return;
         }
     };
+
 
     let path = socket_path();
     if let Some(parent) = path.parent() {
@@ -87,11 +60,11 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
+                    client_connected();
                     tokio::spawn(async move {
                         let (reader, writer) = stream.into_split();
                         handle_mcp_lines(reader, writer).await;
-                        ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
+                        client_disconnected();
                     });
                 }
                 Err(e) => {
@@ -102,17 +75,18 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
         }
     });
 
-    let idle_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
+    let startup_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+        .unwrap_or(DEFAULT_STARTUP_TIMEOUT_SECS);
 
-    monitor_idle_cooldown(idle_timeout_secs).await;
+    monitor_client_lifecycle(startup_timeout_secs).await;
     let _ = fs::remove_file(&path);
 }
 
 #[cfg(windows)]
 pub async fn daemon_main(port: u16, project_path: Option<String>) {
+    crate::daemon::tray::spawn_system_tray(port);
     use tokio::net::windows::named_pipe::ServerOptions;
     use super::WINDOWS_PIPE_NAME;
 
@@ -160,11 +134,11 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
 
             match server.connect().await {
                 Ok(()) => {
-                    ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
+                    client_connected();
                     tokio::spawn(async move {
                         let (reader, writer) = tokio::io::split(server);
                         handle_mcp_lines(reader, writer).await;
-                        ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
+                        client_disconnected();
                     });
                 }
                 Err(e) => {
@@ -175,10 +149,10 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
         }
     });
 
-    let idle_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
+    let startup_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+        .unwrap_or(DEFAULT_STARTUP_TIMEOUT_SECS);
 
-    monitor_idle_cooldown(idle_timeout_secs).await;
+    monitor_client_lifecycle(startup_timeout_secs).await;
 }

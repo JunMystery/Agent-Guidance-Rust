@@ -1,9 +1,11 @@
+import { t } from './i18n/index.js';
+
 export function timeAgo(ts) {
   const sec = Math.floor((Date.now() / 1000) - ts);
-  if (sec < 60) return sec + 's ago';
-  if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
-  if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
-  return Math.floor(sec / 86400) + 'd ago';
+  if (sec < 60) return t('time.s_ago', { sec });
+  if (sec < 3600) return t('time.m_ago', { min: Math.floor(sec / 60) });
+  if (sec < 86400) return t('time.h_ago', { hr: Math.floor(sec / 3600) });
+  return t('time.d_ago', { day: Math.floor(sec / 86400) });
 }
 
 export function fmtTokens(n) {

@@ -11,12 +11,27 @@ fn clean_skill_identifier(raw: &str) -> String {
     let mut s = raw.trim();
     s = s.trim_matches('`').trim_matches('*').trim_matches('\'').trim_matches('"').trim();
 
+    while s.starts_with('-') || s.starts_with('*') || s.starts_with('•') {
+        s = s[1..].trim();
+    }
+    if let Some(pos) = s.find(". ") {
+        if s[..pos].chars().all(|c| c.is_ascii_digit()) {
+            s = s[pos + 2..].trim();
+        }
+    }
+
     if let Some(idx) = s.find(" (") {
         s = &s[..idx];
     } else if let Some(idx) = s.find(": ") {
         s = &s[..idx];
     }
     let s = s.trim();
+
+    let s = if let Some(idx) = s.find(" [") {
+        s[..idx].trim()
+    } else {
+        s
+    };
 
     let decoded = crate::mcp::state::types::parse_file_uri(s);
     let s = decoded.trim();
@@ -217,6 +232,14 @@ mod tests {
         assert_eq!(
             clean_skill_identifier(".agents/skills/agent-guidance/SKILL.md"),
             "agent-guidance"
+        );
+        assert_eq!(
+            clean_skill_identifier("- agent-guidance [Local Workspace] (Score: 0.95)"),
+            "agent-guidance"
+        );
+        assert_eq!(
+            clean_skill_identifier("1. android-clean-architecture [Embedded] (Score: 0.88)"),
+            "android-clean-architecture"
         );
         assert_eq!(
             clean_skill_identifier("file:///repo/.agents/skills/security-audit/SKILL.md"),

@@ -114,10 +114,10 @@ fn handle_dashboard_request(
     match path {
         "/" | "/index.html" => serve_asset(request, "index.html", "text/html; charset=utf-8"),
         "/dashboard.css" => serve_asset(request, "dashboard.css", "text/css; charset=utf-8"),
-        "/favicon.ico" => {
-            let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#3b82f6"/><text x="50" y="65" font-size="45" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">AG</text></svg>"##;
-            let header = Header::from_bytes(&b"Content-Type"[..], &b"image/svg+xml"[..]).unwrap();
-            let _ = request.respond(Response::from_string(svg).with_header(header));
+        "/favicon.ico" | "/favicon.png" | "/logo.png" => {
+            let png_bytes = include_bytes!("../../docs/images/logo.png");
+            let header = Header::from_bytes(&b"Content-Type"[..], &b"image/png"[..]).unwrap();
+            let _ = request.respond(Response::from_data(png_bytes.as_slice()).with_header(header));
         }
         "/api/stats" => handle_api_stats(request, project_path, cache),
         "/api/projects" => {

@@ -5,8 +5,9 @@ import { renderLogsView } from './render/logsView.js';
 import { startPoll, stopPoll } from './poll.js';
 import { showConfirm, showAlert } from './dialog.js';
 import { changeProjectPath, closeDirBrowser, selectDirPath } from './dirBrowser.js';
+import { initI18n, getLanguage, setLanguage, onLanguageChange, t } from './i18n/index.js';
 
-const VIEWS = ['dashboard', 'top-skills', 'actions', 'recent-calls', 'graph', 'logs'];
+const VIEWS = ['dashboard', 'actions', 'graph', 'logs'];
 
 export async function loadAndRenderGraph() {
   const data = await fetchGraphData();
@@ -87,7 +88,7 @@ async function initProjectSelector() {
   if (!select) return;
 
   const projects = await fetchProjects();
-  const optionsHtml = ['<option value="all">🌐 All Projects (Global Analytics)</option>'];
+  const optionsHtml = [`<option value="all">${t('sidebar.all_projects_analytics')}</option>`];
   const seenPaths = new Set();
 
   projects.forEach(p => {
@@ -97,7 +98,7 @@ async function initProjectSelector() {
     if (seenPaths.has(key)) return;
     seenPaths.add(key);
 
-    const statusIcon = p.status === 'active' ? '🟢' : '⚠️ [Missing]';
+    const statusIcon = p.status === 'active' ? '🟢' : t('sidebar.status_missing');
     optionsHtml.push(`<option value="${p.path}">${statusIcon} ${p.name} (${p.path})</option>`);
   });
 
@@ -112,10 +113,10 @@ async function initProjectSelector() {
 
     const chosen = projects.find(p => p.path === val);
     const isMissing = chosen && chosen.status === 'missing';
-    const msg = isMissing ? '⚠️ Missing on disk (Showing historical records)' : (val === 'all' ? '🌐 All Tracked Projects' : `📂 Active: ${chosen?.name || val}`);
+    const msg = isMissing ? t('sidebar.missing_msg') : (val === 'all' ? t('sidebar.all_tracked') : t('sidebar.active_project', { name: chosen?.name || val }));
 
     if (badge) {
-      badge.textContent = isMissing ? '⚠️ Missing on disk' : '';
+      badge.textContent = isMissing ? t('sidebar.missing_on_disk') : '';
       badge.style.display = isMissing ? 'block' : 'none';
       badge.style.color = '#ffbd2e';
     }
@@ -149,18 +150,18 @@ async function initProjectSelector() {
   if (pruneBtn) {
     pruneBtn.addEventListener('click', async () => {
       const ok = await showConfirm({
-        title: 'Prune Missing Projects',
-        message: 'Remove missing/deleted projects from the tracking registry?',
-        subtext: 'This removes project records whose paths no longer exist on disk.',
-        confirmText: 'Prune Projects',
-        cancelText: 'Cancel',
+        title: t('dialog.prune_title'),
+        message: t('dialog.prune_msg'),
+        subtext: t('dialog.prune_subtext'),
+        confirmText: t('dialog.prune_btn'),
+        cancelText: t('dialog.cancel'),
         variant: 'danger',
       });
       if (ok) {
         const res = await pruneProjects();
         await showAlert({
-          title: 'Pruning Complete',
-          message: res.message || `Pruned ${res.pruned_count || 0} projects.`,
+          title: t('dialog.prune_title'),
+          message: res.message || t('dialog.pruned_success', { count: res.pruned_count || 0 }),
           variant: 'success',
         });
         await initProjectSelector();
@@ -173,19 +174,19 @@ async function initProjectSelector() {
   if (cleanupBtn) {
     cleanupBtn.addEventListener('click', async () => {
       const ok = await showConfirm({
-        title: 'Optimize Database',
-        message: 'Run automated log cleanup and vacuum SQLite database?',
-        subtext: 'Prunes expired tool calls, vacuum tables, and reclaims disk space.',
-        confirmText: '⚡ Optimize Now',
-        cancelText: 'Cancel',
+        title: t('dialog.optimize_title'),
+        message: t('dialog.optimize_msg'),
+        subtext: t('dialog.optimize_subtext'),
+        confirmText: t('dialog.optimize_btn'),
+        cancelText: t('dialog.cancel'),
         variant: 'info',
       });
       if (!ok) return;
 
       const res = await triggerAutoCleanup();
       await showAlert({
-        title: 'Database Optimized',
-        message: res.message || 'Cleanup complete.',
+        title: t('dialog.optimize_title'),
+        message: res.message || t('dialog.cleanup_complete'),
         variant: res.success ? 'success' : 'danger',
       });
       fetchData();
@@ -193,7 +194,29 @@ async function initProjectSelector() {
   }
 }
 
+function initLanguageSelector() {
+  const select = el('lang-selector');
+  if (!select) return;
+  select.value = getLanguage();
+  select.addEventListener('change', (e) => {
+    setLanguage(e.target.value);
+  });
+  onLanguageChange(() => {
+    initProjectSelector();
+    const current = location.hash.slice(1) || 'dashboard';
+    if (current === 'graph') {
+      loadAndRenderGraph();
+    } else if (current === 'logs') {
+      loadAndRenderLogs();
+    } else {
+      fetchData();
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  initI18n();
+  initLanguageSelector();
   initA11y();
   initRouter();
   initProjectSelector();

@@ -8,6 +8,7 @@ import {
 } from './builders.js';
 import { buildKpi, buildLegend } from './kpi.js';
 import { bindChartTooltip } from './tooltip.js';
+import { t } from '../../i18n/index.js';
 
 export function renderHourlyChart(data, totals) {
   const chart = el('hourly-chart');
@@ -17,7 +18,7 @@ export function renderHourlyChart(data, totals) {
   const maxRaw = maxOf(hours, ['saved', 'original', 'optimized']);
 
   if (!hours.length || maxRaw === 0) {
-    chart.innerHTML = '<div class="chart-empty">No token data in the last 24h — make a tool call to start saving tokens.</div>';
+    chart.innerHTML = `<div class="chart-empty">${t('chart.no_data')}</div>`;
     return;
   }
 

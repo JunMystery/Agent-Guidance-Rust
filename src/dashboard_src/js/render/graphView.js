@@ -1,6 +1,9 @@
 import { el } from '../dom.js';
 import { initGraphCanvas } from './graphCanvas.js';
 import { computeHubThreshold } from './graphLabels.js';
+import { renderSymbolInspector } from './inspectorView.js';
+import { initGraphSymbolList } from './graphSymbolList.js';
+import { t } from '../i18n/index.js';
 
 let activeCanvasInstance = null;
 
@@ -17,12 +20,12 @@ export function renderGraphView(data) {
     container.innerHTML = `
       <div style="padding: 32px; text-align: center; color: var(--text-secondary);">
         <div style="font-size: 36px; margin-bottom: 12px;">🕸️</div>
-        <h3 style="color: var(--text-primary); margin-bottom: 8px;">Architecture Graph Not Available</h3>
+        <h3 style="color: var(--text-primary); margin-bottom: 8px;">${t('graph.not_available')}</h3>
         <p style="max-width: 500px; margin: 0 auto 16px auto; font-size: 13px;">
-          ${data?.message || 'No indexed code_graph.db found for this project. Index the codebase using project_context to generate dependency graphs.'}
+          ${data?.message || t('graph.not_indexed_msg')}
         </p>
         <div style="font-family: var(--font-mono); font-size: 11px; background: var(--bg-tertiary); padding: 8px 12px; display: inline-block; border-radius: var(--border-radius-sm);">
-          Project: ${data?.project_path || '--'}
+          ${t('graph.project_label', { project: data?.project_path || '--' })}
         </div>
       </div>
     `;
@@ -54,25 +57,25 @@ export function renderGraphView(data) {
   container.innerHTML = `
     <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
       <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: var(--border-radius-sm);">
-        <span style="color: var(--text-secondary); font-size: 11px;">SYMBOLS:</span>
+        <span style="color: var(--text-secondary); font-size: 11px;">${t('graph.symbols')}</span>
         <strong style="margin-left: 6px; color: var(--text-primary); font-size: 13px;">${data.total_nodes || nodes.length}</strong>
       </div>
       <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: var(--border-radius-sm);">
-        <span style="color: var(--text-secondary); font-size: 11px;">EDGES:</span>
+        <span style="color: var(--text-secondary); font-size: 11px;">${t('graph.edges')}</span>
         <strong style="margin-left: 6px; color: #00e5ff; font-size: 13px;">${data.total_edges || edges.length}</strong>
       </div>
       <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: var(--border-radius-sm);">
-        <span style="color: var(--text-secondary); font-size: 11px;">CLUSTERS:</span>
+        <span style="color: var(--text-secondary); font-size: 11px;">${t('graph.clusters')}</span>
         <strong style="margin-left: 6px; color: #a78bfa; font-size: 13px;">${communities.length}</strong>
       </div>
 
       <div style="display: flex; gap: 6px; align-items: center; margin-left: 8px;">
-        <button id="btn-filter-all" class="btn btn-sm btn-primary" style="padding: 4px 10px; font-size: 11px;">All</button>
-        <button id="btn-filter-func" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">Functions</button>
-        <button id="btn-filter-struct" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">Structs</button>
-        <button id="btn-filter-mod" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">Modules</button>
-        <button id="btn-filter-hubs" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔥 Hubs</button>
-        <button id="btn-toggle-orphans" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; margin-left: 6px; border-color: #334155;" title="Hide disconnected isolated nodes">🛡️ Connected Only</button>
+        <button id="btn-filter-all" class="btn btn-sm btn-primary" style="padding: 4px 10px; font-size: 11px;">${t('graph.all')}</button>
+        <button id="btn-filter-func" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">${t('graph.functions')}</button>
+        <button id="btn-filter-struct" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">${t('graph.structs')}</button>
+        <button id="btn-filter-mod" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">${t('graph.modules')}</button>
+        <button id="btn-filter-hubs" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">${t('graph.hubs')}</button>
+        <button id="btn-toggle-orphans" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; margin-left: 6px; border-color: #334155;" title="${t('graph.connected_only')}">${t('graph.connected_only')}</button>
       </div>
 
       <div style="flex: 1;"></div>
@@ -80,16 +83,16 @@ export function renderGraphView(data) {
       <div style="display: flex; gap: 6px; align-items: center;">
         <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); cursor: pointer; margin-right: 8px;">
           <input type="checkbox" id="toggle-pulse" checked style="accent-color: #00e5ff; cursor: pointer;">
-          <span>⚡ Pulses</span>
+          <span>${t('graph.pulses')}</span>
         </label>
         <div style="display: flex; gap: 2px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); padding: 2px;">
-          <button id="btn-zoom-out" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 12px; font-weight: bold;" title="Zoom Out">−</button>
+          <button id="btn-zoom-out" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 12px; font-weight: bold;" title="${t('graph.zoom_out')}">−</button>
           <span id="zoom-val" style="font-family: var(--font-mono); font-size: 11px; color: #00e5ff; min-width: 42px; text-align: center; display: inline-flex; align-items: center; justify-content: center;">82%</span>
-          <button id="btn-zoom-in" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 12px; font-weight: bold;" title="Zoom In">+</button>
-          <button id="btn-zoom-fit" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 11px;" title="Reset Fit">Fit</button>
+          <button id="btn-zoom-in" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 12px; font-weight: bold;" title="${t('graph.zoom_in')}">+</button>
+          <button id="btn-zoom-fit" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 11px;" title="${t('graph.reset_fit')}">${t('graph.zoom_fit')}</button>
         </div>
         <button id="btn-copy-mermaid" class="btn btn-sm" style="background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 4px 12px; font-size: 11px; cursor: pointer;">
-          📋 Copy Mermaid DAG
+          ${t('graph.copy_dag')}
         </button>
       </div>
     </div>
@@ -98,24 +101,27 @@ export function renderGraphView(data) {
       <div style="flex: 1; background: #080c14; border: 1px solid var(--border-color); border-radius: var(--border-radius-md); position: relative; overflow: hidden;">
         <canvas id="graph-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
         <div style="position: absolute; bottom: 8px; left: 12px; font-size: 11px; color: #64748b; pointer-events: none;">
-          Scroll to Zoom • Drag to Pan • Click node to inspect • Community Auras denote architectural modules
+          ${t('graph.canvas_hint')}
         </div>
       </div>
-      <div id="graph-inspector" style="width: 300px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 14px; overflow-y: auto;">
-        <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Symbol Inspector</div>
-        <div id="inspector-body" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-          Select any symbol on the graph to inspect AST callers, dependencies, and blast radius.
+      <div id="graph-inspector" style="width: 340px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 14px; overflow-y: auto;">
+        <div id="inspector-body">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">${t('inspector.title')}</div>
+          <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+            ${t('inspector.hint')}
+          </div>
         </div>
       </div>
     </div>
+    <div id="graph-symbol-list-container"></div>
   `;
 
   const copyBtn = el('btn-copy-mermaid');
   if (copyBtn && mermaidDag) {
     copyBtn.onclick = () => {
       navigator.clipboard.writeText(mermaidDag).then(() => {
-        copyBtn.textContent = '✅ Copied!';
-        setTimeout(() => { copyBtn.textContent = '📋 Copy Mermaid DAG'; }, 2000);
+        copyBtn.textContent = t('graph.copied');
+        setTimeout(() => { copyBtn.textContent = t('graph.copy_dag'); }, 2000);
       });
     };
   }
@@ -125,13 +131,35 @@ export function renderGraphView(data) {
     if (zoomLabel) zoomLabel.textContent = `${Math.round(scale * 100)}%`;
   };
 
+  let symbolList = null;
+
+  const handleSelectNode = (selectedNode, syncList = true) => {
+    const insp = el('inspector-body');
+    renderSymbolInspector(insp, selectedNode, edges, nodes, (jumpNode) => {
+      if (activeCanvasInstance) activeCanvasInstance.selectNode(jumpNode.id);
+      handleSelectNode(jumpNode, true);
+    });
+    if (syncList && symbolList) {
+      symbolList.setActiveNode(selectedNode.id);
+    }
+  };
+
   activeCanvasInstance = initGraphCanvas(
     'graph-canvas',
     nodes,
     edges,
     communities,
-    (selectedNode) => updateInspector(selectedNode, edges, nodes),
+    (node) => handleSelectNode(node, true),
     updateZoomText
+  );
+
+  symbolList = initGraphSymbolList(
+    el('graph-symbol-list-container'),
+    nodes,
+    (node) => {
+      if (activeCanvasInstance) activeCanvasInstance.selectNode(node.id);
+      handleSelectNode(node, false);
+    }
   );
 
   // Zoom & Filter Controls Wiring
@@ -152,7 +180,7 @@ export function renderGraphView(data) {
       hideOrphans = !hideOrphans;
       activeCanvasInstance.toggleOrphans(hideOrphans);
       btnToggleOrphans.className = 'btn btn-sm ' + (hideOrphans ? 'btn-primary' : 'btn-secondary');
-      btnToggleOrphans.textContent = hideOrphans ? '🛡️ Connected (Only)' : '🌐 All Symbols';
+      btnToggleOrphans.textContent = hideOrphans ? t('graph.connected_only') : t('graph.all_symbols');
     };
   }
 
@@ -173,33 +201,4 @@ export function renderGraphView(data) {
   setupFilter('btn-filter-struct', 'struct');
   setupFilter('btn-filter-mod', 'module');
   setupFilter('btn-filter-hubs', 'hubs');
-}
-
-function updateInspector(node, edges, allNodes) {
-  const insp = el('inspector-body');
-  if (!insp || !node) return;
-  const nodeMap = new Map(allNodes.map(n => [n.id, n.label]));
-  const callers = edges.filter(e => e.target === node.id).map(e => nodeMap.get(e.source) || e.source);
-  const callees = edges.filter(e => e.source === node.id).map(e => nodeMap.get(e.target) || e.target);
-
-  insp.innerHTML = `
-    <div style="margin-bottom: 8px;"><strong style="color: #00e5ff; font-size: 14px;">${node.label}</strong></div>
-    <div><strong>Kind:</strong> <span style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${node.kind}</span></div>
-    <div style="margin-top: 4px;"><strong>Span:</strong> ${node.loc} lines</div>
-    <div style="margin-top: 4px;"><strong>Impact Degree:</strong> ${node.deg} (Callers: ${node.inDeg} | Dependencies: ${node.outDeg})</div>
-    ${node.isHub ? '<div style="margin-top: 6px; color: #f59e0b; font-size: 11px; font-weight: 600;">⚡ Critical Architectural Hub</div>' : ''}
-    <div style="margin-top: 8px; word-break: break-all;"><strong>File:</strong> <div style="font-family: var(--font-mono); font-size: 10px; color: #94a3b8; margin-top: 2px;">${node.file}</div></div>
-    <div style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-      <strong style="font-size: 11px; color: #38bdf8;">Incoming Callers (${callers.length}):</strong>
-      <div style="font-size: 11px; color: #93c5fd; margin-top: 2px; max-height: 90px; overflow-y: auto;">
-        ${callers.length ? callers.join(', ') : '<em>None</em>'}
-      </div>
-    </div>
-    <div style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-      <strong style="font-size: 11px; color: #10b981;">Outgoing Dependencies (${callees.length}):</strong>
-      <div style="font-size: 11px; color: #86efac; margin-top: 2px; max-height: 90px; overflow-y: auto;">
-        ${callees.length ? callees.join(', ') : '<em>None</em>'}
-      </div>
-    </div>
-  `;
 }

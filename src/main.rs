@@ -239,7 +239,7 @@ async fn main() -> Result<()> {
     );
 
     if args.contains(&"--daemon".to_string()) || args.contains(&"--force-daemon".to_string()) {
-        daemon::daemon_main(dashboard_port, proj_arg).await;
+        daemon::server::daemon_main(dashboard_port, proj_arg).await;
         return Ok(());
     }
     if args.contains(&"--proxy".to_string()) || args.contains(&"--force-client".to_string()) {

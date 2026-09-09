@@ -1,6 +1,7 @@
 // Magnetic crosshair scrubber & rich glass card tooltip.
 
 import { fmtTokens } from '../../format.js';
+import { t } from '../../i18n/index.js';
 
 export function bindChartTooltip(scope) {
   const tip = scope.querySelector('#chart-tip');
@@ -37,12 +38,12 @@ export function bindChartTooltip(scope) {
       }
 
       // Populate rich glass tooltip
-      const hourTitle = meta.is_current ? `${meta.hour} (CURRENT)` : `${meta.hour}`;
+      const hourTitle = meta.is_current ? `${meta.hour} ${t('chart.current_suffix')}` : `${meta.hour}`;
       tip.innerHTML = '<div class="glass-tip-inner">' +
-        '<div class="tip-header"><span>' + hourTitle + '</span><span class="tip-badge">' + meta.pct + ' saved</span></div>' +
-        '<div class="tip-row"><span class="tip-label">Net Saved:</span><span class="tip-val tip-saved font-bold">+' + fmtTokens(meta.saved) + '</span></div>' +
-        '<div class="tip-row"><span class="tip-label">Optimized:</span><span class="tip-val font-mono">' + fmtTokens(meta.opt) + '</span></div>' +
-        '<div class="tip-row"><span class="tip-label">Original:</span><span class="tip-val font-mono text-muted">' + fmtTokens(meta.orig) + '</span></div>' +
+        '<div class="tip-header"><span>' + hourTitle + '</span><span class="tip-badge">' + t('chart.saved_badge', { pct: meta.pct }) + '</span></div>' +
+        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_net_saved') + '</span><span class="tip-val tip-saved font-bold">+' + fmtTokens(meta.saved) + '</span></div>' +
+        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_optimized') + '</span><span class="tip-val font-mono">' + fmtTokens(meta.opt) + '</span></div>' +
+        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_original') + '</span><span class="tip-val font-mono text-muted">' + fmtTokens(meta.orig) + '</span></div>' +
         '</div>';
       tip.style.opacity = '1';
     };

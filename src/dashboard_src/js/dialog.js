@@ -1,5 +1,6 @@
 // Reusable Promise-based modal dialog replacing window.alert() and window.confirm().
 import { el } from './dom.js';
+import { t } from './i18n/index.js';
 
 let activeResolver = null;
 
@@ -11,36 +12,36 @@ const ICONS = {
 };
 
 export function showConfirm({
-  title = 'Confirmation',
-  message = 'Are you sure?',
+  title,
+  message,
   subtext = '',
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   variant = 'danger',
 } = {}) {
   return openDialog({
-    title,
-    message,
+    title: title || t('dialog.confirm_title') || 'Confirmation',
+    message: message || t('dialog.confirm_default_msg') || 'Are you sure?',
     subtext,
-    confirmText,
-    cancelText,
+    confirmText: confirmText || t('dialog.confirm') || 'Confirm',
+    cancelText: cancelText || t('dialog.cancel') || 'Cancel',
     variant,
     isConfirm: true,
   });
 }
 
 export function showAlert({
-  title = 'Notification',
+  title,
   message = '',
   subtext = '',
-  okText = 'OK',
+  okText,
   variant = 'info',
 } = {}) {
   return openDialog({
-    title,
+    title: title || t('dialog.notify_title') || 'Notification',
     message,
     subtext,
-    confirmText: okText,
+    confirmText: okText || t('dialog.ok') || 'OK',
     cancelText: '',
     variant,
     isConfirm: false,

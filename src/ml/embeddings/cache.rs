@@ -195,6 +195,50 @@ pub fn embed_skills_cache(candidates: &[SkillItem], model: &EmbeddingModel) -> A
         }
     }
 
+    if let Some(cached) = load_precomputed_cache(candidates) {
+        store_passage_cache(cached, candidates);
+        if let Ok(guard) = cache.read() {
+            if let Some(entry) = guard.iter().find(|e| e.fingerprint == fingerprint) {
+                return entry.vectors.clone();
+            }
+        }
+    }
+
+    if let Some(cached) = load_passage_cache(candidates) {
+        store_passage_cache(cached, candidates);
+        if let Ok(guard) = cache.read() {
+            if let Some(entry) = guard.iter().find(|e| e.fingerprint == fingerprint) {
+                return entry.vectors.clone();
+            }
+        }
+    }
+
+    if candidates.len() > 64 {
+        info!(
+            "[ML Pipeline] Deferring on-the-fly embedding of {} skills to background to avoid timeout; using fast semantic fallback.",
+            candidates.len()
+        );
+        let cand_owned = candidates.to_vec();
+        let _ = std::thread::Builder::new()
+            .name("ag-passage-bg".to_string())
+            .spawn(move || {
+                if let Ok(model_guard) = cached_model() {
+                    let vecs: Vec<Vec<f32>> = inference_pool().install(|| {
+                        cand_owned
+                            .par_iter()
+                            .filter_map(|cand| {
+                                let text = cand.to_search_passage();
+                                model_guard.embed_text(&text, Some("passage")).ok()
+                            })
+                            .collect()
+                    });
+                    save_passage_cache(&vecs, &cand_owned);
+                    store_passage_cache(vecs, &cand_owned);
+                }
+            });
+        return Arc::new(Vec::new());
+    }
+
     info!(
         "[ML Pipeline] Computing passage embeddings for {} skills on-the-fly...",
         candidates.len()

@@ -51,13 +51,11 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
     commGroups.get(n.commKey).push(n);
   });
 
-  // 1. Position Community Anchors (Macro Layout with generous spacing)
+  // 1. Position Community Anchors (Macro Layout)
   const commKeys = Array.from(commGroups.keys());
   const commCount = Math.max(commKeys.length, 1);
   const commAnchors = new Map();
-  const R_comm = commCount > 1
-    ? Math.max(Math.min(W, H) * 0.48, 260 + Math.sqrt(connected.length) * 16)
-    : 0;
+  const R_comm = commCount > 1 ? Math.min(W, H) * 0.34 : 0;
 
   commKeys.forEach((key, idx) => {
     const angle = (idx / commCount) * 2 * Math.PI - Math.PI / 2;
@@ -74,7 +72,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   connected.forEach((n, idx) => {
     const anchor = commAnchors.get(n.commKey) || { cx: 0, cy: 0 };
     const phi = idx * 2.3999632;
-    const spread = 35 + Math.sqrt(idx + 1) * 32;
+    const spread = 21 + Math.sqrt(idx + 1) * 21;
     nodeMap.set(n.id, {
       ...n,
       x: anchor.cx + spread * Math.cos(phi),
@@ -86,12 +84,12 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   // 2. Physics Simulation: ForceAtlas2 with LinLog Repulsion & Soft Distance Falloff
   const connNodes = Array.from(nodeMap.values());
   const validEdges = edges.filter(e => nodeMap.has(e.source) && nodeMap.has(e.target));
-  const iterations = 110;
+  const iterations = 85;
 
   for (let iter = 0; iter < iterations; iter++) {
-    const temp = Math.pow(1.0 - iter / iterations, 1.4);
+    const temp = Math.pow(1.0 - iter / iterations, 1.3);
 
-    // Repulsion (LinLog: effective over wider radius, cross-community repel 2.6x)
+    // Repulsion (Softened inverse-square with degree weighting)
     for (let i = 0; i < connNodes.length; i++) {
       for (let j = i + 1; j < connNodes.length; j++) {
         const a = connNodes[i];
@@ -100,8 +98,8 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
         const dy = b.y - a.y;
         const dist = Math.hypot(dx, dy) || 1;
         const crossComm = a.commKey !== b.commKey;
-        const kRepel = crossComm ? 1800 : 900;
-        const f = (kRepel * Math.sqrt((a.deg + 1) * (b.deg + 1)) * temp) / (dist + 30);
+        const kRepel = crossComm ? 720 : 360;
+        const f = Math.min((kRepel * Math.sqrt((a.deg + 1) * (b.deg + 1)) * temp) / (dist * dist + 150), 16);
         const nx = dx / dist;
         const ny = dy / dist;
         a.x -= nx * f;
@@ -111,7 +109,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
       }
     }
 
-    // Attraction along actual graph edges (Generous rest length)
+    // Attraction along actual graph edges (Natural rest length 80px)
     validEdges.forEach(e => {
       const a = nodeMap.get(e.source);
       const b = nodeMap.get(e.target);
@@ -119,26 +117,26 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const restLen = 95 + Math.min(a.deg + b.deg, 16) * 2;
-      const f = (dist - restLen) * 0.028 * temp;
+      const restLen = 80 + Math.min(a.deg + b.deg, 12) * 2.5;
+      const f = Math.min((dist - restLen) * 0.065 * temp, 14);
       const nx = dx / dist;
       const ny = dy / dist;
       a.x += nx * f;
-      a.y -= ny * f;
+      a.y += ny * f;
       b.x -= nx * f;
-      b.y += ny * f;
+      b.y -= ny * f;
     });
 
-    // Gentle Community Centroid Gravity (Allows clusters to breathe while grouping)
+    // Gentle Community Centroid Gravity
     connNodes.forEach(n => {
       const anchor = commAnchors.get(n.commKey);
       if (anchor) {
-        n.x += (anchor.cx - n.x) * 0.016 * temp;
-        n.y += (anchor.cy - n.y) * 0.016 * temp;
+        n.x += (anchor.cx - n.x) * 0.04 * temp;
+        n.y += (anchor.cy - n.y) * 0.04 * temp;
       }
     });
 
-    // Anti-collision push: Generous buffer so nodes and their labels never collide
+    // Anti-collision push: Comfortable spacing buffer
     for (let i = 0; i < connNodes.length; i++) {
       for (let j = i + 1; j < connNodes.length; j++) {
         const a = connNodes[i];
@@ -146,9 +144,9 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.hypot(dx, dy) || 1;
-        const minDist = a.radius + b.radius + 52;
+        const minDist = a.radius + b.radius + 36;
         if (dist < minDist) {
-          const push = ((minDist - dist) / 2) * 0.75;
+          const push = ((minDist - dist) / 2) * 0.7;
           const nx = dx / dist;
           const ny = dy / dist;
           a.x -= nx * push;
@@ -162,11 +160,11 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
 
   // Re-center connected nodes strictly around (0, 0)
   if (connNodes.length > 0) {
-    const cX = connNodes.reduce((s, n) => s + n.x, 0) / connNodes.length;
-    const cY = connNodes.reduce((s, n) => s + n.y, 0) / connNodes.length;
+    const cX = connNodes.reduce((s, n) => s + (isFinite(n.x) ? n.x : 0), 0) / connNodes.length;
+    const cY = connNodes.reduce((s, n) => s + (isFinite(n.y) ? n.y : 0), 0) / connNodes.length;
     connNodes.forEach(n => {
-      n.x -= cX;
-      n.y -= cY;
+      n.x = isFinite(n.x) ? n.x - cX : 0;
+      n.y = isFinite(n.y) ? n.y - cY : 0;
     });
   }
 
@@ -175,14 +173,14 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   // 3. Position Orphans in Peripheral Orbit Dock
   const numOrphans = orphans.length;
   const numRings = numOrphans > 70 ? 3 : (numOrphans > 32 ? 2 : 1);
-  const baseOrbitR = Math.max(maxConnR + 65, Math.min(W, H) * 0.45);
+  const baseOrbitR = Math.max(maxConnR + 45, Math.min(W, H) * 0.44);
 
   orphans.forEach((n, idx) => {
     const ringIdx = idx % numRings;
     const perRing = Math.ceil(numOrphans / numRings);
     const posInRing = Math.floor(idx / numRings);
     const angle = (posInRing / Math.max(perRing, 1)) * 2 * Math.PI;
-    const r = baseOrbitR + ringIdx * 28;
+    const r = baseOrbitR + ringIdx * 24;
     nodeMap.set(n.id, {
       ...n,
       x: r * Math.cos(angle),
@@ -205,7 +203,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
       name: anc.name,
       x: avgX,
       y: avgY,
-      radius: Math.max(55, maxR + 35),
+      radius: Math.max(45, maxR + 26),
       color: anc.color,
       count: members.length
     });

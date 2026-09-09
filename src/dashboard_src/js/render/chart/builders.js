@@ -3,6 +3,7 @@
 import { fmtTokens, fmtPct } from '../../format.js';
 import { slotCenter, CHART_W, PAD } from './scale.js';
 import { buildSplinePath, buildSplineAreaPath } from './spline.js';
+import { t } from '../../i18n/index.js';
 
 export function buildDefs(hours) {
   const n = hours.length;
@@ -109,7 +110,7 @@ export function buildXLabels(hours, box) {
     if (i % step === 0 || i === n - 1) {
       const x = slotCenter(i, n, box);
       const isLast = i === n - 1;
-      const text = isLast && h.is_current ? 'NOW' : (h.hour || `${i}:00`);
+      const text = isLast && h.is_current ? (t('chart.now') || 'NOW') : (h.hour || `${i}:00`);
       const cls = isLast ? 'chart-xlabel font-bold is-now' : 'chart-xlabel';
       labels += '<text x="' + x.toFixed(1) + '" y="' + (box.yMax + 28) + '" class="' + cls + '">' + text + '</text>';
     }

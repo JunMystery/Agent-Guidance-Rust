@@ -60,14 +60,12 @@ pub(crate) fn handle_search(
         }
     }
 
-    if state.pending_skill_proposals.is_empty() {
-        state.pending_skill_proposals = deduped_results
-            .iter()
-            .map(|(score, item)| {
-                (item.name.clone(), item.relative_path.clone(), *score)
-            })
-            .collect();
-    }
+    state.pending_skill_proposals = deduped_results
+        .iter()
+        .map(|(score, item)| {
+            (item.name.clone(), item.relative_path.clone(), *score)
+        })
+        .collect();
 
     let formatted_results: Vec<String> = deduped_results
         .into_iter()

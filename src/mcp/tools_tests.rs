@@ -266,24 +266,6 @@
         assert!(text.contains("Pattern:"));
     }
 
-    #[test]
-    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in unit tests"]
-    fn test_task_pipeline_architecture_guidance_output() {
-        let mut state = ServerState::new();
-
-        let res = handle_tool_call(
-            "task_pipeline",
-            json!({ "task": "build new feature", "phase": "plan" }),
-            &mut state,
-        );
-        assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        assert!(text.contains("## Architecture Guidance"));
-        assert!(text.contains("Detected Pattern:"));
-    }
 
     #[test]
     fn test_guidance_workflow_loads_embedded_reference() {
@@ -303,22 +285,6 @@
         assert!(!text.contains("# Dev Workflow Guidance: [code]\n\nRecommended Flow: Context -> Plan -> Ask/Revise -> Build -> Test/Recheck -> Fix -> Document"));
     }
 
-    #[test]
-    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in unit tests"]
-    fn test_guidance_docs_vector_search() {
-        let mut state = ServerState::new();
-        let res = handle_tool_call(
-            "guidance",
-            json!({ "operation": "docs", "query": "rust testing" }),
-            &mut state,
-        );
-        assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        assert!(text.contains("# Documentation Guidance for"));
-    }
 
     #[test]
     fn test_workflow_gate_plan_approval_via_user_message() {
@@ -625,30 +591,6 @@
         assert!(text.contains("android-clean-architecture [Embedded Catalog]"));
     }
 
-    #[test]
-    #[ignore] // Requires pre-cached HuggingFace model files; avoid network I/O in unit tests
-    fn test_task_pipeline_skill_deduplication_and_empty_task_fallback() {
-        let mut state = ServerState::new();
-        let res = handle_tool_call(
-            "task_pipeline",
-            json!({
-                "task": "",
-                "project_path": ".",
-                "phase": "plan",
-                "focus": "security"
-            }),
-            &mut state,
-        );
-        assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text.contains("# Task Pipeline Activated"));
-
-        // Check that pending_skill_proposals contains no duplicates
-        let mut names = std::collections::HashSet::new();
-        for (name, _, _) in &state.pending_skill_proposals {
-            assert!(names.insert(name.clone()), "Duplicate skill proposal found: {}", name);
-        }
-    }
 
     #[test]
     fn test_precode_upfront_split_blueprint() {
@@ -805,47 +747,6 @@
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
-    #[test]
-    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in unit tests"]
-    fn test_task_pipeline_blueprint_and_recipe() {
-        let mut state = ServerState::new();
-        let res = handle_tool_call(
-            "task_pipeline",
-            json!({
-                "task": "build payment webhook listener and process transactions",
-                "project_path": ".",
-                "phase": "plan"
-            }),
-            &mut state,
-        );
-        assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text.contains("Dynamic Split Blueprint"));
-        assert!(text.contains("Upfront Modular Blueprint"));
-    }
-
-    #[test]
-    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in unit tests"]
-    fn test_select_skills_semantic_slicing() {
-        let mut state = ServerState::new();
-        state.pending_skill_proposals = vec![
-            ("android-clean-architecture".to_string(), "skills/android-clean-architecture/SKILL.md".to_string(), 0.95),
-        ];
-
-        let res = handle_tool_call(
-            "select_skills",
-            json!({
-                "skills": ["android-clean-architecture"],
-                "task": "configure domain usecases and repository traits",
-                "project_path": "."
-            }),
-            &mut state,
-        );
-        assert!(res.is_ok());
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text.contains("Skill Selection Confirmed"));
-        assert!(text.contains("## Language Safety Rules"));
-    }
 
     #[test]
     fn test_session_continuity_learn_and_handoff() {

@@ -214,7 +214,14 @@ pub fn is_read_only_request(method: &str, params: &Option<Value>) -> bool {
                 let name = p.get("name").and_then(|n| n.as_str()).unwrap_or("");
                 let args = p.get("arguments");
                 match name {
-                    "project_context" | "guidance" => true,
+                    "project_context" => true,
+                    "guidance" => {
+                        let op = args
+                            .and_then(|a| a.get("operation"))
+                            .and_then(|o| o.as_str())
+                            .unwrap_or("list");
+                        matches!(op, "list" | "get" | "docs" | "workflow" | "ui_ux")
+                    }
                     "workflow_gate" => {
                         let action = args
                             .and_then(|a| a.get("action"))

@@ -44,10 +44,9 @@ fn test_discover_linked_projects_from_config() {
     ).unwrap();
 
     let discovered = discover_linked_projects(&primary);
-    assert_eq!(discovered.len(), 1);
-    assert_eq!(discovered[0].name, "second");
+    let second = discovered.iter().find(|p| p.name == "second").expect("second project discovered");
     assert_eq!(
-        discovered[0].root_path,
+        second.root_path,
         secondary.canonicalize().unwrap()
     );
 

@@ -4,35 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MCP Usage Dashboard</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.ico">
+<link rel="icon" type="image/png" href="/favicon.ico">
 <!-- fetch: /api/stats -->
 <link rel="stylesheet" href="/dashboard.css?v={{css_hash}}">
 </head>
 <body>
-<a class="skip-link" href="#main-content">Skip to content</a>
+<a class="skip-link" href="#main-content" data-i18n="nav.skip_link">Skip to content</a>
 
 <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle sidebar" aria-expanded="false" aria-controls="sidebar">☰</button>
 
 <aside class="sidebar" id="sidebar">
-  <h2>MCP Stats</h2>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <img src="/logo.png" alt="Agent Guidance Logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain">
+    <h2 style="margin:0" data-i18n="nav.title">MCP Stats</h2>
+  </div>
   <nav role="tablist" aria-label="Dashboard views">
-    <a class="active" role="tab" aria-selected="true" aria-controls="view-dashboard" id="tab-dashboard" data-view="dashboard"><span>Dashboard</span></a>
-    <a role="tab" aria-selected="false" aria-controls="view-top-skills" id="tab-top-skills" data-view="top-skills"><span>Top Skills</span></a>
-    <a role="tab" aria-selected="false" aria-controls="view-actions" id="tab-actions" data-view="actions"><span>Actions Log</span></a>
-    <a role="tab" aria-selected="false" aria-controls="view-recent-calls" id="tab-recent-calls" data-view="recent-calls"><span>Recent Calls</span></a>
-    <a role="tab" aria-selected="false" aria-controls="view-graph" id="tab-graph" data-view="graph"><span>🕸️ Architecture Graph</span></a>
-    <a role="tab" aria-selected="false" aria-controls="view-logs" id="tab-logs" data-view="logs"><span>⚠️ Diagnostics</span></a>
+    <a class="active" role="tab" aria-selected="true" aria-controls="view-dashboard" id="tab-dashboard" data-view="dashboard"><span data-i18n="nav.dashboard">Dashboard</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-actions" id="tab-actions" data-view="actions"><span data-i18n="nav.actions">Actions Log</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-graph" id="tab-graph" data-view="graph"><span data-i18n="nav.graph">🕸️ Architecture Graph</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-logs" id="tab-logs" data-view="logs"><span data-i18n="nav.logs">⚠️ Diagnostics</span></a>
   </nav>
   <div class="sidebar-footer">
     <div style="margin-bottom:8px">
-      <label for="project-selector" style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px">Tracked Project:</label>
+      <label for="lang-selector" style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px" data-i18n="sidebar.language">🌐 Language / Ngôn ngữ:</label>
+      <select id="lang-selector" style="width:100%;padding:4px 6px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:12px;font-family:var(--font-mono)">
+        <option value="en">English (EN)</option>
+        <option value="vi">Tiếng Việt (VI)</option>
+      </select>
+    </div>
+    <div style="margin-bottom:8px">
+      <label for="project-selector" style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px" data-i18n="sidebar.tracked_project">Tracked Project:</label>
       <select id="project-selector" style="width:100%;padding:4px 6px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:12px;font-family:var(--font-mono)">
-        <option value="all">🌐 All Projects (Global)</option>
+        <option value="all" data-i18n="sidebar.all_projects">🌐 All Projects (Global)</option>
       </select>
     </div>
     <div id="project-status-badge" style="font-size:11px;margin-bottom:8px;display:none"></div>
-    <button id="btn-prune-projects" title="Prune non-existent/deleted projects from registry" style="width:100%;padding:4px 6px;font-size:11px;margin-bottom:8px;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--border-radius-sm);cursor:pointer">🧹 Prune Missing</button>
-    <button id="btn-auto-cleanup" title="Clean expired logs, enforce caps, and vacuum database" style="width:100%;padding:4px 6px;font-size:11px;margin-bottom:8px;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--border-radius-sm);cursor:pointer">⚡ Vacuum & Optimize DB</button>
+    <button id="btn-prune-projects" data-i18n="sidebar.prune_missing" data-i18n-title="sidebar.prune_missing_title" title="Prune non-existent/deleted projects from registry" style="width:100%;padding:4px 6px;font-size:11px;margin-bottom:8px;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--border-radius-sm);cursor:pointer">🧹 Prune Missing</button>
+    <button id="btn-auto-cleanup" data-i18n="sidebar.vacuum_db" data-i18n-title="sidebar.vacuum_db_title" title="Clean expired logs, enforce caps, and vacuum database" style="width:100%;padding:4px 6px;font-size:11px;margin-bottom:8px;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:var(--border-radius-sm);cursor:pointer">⚡ Vacuum & Optimize DB</button>
     <div id="sidebar-db-size" style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">db size: --</div>
     <div class="proj" id="sidebar-proj" style="font-size:11px;color:var(--text-muted)">--</div>
     <div id="sidebar-port">port: --</div>
@@ -53,15 +61,15 @@
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title">Directory Browser</div>
+        <div class="terminal-title" data-i18n="dialog.dir_browser">Directory Browser</div>
       </div>
       <div class="terminal-body-raw">
         <div id="dir-current">/</div>
         <div id="dir-list"></div>
         <div class="modal-actions">
-          <button onclick="closeDirBrowser()" class="btn-secondary">Cancel</button>
+          <button onclick="closeDirBrowser()" class="btn-secondary" data-i18n="dialog.cancel">Cancel</button>
           <div style="flex:1"></div>
-          <button onclick="selectDirPath()" class="btn-accent">Select folder</button>
+          <button onclick="selectDirPath()" class="btn-accent" data-i18n="dialog.select_folder">Select folder</button>
         </div>
       </div>
     </div>
@@ -75,185 +83,24 @@
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title" id="dialog-title">Confirmation</div>
+        <div class="terminal-title" id="dialog-title" data-i18n="dialog.confirm_title">Confirmation</div>
       </div>
       <div class="terminal-body-raw dialog-body">
         <div class="dialog-icon-wrap" id="dialog-icon">⚠️</div>
         <div class="dialog-content-wrap">
-          <div class="dialog-message" id="dialog-message">Are you sure?</div>
+          <div class="dialog-message" id="dialog-message" data-i18n="dialog.confirm_default_msg">Are you sure?</div>
           <div class="dialog-subtext" id="dialog-subtext"></div>
         </div>
       </div>
       <div class="modal-actions dialog-actions">
-        <button id="dialog-btn-cancel" class="btn-secondary">Cancel</button>
-        <button id="dialog-btn-confirm" class="btn-accent">Confirm</button>
+        <button id="dialog-btn-cancel" class="btn-secondary" data-i18n="dialog.cancel">Cancel</button>
+        <button id="dialog-btn-confirm" class="btn-accent" data-i18n="dialog.confirm">Confirm</button>
       </div>
     </div>
   </div>
 
   <!-- VIEWS -->
   <section id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
-    <div class="hud-container">
-      
-      <!-- Top HUD Scope & Timeframe Ribbon -->
-      <div class="hud-command-bar">
-        <div class="hud-scope-wrap">
-          <div class="hud-scope-label">
-            <span class="hud-pulse-dot pulse-emerald"></span>
-            <span class="hud-scope-title">ACTIVE SCOPE:</span>
-          </div>
-          <div class="hud-project-select-wrap">
-            <select id="header-project-selector" class="hud-project-select" aria-label="Filter dashboard by project">
-              <option value="all">🌐 All Projects (Global Analytics)</option>
-            </select>
-            <div id="header-project-badge" class="header-project-badge"></div>
-          </div>
-          <div class="hud-scope-tag">
-            <span id="sys-project" class="hud-project-name">--</span>
-            <span class="hud-arch-badge">Clean_Arch</span>
-          </div>
-        </div>
-
-        <!-- Timeframe Segmented Switcher -->
-        <div class="hud-timeframe-wrap" id="timeframe-selector">
-          <button class="timeframe-tab active" data-timeframe="past_24h">24H</button>
-          <button class="timeframe-tab" data-timeframe="last_7d">7D</button>
-          <button class="timeframe-tab" data-timeframe="last_30d">30D</button>
-          <button class="timeframe-tab" data-timeframe="lifetime">ALL</button>
-        </div>
-      </div>
-
-      <!-- 4 Hero Telemetry KPI Cards -->
-      <div class="hud-kpi-grid">
-        <!-- Card 1: Token Compression & Savings -->
-        <div class="hud-card hud-card-cyan">
-          <div class="hud-card-header">
-            <span class="hud-card-title">Token Savings</span>
-            <span id="out-savings-pct" class="hud-badge hud-badge-cyan font-mono">+88.4%</span>
-          </div>
-          <div class="hud-kpi-val text-cyan" id="out-token-savings">--</div>
-          <div class="hud-card-footer">
-            <span class="hud-submetric">Orig: <strong id="out-original-tokens">--</strong></span>
-            <span class="hud-submetric">Opt: <strong id="out-optimized-tokens" class="text-cyan">--</strong></span>
-          </div>
-        </div>
-
-        <!-- Card 2: Tool Invocations -->
-        <div class="hud-card hud-card-emerald">
-          <div class="hud-card-header">
-            <span class="hud-card-title">Tool Invocations</span>
-            <span class="hud-badge hud-badge-emerald font-mono"><span class="hud-pulse-dot pulse-emerald"></span>LIVE</span>
-          </div>
-          <div class="hud-kpi-val text-emerald" id="out-tool-calls">--</div>
-          <div class="hud-card-footer">
-            <span class="hud-submetric">Status: <strong class="text-emerald">Active</strong></span>
-            <span class="hud-submetric">Session: <strong id="out-client-name" class="font-mono">global</strong></span>
-          </div>
-        </div>
-
-        <!-- Card 3: Vector Embeddings -->
-        <div class="hud-card hud-card-violet">
-          <div class="hud-card-header">
-            <span class="hud-card-title">Neural Embeddings</span>
-            <span class="hud-badge hud-badge-violet font-mono" id="out-model-status">Loaded</span>
-          </div>
-          <div class="hud-kpi-val text-violet" id="out-embed-queries">--</div>
-          <div class="hud-card-footer">
-            <span class="hud-submetric">Engine: <strong id="out-engine" class="text-violet">candle-bert</strong></span>
-            <span class="hud-submetric">Queries: <strong id="out-embed-metrics-queries">0</strong></span>
-          </div>
-        </div>
-
-        <!-- Card 4: Active Skills Knowledge -->
-        <div class="hud-card hud-card-amber">
-          <div class="hud-card-header">
-            <span class="hud-card-title">Skill Activations</span>
-            <span class="hud-badge hud-badge-amber font-mono">Cached</span>
-          </div>
-          <div class="hud-kpi-val text-amber" id="out-skills-loaded">--</div>
-          <div class="hud-card-footer">
-            <span class="hud-submetric">Targeting: <strong id="out-session-label">per-call</strong></span>
-            <span class="hud-submetric">Top Active: <strong id="out-skills-catalog">--</strong></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Subsystem & Neural Engine Diagnostics Matrix -->
-      <div class="hud-diagnostics-deck">
-        <div class="hud-diag-main">
-          <div class="hud-deck-header">
-            <div class="hud-deck-title">
-              <span class="hud-pulse-dot pulse-cyan"></span>
-              <h3>Subsystems & Neural Engine Matrix</h3>
-            </div>
-            <div class="hud-deck-meta">
-              <span class="hud-meta-pill">VERSION <span id="sys-version">v1.5.6</span></span>
-              <span class="hud-meta-pill">PORT <span id="sidebar-port-badge">11997</span></span>
-            </div>
-          </div>
-
-          <div class="hud-nodes-grid">
-            <!-- Node 1: MCP Daemon -->
-            <div class="hud-node-card">
-              <div class="hud-node-top">
-                <span class="hud-node-label">MCP DAEMON</span>
-                <span id="sys-daemon" class="hud-node-status status-ok">running</span>
-              </div>
-              <div class="hud-node-value font-mono">IPC Socket Active</div>
-              <div class="hud-node-sub">Clients: <span id="sys-clients">0</span> connected • Mode: <span id="out-daemon-status">running</span></div>
-            </div>
-
-            <!-- Node 2: Candle BERT Embedder -->
-            <div class="hud-node-card">
-              <div class="hud-node-top">
-                <span class="hud-node-label">EMBEDDING MODEL</span>
-                <span id="sys-model" class="hud-node-status status-ok">loaded</span>
-              </div>
-              <div class="hud-node-value font-mono" id="sys-embed-backend">Candle-BERT</div>
-              <div class="hud-node-sub">Model: <span id="sys-embed-model">loaded</span> • Last: <span id="out-last-embed">--</span></div>
-            </div>
-
-            <!-- Node 3: SQLite Storage -->
-            <div class="hud-node-card">
-              <div class="hud-node-top">
-                <span class="hud-node-label">STORAGE & TELEMETRY</span>
-                <span id="sys-db-status" class="hud-node-status status-ok">ok</span>
-              </div>
-              <div class="hud-node-value font-mono">SQLite WAL Mode</div>
-              <div class="hud-node-sub">Daemon: <span id="sys-embed-daemon">running</span> • Embed Clients: <span id="sys-embed-clients">0</span></div>
-            </div>
-
-            <!-- Node 4: Governance & Hard Cap -->
-            <div class="hud-node-card">
-              <div class="hud-node-top">
-                <span class="hud-node-label">WORKFLOW GUARD</span>
-                <span class="hud-node-status status-cyan">&lt; 300 LOC</span>
-              </div>
-              <div class="hud-node-value font-mono">Clean_Architecture</div>
-              <div class="hud-node-sub">Active Clients: <span id="out-clients">0</span> • Modularity Enforced</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Side Action / Control Deck -->
-        <div class="hud-diag-side">
-          <div class="hud-side-header">
-            <h4>ENGINE CONTROL</h4>
-          </div>
-          <div class="hud-side-body">
-            <p class="hud-side-desc">Hot-refresh candle-bert neural vector embeddings cache and reload active inference checkpoints.</p>
-            <button id="btn-embed-refresh" onclick="refreshEmbedStatus()" class="hud-btn-refresh">
-              <span class="hud-refresh-icon">🔄</span>
-              <span>Refresh Model Status</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <section id="view-top-skills" class="hidden" role="tabpanel" aria-labelledby="tab-top-skills">
     <div class="terminal-window">
       <div class="terminal-header">
         <div class="terminal-dots">
@@ -261,23 +108,157 @@
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title">Top Skills Analytics <span id="skills-poll" class="poll-badge"></span></div>
+        <div class="terminal-title" data-i18n="deck.title">System Overview &amp; Telemetry Matrix</div>
       </div>
       <div class="terminal-body-raw">
-        <div class="table-toolbar">
-          <input type="text" id="skills-filter" placeholder="Filter by skill name or ID…" aria-label="Filter top skills">
+        <div class="hud-container">
+
+          <div class="hud-command-bar">
+            <div class="hud-scope-wrap">
+              <div class="hud-scope-label">
+                <span class="hud-pulse-dot pulse-emerald"></span>
+                <span class="hud-scope-title" data-i18n="kpi.active_scope">ACTIVE SCOPE:</span>
+              </div>
+              <div class="hud-project-select-wrap">
+                <select id="header-project-selector" class="hud-project-select" aria-label="Filter dashboard by project" data-i18n-aria-label="kpi.filter_project_aria">
+                  <option value="all" data-i18n="sidebar.all_projects_analytics">🌐 All Projects (Global Analytics)</option>
+                </select>
+                <div id="header-project-badge" class="header-project-badge"></div>
+              </div>
+              <div class="hud-scope-tag">
+                <span id="sys-project" class="hud-project-name">--</span>
+                <span class="hud-arch-badge">Clean_Arch</span>
+              </div>
+            </div>
+
+            <div class="hud-timeframe-wrap" id="timeframe-selector">
+              <button class="timeframe-tab active" data-timeframe="past_24h">24H</button>
+              <button class="timeframe-tab" data-timeframe="last_7d">7D</button>
+              <button class="timeframe-tab" data-timeframe="last_30d">30D</button>
+              <button class="timeframe-tab" data-timeframe="lifetime">ALL</button>
+            </div>
+          </div>
+
+          <div class="hud-kpi-grid">
+
+            <div class="hud-card hud-card-cyan flat-card">
+              <div class="hud-card-header">
+                <span class="hud-card-title" data-i18n="kpi.context_shielded">Context Shielded</span>
+                <span id="out-shielded-badge" class="hud-badge hud-badge-cyan font-mono"><span id="out-savings-pct">+88.4%</span></span>
+              </div>
+              <div class="hud-kpi-val text-cyan" id="out-context-shielded"><span id="out-token-savings">--</span></div>
+              <div class="hud-card-footer" id="out-shielded-sub">
+                <span class="hud-submetric"><span data-i18n="kpi.orig">Orig:</span> <strong id="out-original-tokens">--</strong></span>
+                <span class="hud-submetric"><span data-i18n="kpi.opt">Opt:</span> <strong id="out-optimized-tokens" class="text-cyan">--</strong></span>
+              </div>
+            </div>
+
+            <div class="hud-card hud-card-emerald flat-card">
+              <div class="hud-card-header">
+                <span class="hud-card-title" data-i18n="kpi.graph_precision">Graph Precision</span>
+                <span id="out-precision-badge" class="hud-badge hud-badge-emerald font-mono">99.2%</span>
+              </div>
+              <div class="hud-kpi-val text-emerald" id="out-graph-precision">--</div>
+              <div class="hud-card-footer" id="out-precision-sub">
+                <span class="hud-submetric"><span data-i18n="kpi.status">Status:</span> <strong class="text-emerald">Active</strong></span>
+                <span class="hud-submetric"><span data-i18n="kpi.session">Session:</span> <strong id="out-client-name" class="font-mono">global</strong></span>
+              </div>
+            </div>
+
+            <div class="hud-card hud-card-violet flat-card">
+              <div class="hud-card-header">
+                <span class="hud-card-title" data-i18n="kpi.tool_invocations">Tool Invocations</span>
+                <span class="hud-badge hud-badge-violet font-mono"><span class="hud-pulse-dot pulse-emerald"></span>LIVE</span>
+              </div>
+              <div class="hud-kpi-val text-violet" id="out-tool-calls">--</div>
+              <div class="hud-card-footer">
+                <span class="hud-submetric"><span data-i18n="kpi.targeting">Targeting:</span> <strong id="out-session-label">per-call</strong></span>
+                <span class="hud-submetric"><span data-i18n="kpi.top_active">Top Active:</span> <strong id="out-skills-catalog">--</strong></span>
+              </div>
+            </div>
+
+            <div class="hud-card hud-card-amber flat-card">
+              <div class="hud-card-header">
+                <span class="hud-card-title" data-i18n="kpi.neural_embeddings">Neural Embeddings</span>
+                <span class="hud-badge hud-badge-amber font-mono" id="out-model-status">Loaded</span>
+              </div>
+              <div class="hud-kpi-val text-amber" id="out-embed-queries">--</div>
+              <div class="hud-card-footer">
+                <span class="hud-submetric"><span data-i18n="kpi.engine">Engine:</span> <strong id="out-engine" class="text-amber">candle-bert</strong></span>
+                <span class="hud-submetric"><span data-i18n="kpi.queries">Queries:</span> <strong id="out-embed-metrics-queries">0</strong></span>
+                <span id="out-skills-loaded" class="hidden" style="display:none"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hud-diagnostics-deck">
+            <div class="hud-diag-main">
+              <div class="hud-deck-header">
+                <div class="hud-deck-title">
+                  <span class="hud-pulse-dot pulse-cyan"></span>
+                  <h3 data-i18n="deck.title">Subsystems &amp; Neural Engine Matrix</h3>
+                </div>
+                <div class="hud-deck-meta">
+                  <span class="hud-meta-pill">VERSION <span id="sys-version">v1.5.6</span></span>
+                  <span class="hud-meta-pill">PORT <span id="sidebar-port-badge">11997</span></span>
+                </div>
+              </div>
+
+              <div class="hud-nodes-grid">
+
+                <div class="hud-node-card">
+                  <div class="hud-node-top">
+                    <span class="hud-node-label" data-i18n="deck.mcp_daemon">MCP DAEMON</span>
+                    <span id="sys-daemon" class="hud-node-status status-ok">running</span>
+                  </div>
+                  <div class="hud-node-value font-mono">IPC Socket Active</div>
+                  <div class="hud-node-sub">Clients: <span id="sys-clients">0</span> connected • Mode: <span id="out-daemon-status">running</span></div>
+                </div>
+
+                <div class="hud-node-card">
+                  <div class="hud-node-top">
+                    <span class="hud-node-label" data-i18n="deck.embed_model">EMBEDDING MODEL</span>
+                    <span id="sys-model" class="hud-node-status status-ok">loaded</span>
+                  </div>
+                  <div class="hud-node-value font-mono" id="sys-embed-backend">Candle-BERT</div>
+                  <div class="hud-node-sub">Model: <span id="sys-embed-model">loaded</span> • Last: <span id="out-last-embed">--</span></div>
+                </div>
+
+                <div class="hud-node-card">
+                  <div class="hud-node-top">
+                    <span class="hud-node-label" data-i18n="deck.storage_telemetry">STORAGE &amp; TELEMETRY</span>
+                    <span id="sys-db-status" class="hud-node-status status-ok">ok</span>
+                  </div>
+                  <div class="hud-node-value font-mono">SQLite WAL Mode</div>
+                  <div class="hud-node-sub">Daemon: <span id="sys-embed-daemon">running</span> • Embed Clients: <span id="sys-embed-clients">0</span></div>
+                </div>
+
+                <div class="hud-node-card">
+                  <div class="hud-node-top">
+                    <span class="hud-node-label" data-i18n="deck.workflow_guard">WORKFLOW GUARD</span>
+                    <span class="hud-node-status status-cyan">&lt; 300 LOC</span>
+                  </div>
+                  <div class="hud-node-value font-mono">Clean_Architecture</div>
+                  <div class="hud-node-sub">Active Clients: <span id="out-clients">0</span> • Modularity Enforced</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="hud-diag-side">
+              <div class="hud-side-header">
+                <h4 data-i18n="deck.engine_control">ENGINE CONTROL</h4>
+              </div>
+              <div class="hud-side-body">
+                <p class="hud-side-desc" data-i18n="deck.engine_desc">Hot-refresh candle-bert neural vector embeddings cache and reload active inference checkpoints.</p>
+                <button id="btn-embed-refresh" onclick="refreshEmbedStatus()" class="hud-btn-refresh">
+                  <span class="hud-refresh-icon">🔄</span>
+                  <span data-i18n="deck.refresh_model">Refresh Model Status</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col" style="width:70px">Rank</th>
-              <th scope="col">Skill ID / Name</th>
-              <th scope="col" style="width:120px">Load Count</th>
-            </tr>
-          </thead>
-          <tbody id="dash-skills"></tbody>
-        </table>
-        <div id="dash-skills-pagination"></div>
       </div>
     </div>
 
@@ -288,111 +269,101 @@
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title">Last 10 Skill Call Logs</div>
+        <div class="terminal-title"><span data-i18n="top_skills.title">Top Skills Analytics</span> <span id="skills-poll" class="poll-badge"></span></div>
       </div>
       <div class="terminal-body-raw">
-        <table>
+        <div class="table-toolbar">
+          <input type="text" id="skills-filter" placeholder="Filter by skill name or ID…" aria-label="Filter top skills" data-i18n-placeholder="top_skills.filter_placeholder" data-i18n-aria-label="top_skills.filter_aria">
+        </div>
+        <table class="flat-table">
           <thead>
             <tr>
-              <th scope="col" style="width:140px">Time</th>
-              <th scope="col">Skill ID / Name</th>
+              <th scope="col" style="width:70px" data-i18n="top_skills.rank">Rank</th>
+              <th scope="col" data-i18n="top_skills.skill_name">Skill ID / Name</th>
+              <th scope="col" style="width:120px" data-i18n="top_skills.load_count">Load Count</th>
             </tr>
           </thead>
-          <tbody id="recent-skills-body"></tbody>
+          <tbody id="dash-skills"></tbody>
         </table>
-        <div id="recent-skills-pagination"></div>
+        <div id="dash-skills-pagination"></div>
       </div>
     </div>
   </section>
 
   <section id="view-actions" class="hidden" role="tabpanel" aria-labelledby="tab-actions">
-    <!-- Top Action Bar & Live Beacon -->
-    <div class="actions-hero-bar">
-      <div class="actions-hero-title">
-        <div class="actions-live-indicator">
-          <span class="live-beacon"></span>
-          <span class="live-label">LIVE TELEMETRY</span>
-          <span id="actions-poll" class="live-poll-rate"></span>
-        </div>
-      </div>
-      <div class="actions-hero-controls">
-        <div class="view-mode-toggle" role="group" aria-label="Actions display mode">
-          <button class="view-mode-btn active" data-mode="aggregated" title="Aggregated tool breakdown">📊 Breakdown</button>
-          <button class="view-mode-btn" data-mode="stream" title="Chronological execution stream">⏱️ Live Stream</button>
-        </div>
-        <button id="btn-export-actions" class="btn-actions-secondary" title="Export actions telemetry as JSON">📥 Export JSON</button>
-      </div>
-    </div>
-
-    <!-- 4-Card KPI Ribbon -->
-    <div class="actions-kpi-grid">
-      <div class="actions-kpi-card">
-        <div class="actions-kpi-label">TOTAL TOOL CALLS</div>
-        <div class="actions-kpi-val" id="actions-kpi-calls">--</div>
-        <div class="actions-kpi-sub" id="actions-kpi-tools">0 active tools</div>
-      </div>
-      <div class="actions-kpi-card">
-        <div class="actions-kpi-label">ORIGINAL TOKENS</div>
-        <div class="actions-kpi-val" id="actions-kpi-orig">--</div>
-        <div class="actions-kpi-sub">Unoptimized baseline</div>
-      </div>
-      <div class="actions-kpi-card">
-        <div class="actions-kpi-label">OPTIMIZED TOKENS</div>
-        <div class="actions-kpi-val" id="actions-kpi-opt">--</div>
-        <div class="actions-kpi-sub">Compressed payload</div>
-      </div>
-      <div class="actions-kpi-card actions-kpi-highlight">
-        <div class="actions-kpi-label">NET TOKEN SAVINGS</div>
-        <div class="actions-kpi-val kpi-saved" id="actions-kpi-saved">--</div>
-        <div class="actions-kpi-sub actions-badge-rate" id="actions-kpi-rate">0.0% saved</div>
-      </div>
-    </div>
-
-    <!-- Actions Data Table Container -->
-    <div class="terminal-window" style="margin-top:16px">
+    <div class="terminal-window">
       <div class="terminal-header">
         <div class="terminal-dots">
           <div class="terminal-dot dot-red"></div>
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title">Actions Invocations & Optimization Efficiency</div>
+        <div class="terminal-title"><span data-i18n="actions.title">Actions &amp; Recent Calls</span> <span id="actions-poll" class="live-poll-rate"></span></div>
+        <div class="terminal-actions-controls">
+          <div class="view-mode-toggle" role="group" aria-label="Actions display mode" data-i18n-aria-label="actions.display_mode_aria">
+            <button class="view-mode-btn active" data-mode="breakdown" title="Aggregated tool breakdown" data-i18n-title="actions.breakdown_title" data-i18n="actions.breakdown">📊 Breakdown</button>
+            <button class="view-mode-btn" data-mode="stream" title="Chronological execution stream" data-i18n-title="actions.stream_title" data-i18n="actions.stream">⏱️ Recent Stream</button>
+          </div>
+          <button id="btn-export-actions" class="btn-actions-secondary" title="Export actions telemetry as JSON" data-i18n-title="actions.export_json_title" data-i18n="actions.export_json">📥 Export JSON</button>
+        </div>
       </div>
       <div class="terminal-body-raw">
-        <!-- Advanced Filter Toolbar -->
-        <div class="actions-toolbar">
-          <div class="actions-search-wrap">
-            <span class="actions-search-icon">🔍</span>
-            <input type="text" id="actions-filter" placeholder="Filter tools, operations, status…" aria-label="Filter actions">
+
+        <div class="actions-kpi-grid">
+          <div class="actions-kpi-card flat-card">
+            <div class="actions-kpi-label" data-i18n="actions.kpi_total_calls">TOTAL TOOL CALLS</div>
+            <div class="actions-kpi-val" id="actions-kpi-calls">--</div>
+            <div class="actions-kpi-sub" id="actions-kpi-tools">0 active tools</div>
           </div>
-          <div class="actions-chips-wrap">
-            <span class="filter-label">Tool Domain:</span>
-            <button class="actions-chip active" data-cat="all">All</button>
-            <button class="actions-chip" data-cat="context">Context</button>
-            <button class="actions-chip" data-cat="lifecycle">Lifecycle</button>
-            <button class="actions-chip" data-cat="governance">Governance</button>
-            <button class="actions-chip" data-cat="standards">Standards</button>
-            <button class="actions-chip" data-cat="skills">Skills</button>
+          <div class="actions-kpi-card flat-card">
+            <div class="actions-kpi-label" data-i18n="actions.kpi_orig_tokens">ORIGINAL TOKENS</div>
+            <div class="actions-kpi-val" id="actions-kpi-orig">--</div>
+            <div class="actions-kpi-sub" data-i18n="actions.kpi_unoptimized">Unoptimized baseline</div>
           </div>
-          <div class="actions-eff-wrap">
-            <span class="filter-label">Efficiency:</span>
-            <button class="eff-pill active" data-eff="all">All</button>
-            <button class="eff-pill" data-eff="high">High (&gt;50%)</button>
-            <button class="eff-pill" data-eff="low">&le;50%</button>
+          <div class="actions-kpi-card flat-card">
+            <div class="actions-kpi-label" data-i18n="actions.kpi_opt_tokens">OPTIMIZED TOKENS</div>
+            <div class="actions-kpi-val" id="actions-kpi-opt">--</div>
+            <div class="actions-kpi-sub" data-i18n="actions.kpi_compressed">Compressed payload</div>
+          </div>
+          <div class="actions-kpi-card actions-kpi-highlight flat-card">
+            <div class="actions-kpi-label" data-i18n="actions.kpi_net_savings">NET TOKEN SAVINGS</div>
+            <div class="actions-kpi-val kpi-saved" id="actions-kpi-saved">--</div>
+            <div class="actions-kpi-sub actions-badge-rate" id="actions-kpi-rate">0.0% saved</div>
           </div>
         </div>
 
-        <!-- Mode 1: Aggregated Breakdown Table -->
+        <div class="actions-toolbar">
+          <div class="actions-search-wrap">
+            <span class="actions-search-icon">🔍</span>
+            <input type="text" id="actions-filter" placeholder="Filter tools, operations, status…" aria-label="Filter actions" data-i18n-placeholder="actions.filter_placeholder" data-i18n-aria-label="actions.filter_aria">
+          </div>
+          <div class="actions-chips-wrap">
+            <span class="filter-label" data-i18n="actions.domain_label">Tool Domain:</span>
+            <button class="actions-chip active" data-cat="all" data-i18n="actions.domain_all">All</button>
+            <button class="actions-chip" data-cat="context" data-i18n="actions.domain_context">Context</button>
+            <button class="actions-chip" data-cat="lifecycle" data-i18n="actions.domain_lifecycle">Lifecycle</button>
+            <button class="actions-chip" data-cat="governance" data-i18n="actions.domain_governance">Governance</button>
+            <button class="actions-chip" data-cat="standards" data-i18n="actions.domain_standards">Standards</button>
+            <button class="actions-chip" data-cat="skills" data-i18n="actions.domain_skills">Skills</button>
+          </div>
+          <div class="actions-eff-wrap">
+            <span class="filter-label" data-i18n="actions.eff_label">Efficiency:</span>
+            <button class="eff-pill active" data-eff="all" data-i18n="actions.eff_all">All</button>
+            <button class="eff-pill" data-eff="high" data-i18n="actions.eff_high">High (&gt;50%)</button>
+            <button class="eff-pill" data-eff="low" data-i18n="actions.eff_low">&le;50%</button>
+          </div>
+        </div>
+
         <div id="actions-table-wrap">
-          <table class="actions-table">
+          <table class="actions-table flat-table">
             <thead>
               <tr>
-                <th data-sort="tool_name" style="width:26%">Tool & Domain</th>
-                <th data-sort="operation" style="width:16%">Operation</th>
-                <th data-sort="cnt" style="width:12%" class="num-cell">Calls</th>
-                <th data-sort="tok_orig" style="width:14%" class="num-cell">Orig Tokens</th>
-                <th data-sort="tok_opt" style="width:14%" class="num-cell">Opt Tokens</th>
-                <th data-sort="savings" style="width:18%">Efficiency / Savings</th>
+                <th data-sort="tool_name" style="width:26%" data-i18n="actions.th_tool">Tool &amp; Domain</th>
+                <th data-sort="operation" style="width:16%" data-i18n="actions.th_operation">Operation</th>
+                <th data-sort="cnt" style="width:12%" class="num-cell" data-i18n="actions.th_calls">Calls</th>
+                <th data-sort="tok_orig" style="width:14%" class="num-cell" data-i18n="actions.th_orig">Orig Tokens</th>
+                <th data-sort="tok_opt" style="width:14%" class="num-cell" data-i18n="actions.th_opt">Opt Tokens</th>
+                <th data-sort="savings" style="width:18%" data-i18n="actions.th_efficiency">Efficiency / Savings</th>
               </tr>
             </thead>
             <tbody id="actions-body"></tbody>
@@ -400,17 +371,17 @@
           <div id="actions-pagination"></div>
         </div>
 
-        <!-- Mode 2: Chronological Execution Stream Table -->
         <div id="actions-stream-wrap" class="hidden">
-          <table class="actions-table">
+          <table class="actions-table flat-table">
             <thead>
               <tr>
-                <th data-sort="started_at" style="width:140px">Time</th>
-                <th data-sort="tool_name">Tool</th>
-                <th data-sort="operation">Operation</th>
-                <th data-sort="duration_ms" style="width:100px">Latency</th>
-                <th data-sort="savings" style="width:120px">Savings</th>
-                <th data-sort="status" style="width:90px">Status</th>
+                <th data-sort="started_at" style="width:130px" data-i18n="actions.th_time">Time</th>
+                <th data-sort="tool_name" style="width:180px" data-i18n="recent.th_tool">Tool</th>
+                <th data-sort="operation" style="width:130px" data-i18n="actions.th_operation">Operation</th>
+                <th data-sort="target" data-i18n="recent.th_target">Target / Context</th>
+                <th data-sort="duration_ms" style="width:100px" class="num-cell" data-i18n="actions.th_latency">Latency</th>
+                <th data-sort="savings" style="width:110px" class="num-cell" data-i18n="recent.th_savings">Savings</th>
+                <th data-sort="status" style="width:90px" data-i18n="actions.th_status">Status</th>
               </tr>
             </thead>
             <tbody id="actions-stream-body"></tbody>
@@ -420,56 +391,21 @@
       </div>
     </div>
 
-    <!-- Token Savings & Hourly Chart Panel -->
-    <div class="terminal-window" style="margin-top:20px">
+    <div class="terminal-window token-dynamics-wave chart" style="margin-top:20px">
       <div class="terminal-header">
         <div class="terminal-dots">
           <div class="terminal-dot dot-red"></div>
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title">Token Savings & Velocity Dynamics</div>
+        <div class="terminal-title" data-i18n="actions.chart_title">Token Savings &amp; Velocity Dynamics</div>
       </div>
       <div class="terminal-body-raw">
         <div class="chart-card">
-          <div class="chart-card-title">Token Savings Velocity &amp; Payload Wave · Last 24h</div>
+          <div class="chart-card-title" data-i18n="actions.chart_subtitle">Token Savings Velocity &amp; Payload Wave · Last 24h</div>
           <div id="hourly-chart" class="hourly-chart"></div>
         </div>
         <div class="cards" style="margin-top:20px" id="token-summary-cards"></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="view-recent-calls" class="hidden" role="tabpanel" aria-labelledby="tab-recent-calls">
-    <div class="terminal-window">
-      <div class="terminal-header">
-        <div class="terminal-dots">
-          <div class="terminal-dot dot-red"></div>
-          <div class="terminal-dot dot-yellow"></div>
-          <div class="terminal-dot dot-green"></div>
-        </div>
-            <div class="terminal-title">Recent Calls <span id="recent-calls-poll"></span></div>
-          </div>
-          <div class="terminal-body-raw">
-            <div class="table-toolbar">
-              <input type="text" id="recent-filter" placeholder="Filter by tool, operation, status…" aria-label="Filter recent calls">
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th data-sort="started_at">Time</th>
-                  <th data-sort="tool_name">Tool</th>
-                  <th data-sort="operation">Operation</th>
-                  <th data-sort="target">Target / Context</th>
-                  <th data-sort="tokens_original">Orig Tokens</th>
-                  <th data-sort="tokens_optimized">Opt Tokens</th>
-                  <th data-sort="savings">Savings</th>
-                  <th data-sort="status">Status</th>
-                </tr>
-              </thead>
-              <tbody id="recent-calls-body"></tbody>
-            </table>
-            <div id="recent-calls-pagination"></div>
       </div>
     </div>
   </section>

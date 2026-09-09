@@ -4,22 +4,22 @@ import { fmtTokens, fmtPct, timeAgo, fmtDurationMs, savingsBadge } from '../form
 import { filterRows, makeSortable, bindFilter } from '../interactions.js';
 import { paginate, renderPagination, resetPage } from '../pagination.js';
 import { store } from '../state.js';
+import { t } from '../i18n/index.js';
 
 let activeCategory = 'all';
 let activeEff = 'all';
 let viewMode = 'aggregated';
 let expandedKey = null;
 
-const TOOL_META = {
-  project_context: { cat: 'context', label: 'Context', cls: 'badge-context' },
-  task_pipeline: { cat: 'lifecycle', label: 'Lifecycle', cls: 'badge-lifecycle' },
-  workflow_gate: { cat: 'governance', label: 'Governance', cls: 'badge-governance' },
-  guidance: { cat: 'standards', label: 'Standards', cls: 'badge-standards' },
-  select_skills: { cat: 'skills', label: 'Skills', cls: 'badge-skills' },
-};
-
 function getToolMeta(name) {
-  return TOOL_META[name] || { cat: 'other', label: 'Custom', cls: 'badge-other' };
+  const TOOL_META = {
+    project_context: { cat: 'context', label: t('actions.domain_context'), cls: 'badge-context' },
+    task_pipeline: { cat: 'lifecycle', label: t('actions.domain_lifecycle'), cls: 'badge-lifecycle' },
+    workflow_gate: { cat: 'governance', label: t('actions.domain_governance'), cls: 'badge-governance' },
+    guidance: { cat: 'standards', label: t('actions.domain_standards'), cls: 'badge-standards' },
+    select_skills: { cat: 'skills', label: t('actions.domain_skills'), cls: 'badge-skills' },
+  };
+  return TOOL_META[name] || { cat: 'other', label: t('actions.domain_custom'), cls: 'badge-other' };
 }
 
 export function renderActionsView(data) {
@@ -30,7 +30,9 @@ export function renderActionsView(data) {
   }));
   store.recent_actions = (data.recent_actions || []).map(r => ({
     ...r,
-    savings: (r.tokens_original || 0) - (r.tokens_optimized || 0),
+    savings: (r.tokens_original || r.tok_orig || 0) - (r.tokens_optimized || r.tok_opt || 0),
+    tokens_original: r.tokens_original ?? r.tok_orig ?? 0,
+    tokens_optimized: r.tokens_optimized ?? r.tok_opt ?? 0,
     meta: getToolMeta(r.tool_name),
   }));
 
@@ -47,21 +49,20 @@ function drawKpis(totals, breakdown) {
   const rate = orig > 0 ? ((saved / orig) * 100).toFixed(1) : '0.0';
 
   setText('actions-kpi-calls', calls.toLocaleString());
-  setText('actions-kpi-tools', `${new Set(breakdown.map(r => r.tool_name)).size} active tools`);
+  setText('actions-kpi-tools', t('actions.kpi_active_tools', { count: new Set(breakdown.map(r => r.tool_name)).size }));
   setText('actions-kpi-orig', fmtTokens(orig));
   setText('actions-kpi-opt', fmtTokens(opt));
   setText('actions-kpi-saved', fmtTokens(saved));
-  setText('actions-kpi-rate', `${rate}% saved`);
+  setText('actions-kpi-rate', t('actions.kpi_rate', { rate }));
 }
 
 function refreshCurrentView() {
-  if (viewMode === 'stream') {
-    el('actions-table-wrap')?.classList.add('hidden');
-    el('actions-stream-wrap')?.classList.remove('hidden');
+  const isStream = viewMode === 'stream';
+  el('actions-table-wrap')?.classList.toggle('hidden', isStream);
+  el('actions-stream-wrap')?.classList.toggle('hidden', !isStream);
+  if (isStream) {
     drawStreamTable();
   } else {
-    el('actions-stream-wrap')?.classList.add('hidden');
-    el('actions-table-wrap')?.classList.remove('hidden');
     drawBreakdownTable();
   }
 }
@@ -84,7 +85,7 @@ function drawBreakdownTable() {
   const paged = paginate('actions-body', rows);
   body.innerHTML = '';
   if (!paged.pagedRows.length) {
-    emptyState('actions-body', 6, 'No matching actions recorded for this filter.');
+    emptyState('actions-body', 6, t('actions.empty_breakdown'));
     renderPagination('actions-pagination', 'actions-body', paged, drawBreakdownTable);
     return;
   }
@@ -113,11 +114,11 @@ function drawBreakdownTable() {
       <td class="num-cell font-mono">${fmtTokens(r.tok_opt)}</td>
       <td>
         <div class="eff-cell">
-          <div class="eff-bar-bg" title="${pct}% token compression">
+          <div class="eff-bar-bg" title="${t('actions.compression_title', { pct })}">
             <div class="eff-bar-fill" style="width:${pctNum}%"></div>
           </div>
           <span class="${badgeClass}">${pct}%</span>
-          <button class="btn-inspect" title="Inspect call traces">${isExp ? '▲' : '▼'}</button>
+          <button class="btn-inspect" title="${t('actions.inspect_traces_title')}">${isExp ? '▲' : '▼'}</button>
         </div>
       </td>
     `;
@@ -149,18 +150,18 @@ function buildDrilldown(r) {
     <div class="drilldown-item">
       <span class="time-col">${timeAgo(m.started_at)}</span>
       <span class="font-mono">${fmtDurationMs(m.duration_ms)}</span>
-      <span class="tok-stat">orig: ${fmtTokens(m.tokens_original)} → opt: ${fmtTokens(m.tokens_optimized)}</span>
-      <span class="badge ${m.error_message ? 'red' : 'green'}">${m.error_message ? 'error' : 'ok'}</span>
+      <span class="tok-stat">${t('actions.tok_stat', { orig: fmtTokens(m.tokens_original), opt: fmtTokens(m.tokens_optimized) })}</span>
+      <span class="badge ${m.error_message ? 'red' : 'green'}">${m.error_message ? t('status.error') : t('status.ok')}</span>
     </div>
   `).join('');
 
-  if (!items) items = '<div class="drilldown-empty">No recent individual traces in cache.</div>';
+  if (!items) items = `<div class="drilldown-empty">${t('actions.drilldown_empty')}</div>`;
 
   return `
     <div class="drilldown-panel">
       <div class="drilldown-header">
-        <strong>Telemetry Inspector: <code>${r.tool_name}</code> (${r.operation || 'default'})</strong>
-        <span>Avg Saved / Call: <strong>${fmtTokens(avgSaved)}</strong></span>
+        <strong>${t('actions.drilldown_inspector', { tool: r.tool_name, op: r.operation || 'default' })}</strong>
+        <span>${t('actions.drilldown_avg_saved', { saved: fmtTokens(avgSaved) })}</span>
       </div>
       <div class="drilldown-list">${items}</div>
     </div>
@@ -171,12 +172,22 @@ function drawStreamTable() {
   const body = el('actions-stream-body');
   if (!body) return;
   const query = el('actions-filter')?.value || '';
-  const rows = filterRows(store.recent_actions, query, ['tool_name', 'operation', 'status']);
+  let rows = filterRows(store.recent_actions, query, ['tool_name', 'operation', 'status']);
+
+  if (activeCategory !== 'all') {
+    rows = rows.filter(r => r.meta?.cat === activeCategory);
+  }
+  if (activeEff === 'high') {
+    rows = rows.filter(r => (r.tokens_original || 0) > 0 && ((r.savings / r.tokens_original) * 100) >= 50);
+  } else if (activeEff === 'low') {
+    rows = rows.filter(r => (r.tokens_original || 0) > 0 && ((r.savings / r.tokens_original) * 100) < 50);
+  }
+
   const paged = paginate('actions-stream-body', rows);
   body.innerHTML = '';
 
   if (!paged.pagedRows.length) {
-    emptyState('actions-stream-body', 6, 'No live call events recorded.');
+    emptyState('actions-stream-body', 6, t('actions.empty_stream'));
     renderPagination('actions-stream-pagination', 'actions-stream-body', paged, drawStreamTable);
     return;
   }
@@ -197,7 +208,7 @@ function drawStreamTable() {
         <td><span class="badge op-badge">${op}</span></td>
         <td class="font-mono">${fmtDurationMs(r.duration_ms)}</td>
         <td><span class="${badgeClass}">${pct}%</span></td>
-        <td><span class="badge ${isErr ? 'red' : 'green'}" title="${(r.error_message || '').replace(/"/g, '&quot;')}">${isErr ? 'failed' : 'success'}</span></td>
+        <td><span class="badge ${isErr ? 'red' : 'green'}" title="${(r.error_message || '').replace(/"/g, '&quot;')}">${isErr ? t('status.failed') : t('status.success')}</span></td>
       </tr>
     `;
   });
@@ -226,8 +237,9 @@ function bindActionsControls() {
       btn.classList.add('active');
       activeCategory = btn.dataset.cat || 'all';
       resetPage('actions-body');
+      resetPage('actions-stream-body');
       expandedKey = null;
-      drawBreakdownTable();
+      refreshCurrentView();
     };
   });
 
@@ -237,8 +249,9 @@ function bindActionsControls() {
       btn.classList.add('active');
       activeEff = btn.dataset.eff || 'all';
       resetPage('actions-body');
+      resetPage('actions-stream-body');
       expandedKey = null;
-      drawBreakdownTable();
+      refreshCurrentView();
     };
   });
 
@@ -247,6 +260,9 @@ function bindActionsControls() {
       qsa('.view-mode-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       viewMode = btn.dataset.mode || 'aggregated';
+      resetPage('actions-body');
+      resetPage('actions-stream-body');
+      expandedKey = null;
       refreshCurrentView();
     };
   });

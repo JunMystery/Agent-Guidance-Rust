@@ -322,6 +322,34 @@ To ensure total runtime observability and instant root-cause identification:
 
 ---
 
+## MCP Daemon & Cross-Platform System Tray Architecture
+
+### Multi-IDE Lifecycle & Decoupled Process
+The MCP daemon is fully decoupled from the launching IDE process to ensure zero interruption across multi-IDE workflows:
+- **Windows Job Object Breakaway**: Spawned with `CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`. Fallback to WMI `Win32_Process::Create` ensures the daemon is parented directly under the Windows OS WMI service (`WmiPrvSE.exe`), immune to IDE parent tree teardown.
+- **Unix Process Group Detachment**: Configured with `process_group(0)` to prevent `SIGHUP` cascade when the launching IDE closes.
+- **Active IDE Detection Engine (`ide_detector.rs`)**: Scans OS process table via `sysinfo` for all major IDE binaries (VS Code, Cursor, Antigravity, Windsurf, Claude Desktop, Trae, Zed, JetBrains suite, Visual Studio).
+- **Graceful Multi-Client Lifecycle (`lifecycle.rs`)**: If `ACTIVE_CLIENTS` drops to 0, the daemon queries `has_running_ide_processes()`. As long as ANY IDE remains active, the daemon stays alive indefinitely. When 0 IDEs remain, a 60-second cooldown buffer runs; if an IDE is reopened during cooldown, shutdown is immediately cancelled.
+
+### Cross-Platform System Tray (`tray.rs`, `tray_windows.rs`, `tray_unix.rs`)
+A native system tray icon runs in a dedicated background thread:
+- **Windows (`tray_windows.rs`)**:
+  - Implements native Win32 `Shell_NotifyIconW`, hidden message pump window, and `TrackPopupMenu`.
+  - **Desktop Session Attachment**: Automatically bridges thread context to `"Default"` interactive desktop via `OpenDesktopW` and `SetThreadDesktop`, ensuring tray visibility even when spawned from IDE sandboxed desktop stations (`exebox-...`).
+- **macOS & Linux (`tray_unix.rs`)**:
+  - macOS uses Cocoa `NSStatusBar` native menus.
+  - Linux uses pure Rust D-Bus `StatusNotifierItem` via `ksni` (zero C library dependency, eliminating `libdbus`/`libappindicator` system package requirements).
+  - Gracefully disables in headless environments (`DISPLAY` / `WAYLAND_DISPLAY` missing).
+- **Application Icon Embedding**:
+  - `build.rs` compiles `docs/images/logo.png` directly into Windows PE resources via `winres`.
+- **System Tray Actions**:
+  - Status indicator (`Agent Guidance (Running)`).
+  - `Open Web Dashboard`: Launches default browser to `http://127.0.0.1:{port}/#dashboard`.
+  - `Open Data Folder`: Opens local cache/data directory in native file manager.
+  - `Exit MCP Daemon`: Clean shutdown of daemon process.
+
+---
+
 ## Deployment
 
 ### Setup

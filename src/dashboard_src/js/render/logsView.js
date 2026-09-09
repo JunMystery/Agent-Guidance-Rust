@@ -1,6 +1,8 @@
 // Dashboard MCP System Logs & Diagnostics View
 import { el } from '../dom.js';
 import { fetchLogs, clearLogs } from '../api.js';
+import { showConfirm } from '../dialog.js';
+import { t } from '../i18n/index.js';
 
 let currentLevel = 'all';
 let currentSearch = '';
@@ -14,48 +16,48 @@ export async function renderLogsView() {
       <!-- KPI Stats Row -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px;">
-          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">System Crashes</div>
+          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">${t('logs.crashes')}</div>
           <div id="stat-crashes" style="font-size: 24px; font-weight: 700; color: #ef4444; margin-top: 4px;">--</div>
-          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">30-day retention window</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${t('logs.crashes_sub')}</div>
         </div>
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px;">
-          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Runtime Errors</div>
+          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">${t('logs.errors')}</div>
           <div id="stat-errors" style="font-size: 24px; font-weight: 700; color: #f97316; margin-top: 4px;">--</div>
-          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">14-day retention window</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${t('logs.errors_sub')}</div>
         </div>
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px;">
-          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Warnings</div>
+          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">${t('logs.warnings')}</div>
           <div id="stat-warnings" style="font-size: 24px; font-weight: 700; color: #f59e0b; margin-top: 4px;">--</div>
-          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">7-day retention window</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${t('logs.warnings_sub')}</div>
         </div>
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px;">
-          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Total Diagnostics</div>
+          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">${t('logs.total')}</div>
           <div id="stat-total" style="font-size: 24px; font-weight: 700; color: #00e5ff; margin-top: 4px;">--</div>
-          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Rolling 10,000 cap</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">${t('logs.total_sub')}</div>
         </div>
       </div>
 
       <!-- Controls Toolbar -->
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
         <div style="display: flex; gap: 6px; align-items: center;">
-          <button id="btn-log-all" class="btn btn-sm btn-primary" style="padding: 4px 10px; font-size: 11px;">All</button>
-          <button id="btn-log-crash" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #ef4444;">💥 Crashes</button>
-          <button id="btn-log-error" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #f97316;">❌ Errors</button>
-          <button id="btn-log-warn" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #f59e0b;">⚠️ Warnings</button>
+          <button id="btn-log-all" class="btn btn-sm btn-primary" style="padding: 4px 10px; font-size: 11px;">${t('logs.all')}</button>
+          <button id="btn-log-crash" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #ef4444;">${t('logs.filter_crashes')}</button>
+          <button id="btn-log-error" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #f97316;">${t('logs.filter_errors')}</button>
+          <button id="btn-log-warn" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #f59e0b;">${t('logs.filter_warnings')}</button>
         </div>
 
         <div style="display: flex; gap: 8px; align-items: center; flex: 1; max-width: 400px; justify-content: flex-end;">
-          <input id="logs-search-input" type="text" placeholder="Search message, source, or stacktrace…"
+          <input id="logs-search-input" type="text" placeholder="${t('logs.search_placeholder')}"
             style="width: 100%; padding: 5px 10px; border-radius: var(--border-radius-sm); background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 11px;" />
           <button id="btn-refresh-logs" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">🔄</button>
-          <button id="btn-clear-logs" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Clear current logs">🧹 Clear</button>
+          <button id="btn-clear-logs" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="${t('logs.clear')}">${t('logs.clear')}</button>
         </div>
       </div>
 
       <!-- Logs Data Table Container -->
       <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden;">
         <div id="logs-table-body" style="padding: 12px; font-family: var(--font-mono); font-size: 12px;">
-          <div style="text-align: center; color: var(--text-secondary); padding: 32px;">Loading MCP diagnostics…</div>
+          <div style="text-align: center; color: var(--text-secondary); padding: 32px;">${t('logs.loading')}</div>
         </div>
       </div>
     </div>
@@ -75,7 +77,7 @@ async function loadLogs() {
     updateStats(data.stats || {});
     renderLogEntries(table, data.logs || []);
   } catch (err) {
-    table.innerHTML = `<div style="color: #ef4444; padding: 20px; text-align: center;">Failed to load logs: ${err.message}</div>`;
+    table.innerHTML = `<div style="color: #ef4444; padding: 20px; text-align: center;">${t('logs.load_failed', { error: err.message })}</div>`;
   }
 }
 
@@ -91,8 +93,8 @@ function renderLogEntries(container, logs) {
     container.innerHTML = `
       <div style="text-align: center; color: var(--text-muted); padding: 48px;">
         <div style="font-size: 28px; margin-bottom: 8px;">✨</div>
-        <div style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">Zero MCP diagnostics found</div>
-        <div style="font-size: 11px; margin-top: 4px;">System is healthy. No issues matching current filter.</div>
+        <div style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">${t('logs.zero_found')}</div>
+        <div style="font-size: 11px; margin-top: 4px;">${t('logs.healthy')}</div>
       </div>
     `;
     return;
@@ -124,7 +126,7 @@ function renderLogEntries(container, logs) {
         </div>
         ${log.details ? `
           <details style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 6px;">
-            <summary style="font-size: 10px; color: var(--accent); cursor: pointer; user-select: none;">🔍 View Stacktrace / Details</summary>
+            <summary style="font-size: 10px; color: var(--accent); cursor: pointer; user-select: none;">${t('logs.stacktrace')}</summary>
             <pre style="margin-top: 6px; padding: 8px; background: #080c14; border: 1px solid #1e293b; border-radius: 4px; color: #94a3b8; font-size: 10.5px; overflow-x: auto; max-height: 220px; white-space: pre-wrap;">${escapeHtml(log.details)}</pre>
           </details>
         ` : ''}
@@ -175,7 +177,10 @@ function setupSearchAndActions() {
   const clearBtn = el('btn-clear-logs');
   if (clearBtn) {
     clearBtn.onclick = async () => {
-      if (confirm(`Clear all ${currentLevel.toUpperCase()} logs?`)) {
+      const ok = await showConfirm({
+        message: t('logs.clear_confirm', { level: currentLevel.toUpperCase() }),
+      });
+      if (ok) {
         await clearLogs(currentLevel);
         await loadLogs();
       }

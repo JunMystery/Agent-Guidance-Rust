@@ -2,6 +2,7 @@
 import { el } from './dom.js';
 import { fetchData } from './api.js';
 import { showAlert } from './dialog.js';
+import { t } from './i18n/index.js';
 
 let currentBrowserPath = '.';
 
@@ -40,7 +41,7 @@ export async function renderDirBrowser(path) {
     if (data.parent) {
       const pdiv = document.createElement('div');
       pdiv.className = 'dir-item parent';
-      pdiv.textContent = '📁 .. (Up one directory)';
+      pdiv.textContent = t('dir_browser.up_one_dir');
       pdiv.onclick = () => renderDirBrowser(data.parent);
       list.appendChild(pdiv);
     }
@@ -54,11 +55,11 @@ export async function renderDirBrowser(path) {
         list.appendChild(ddiv);
       });
     } else if (!data.parent) {
-      list.innerHTML = '<div class="dir-empty">No directories found or permission denied.</div>';
+      list.innerHTML = `<div class="dir-empty">${t('dir_browser.empty')}</div>`;
     }
   } catch (e) {
     const list = el('dir-list');
-    if (list) list.innerHTML = '<div class="dir-error">Error loading directory.</div>';
+    if (list) list.innerHTML = `<div class="dir-error">${t('dir_browser.error')}</div>`;
   }
 }
 
@@ -75,15 +76,15 @@ export async function selectDirPath() {
       fetchData();
     } else {
       await showAlert({
-        title: 'Directory Selection Failed',
-        message: data.error || 'Failed to select directory.',
+        title: t('dir_browser.select_failed'),
+        message: data.error || t('dir_browser.failed_msg'),
         variant: 'danger',
       });
     }
   } catch (e) {
     await showAlert({
-      title: 'Directory Selection Error',
-      message: e.message || 'Error occurred while selecting directory.',
+      title: t('dir_browser.select_error'),
+      message: e.message || t('dir_browser.error_msg'),
       variant: 'danger',
     });
   }

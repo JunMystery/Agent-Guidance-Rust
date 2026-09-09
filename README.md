@@ -82,16 +82,27 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 - **Adaptive Alias Learning**: Automatically learns successful queries, increasing confidence with reuse and decaying inactive mappings (50% reduction after 30 days, purged after 90 days).
 - **Proactive Background File Watcher**: Uses OS-level file monitoring (`notify`) with a 5s debounce to incrementally update AST symbols, DAG edges, and RAG chunks before the agent even issues a query.
 
-### 3. Hardened 300 LOC Cap & Upfront Decomposition
+### 4. Hardened 300 LOC Cap & Upfront Decomposition
 - Physically clamps file reads at 300 lines max and automatically injects architectural decomposition mandates on large files.
 - Generates concrete Upfront Split Blueprints per pattern during pre-code guidance.
 
-### 4. Universal In-Engine Token Compression
+### 5. Universal In-Engine Token Compression
 - Automatically intercepts and compresses all outgoing MCP tool responses, stripping HTML comments, badges, and redundant whitespace.
 - Reduces context payload size by **30–50%** while logging real-time token savings to SQLite (`~/.agent-guidance/usage.db`).
 
-### 5. Multi-Session & Multi-IDE Isolation
+### 6. Multi-Session & Multi-IDE Isolation
 - Assigns process-isolated Session IDs (`session_{PID}_{ClientName}`) to eliminate state collisions across concurrent IDEs (VS Code, Cursor, Antigravity) or CLI tools in the same codebase.
+
+### 7. Real-Time Web Dashboard & Visual GraphRAG
+
+![Agent Guidance Real-Time Web Dashboard & Visual GraphRAG](docs/images/dashboard-GraphRAG.png)
+
+- **Interactive Architecture Graph**: Real-time canvas visualization of codebase symbols, call/import dependencies, and Leiden community clusters powered by a ForceAtlas2 physics simulation engine with collision culling and contrast halos.
+- **Deep Symbol & Blast Radius Inspector**: Click any node on the graph or search by name to inspect callers (incoming), dependencies (outgoing), architectural tiers, and blast radius risk assessment.
+- **Parallel Symbol & Function Navigator**: Search and navigate across all project files and functions simultaneously with instantaneous filtering.
+- **Token Savings & Velocity Dynamics**: Interactive telemetry charts tracking original vs. compressed payload waves, peak velocity, and execution traces.
+- **Bilingual Interface (i18n)**: Full native support for English (`en`) and Vietnamese (`vi`) with instant dynamic switching and persistent preferences.
+- **Zero-Friction Singleton Daemon**: Runs quietly in the background, serving all concurrent IDE instances, and automatically shuts down immediately once the last IDE window closes.
 
 ---
 
@@ -164,14 +175,51 @@ When running multiple AI agents across different IDEs or terminals simultaneousl
 agent-guidance [OPTIONS]
 
 Options:
-  --setup             Install and configure MCP server across all IDE clients
-  --verify-setup      Verify MCP configuration paths in all IDE clients
-  --upgrade           Download and install latest release package, update IDE configs
-  --self-update       Alias for --upgrade
-  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:11997
-  --port <PORT>       Custom dashboard port (default: 11997)
-  --uninstall         Remove MCP server configurations from all IDE clients
-  --help, -h          Print help message
+  --setup                  Install and configure MCP server across all IDE clients
+  --verify-setup           Verify MCP configuration paths in all IDE clients
+  --upgrade                Download and install latest release package, update IDE configs
+  --self-update            Alias for --upgrade
+  --dashboard              Start real-time web usage dashboard at http://127.0.0.1:11997
+  --port <PORT>            Custom dashboard port (default: 11997)
+  --project <PATH>         Filter dashboard to a specific project path or name
+  --prune-missing          Prune non-existent projects from usage tracking registry
+  --cleanup                Auto-clean expired logs, prune dead projects, and vacuum SQLite DB
+  --retention-days <N>     Retention window in days for detail logs (default: 7)
+  --reindex-skills         Precompute and build rich semantic vector index for all skills
+  --uninstall              Remove MCP server configurations from all IDE clients
+  --help, -h               Print help message
+```
+
+---
+
+## 📂 Project Structure
+
+```text
+Agent-Guidance-Rust/
+├── src/
+│   ├── main.rs                   # CLI entrypoint, argument parsing, stdio MCP dispatcher
+│   ├── catalog/                  # Built-in and custom skills scanner, indexer, YAML parser
+│   ├── context/                  # Codebase indexing, AST parsing, GraphRAG, 5-phase cascade search
+│   │   ├── graph_rag/            # Hierarchical Leiden community clustering, DRIFT/Local/Global search
+│   │   ├── indexer/              # Tree-sitter AST symbol and reference extraction
+│   │   ├── scanner/              # File walker, gitignore resolution, change detection
+│   │   └── watcher/              # Real-time background filesystem watcher
+│   ├── daemon/                   # Zero-friction singleton daemon, IPC named pipe/socket, client lifecycle
+│   ├── dashboard/                # Embedded tiny_http web server, REST endpoints, SQLite telemetry queries
+│   ├── dashboard_src/            # Frontend SPA (Vanilla JS + CSS, zero runtime npm dependencies)
+│   │   ├── index.html            # Dashboard layout and accessible view containers
+│   │   ├── js/i18n/              # Modular bilingual dictionaries (EN/VI: core, telemetry, graph)
+│   │   └── js/render/            # Canvas graph visualizer, ForceAtlas2 layout engine, symbol inspector
+│   ├── mcp/                      # Model Context Protocol implementation & tool execution handlers
+│   │   ├── tools/                # task_pipeline, select_skills, workflow_gate, project_context, guidance
+│   │   ├── state/                # Multi-session state machine, priority gate, checkpointing
+│   │   └── db/                   # SQLite database operations, automatic cleanup, and vacuuming
+│   ├── ml/                       # Candle BERT neural embeddings, vector similarity, ONNX inference
+│   └── optimizer/                # Universal token compression engine, AST code skeletonizer
+├── skills/                       # Pre-packaged domain skills catalog (270+ skills)
+├── docs/                         # Architectural diagrams, specifications, setup guides
+│   └── images/                   # Dashboard screenshots, hero banners, and flowcharts
+└── scripts/                      # Automated installation and maintenance scripts (PowerShell, Bash)
 ```
 
 ---

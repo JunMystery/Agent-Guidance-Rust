@@ -1,5 +1,6 @@
 // Universal Pagination controller and UI renderer for dashboard tables.
 import { el } from './dom.js';
+import { t } from './i18n/index.js';
 
 const paginationStates = {};
 
@@ -46,14 +47,14 @@ export function renderPagination(containerId, tableId, paged, onPageChange) {
   const startNum = paged.totalItems === 0 ? 0 : paged.startIdx + 1;
 
   container.innerHTML = `
-    <div class="pagination-bar" role="navigation" aria-label="Pagination for ${tableId}">
+    <div class="pagination-bar" role="navigation" aria-label="${t('pagination.nav_aria', { table: tableId })}">
       <div class="pagination-info">
-        Showing <strong>${startNum}</strong>–<strong>${paged.endIdx}</strong> of <strong>${paged.totalItems}</strong> entries
+        ${t('pagination.showing', { start: startNum, end: paged.endIdx, total: paged.totalItems })}
       </div>
       <div class="pagination-controls">
         <div class="pagination-size">
-          <label for="pagesize-${tableId}">Show:</label>
-          <select id="pagesize-${tableId}" class="pagination-select" aria-label="Rows per page">
+          <label for="pagesize-${tableId}">${t('pagination.show')}</label>
+          <select id="pagesize-${tableId}" class="pagination-select" aria-label="${t('pagination.rows_per_page')}">
             <option value="10" ${state.pageSize === 10 ? 'selected' : ''}>10</option>
             <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
             <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
@@ -61,11 +62,11 @@ export function renderPagination(containerId, tableId, paged, onPageChange) {
           </select>
         </div>
         <div class="pagination-nav">
-          <button class="pagination-btn pg-first" title="First Page" ${paged.page <= 1 ? 'disabled' : ''}>⏮</button>
-          <button class="pagination-btn pg-prev" title="Previous Page" ${paged.page <= 1 ? 'disabled' : ''}>◀</button>
-          <span class="pagination-status">Page ${paged.page} of ${paged.totalPages}</span>
-          <button class="pagination-btn pg-next" title="Next Page" ${paged.page >= paged.totalPages ? 'disabled' : ''}>▶</button>
-          <button class="pagination-btn pg-last" title="Last Page" ${paged.page >= paged.totalPages ? 'disabled' : ''}>⏭</button>
+          <button class="pagination-btn pg-first" title="${t('pagination.first_page')}" ${paged.page <= 1 ? 'disabled' : ''}>⏮</button>
+          <button class="pagination-btn pg-prev" title="${t('pagination.prev_page')}" ${paged.page <= 1 ? 'disabled' : ''}>◀</button>
+          <span class="pagination-status">${t('pagination.page_status', { page: paged.page, totalPages: paged.totalPages })}</span>
+          <button class="pagination-btn pg-next" title="${t('pagination.next_page')}" ${paged.page >= paged.totalPages ? 'disabled' : ''}>▶</button>
+          <button class="pagination-btn pg-last" title="${t('pagination.last_page')}" ${paged.page >= paged.totalPages ? 'disabled' : ''}>⏭</button>
         </div>
       </div>
     </div>

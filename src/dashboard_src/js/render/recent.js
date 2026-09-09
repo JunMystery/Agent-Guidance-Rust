@@ -3,6 +3,7 @@ import { fmtTokens, savingsBadge, fmtDurationMs, timeAgo } from '../format.js';
 import { makeSortable, filterRows, bindFilter } from '../interactions.js';
 import { paginate, renderPagination, resetPage } from '../pagination.js';
 import { store } from '../state.js';
+import { t } from '../i18n/index.js';
 
 export function renderRecentCalls(recentActions) {
   store.recent_actions = (recentActions || []).map(r => {
@@ -30,7 +31,7 @@ function drawRecentCalls() {
       const { pct, badgeClass } = savingsBadge(saved, r.tokens_original);
       const duration = fmtDurationMs(r.duration_ms);
       const statusClass = r.error_message ? 'badge red' : 'badge green';
-      const statusText = r.error_message ? 'error' : 'ok';
+      const statusText = r.error_message ? t('status.error') : t('status.ok');
       const statusTitle = r.error_message ? ' title="' + r.error_message.replace(/"/g, '&quot;') + '"' : '';
       const opText = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
       const targetText = r.target
@@ -48,7 +49,7 @@ function drawRecentCalls() {
         '</tr>';
     });
   } else {
-    emptyState('recent-calls-body', 8, 'No matching calls.');
+    emptyState('recent-calls-body', 8, t('recent.empty'));
   }
   renderPagination('recent-calls-pagination', 'recent-calls-body', paged, drawRecentCalls);
 }

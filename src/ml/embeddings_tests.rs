@@ -1,5 +1,4 @@
     use super::*;
-    use crate::catalog::store::SkillSource;
 
     #[test]
     fn test_prefix_formatting() {
@@ -18,28 +17,6 @@
         assert!((cosine_similarity(&v1, &v3) - 0.0).abs() < 1e-5);
     }
 
-    #[test]
-    #[ignore = "Requires pre-cached HuggingFace model files; avoid network I/O in CI"]
-    fn test_hybrid_vector_search_fallback() {
-        let candidates = vec![
-            SkillItem {
-                name: "context-budget".to_string(),
-                relative_path: "context-budget/SKILL.md".to_string(),
-                source: SkillSource::Embedded,
-                content: "Reducing context size and managing token limits.".to_string(),
-            },
-            SkillItem {
-                name: "rust-testing".to_string(),
-                relative_path: "rust-testing/SKILL.md".to_string(),
-                source: SkillSource::Embedded,
-                content: "Rust unit and integration testing.".to_string(),
-            },
-        ];
-
-        let results = hybrid_vector_search("reducing context size", &candidates, 2);
-        assert!(!results.is_empty());
-        assert_eq!(results[0].1.name, "context-budget");
-    }
 
     #[test]
     fn test_device_resolution_and_env_override() {
