@@ -168,7 +168,8 @@ Options:
   --verify-setup      Verify MCP configuration paths in all IDE clients
   --upgrade           Download and install latest release package, update IDE configs
   --self-update       Alias for --upgrade
-  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000
+  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:11997
+  --port <PORT>       Custom dashboard port (default: 11997)
   --uninstall         Remove MCP server configurations from all IDE clients
   --help, -h          Print help message
 ```

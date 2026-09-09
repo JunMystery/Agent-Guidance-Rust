@@ -41,7 +41,6 @@ function drawRecentCalls() {
         '<td><code>' + r.tool_name + '</code></td>' +
         '<td><span class="badge">' + opText + '</span></td>' +
         '<td class="target-cell">' + targetText + '</td>' +
-        '<td>' + duration + '</td>' +
         '<td>' + fmtTokens(r.tokens_original) + '</td>' +
         '<td>' + fmtTokens(r.tokens_optimized) + '</td>' +
         '<td><span class="' + badgeClass + '">' + pct + '%</span></td>' +
@@ -49,7 +48,7 @@ function drawRecentCalls() {
         '</tr>';
     });
   } else {
-    emptyState('recent-calls-body', 9, 'No matching calls.');
+    emptyState('recent-calls-body', 8, 'No matching calls.');
   }
   renderPagination('recent-calls-pagination', 'recent-calls-body', paged, drawRecentCalls);
 }

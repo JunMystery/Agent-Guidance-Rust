@@ -19,7 +19,7 @@ export function renderDashboard(data) {
   const projEl = el('sidebar-proj');
   if (projEl) projEl.title = data.project_path || '';
   setText('sidebar-port', 'port: ' + (data.server_port || '--'));
-  setText('sidebar-port-badge', data.server_port || '3000');
+  setText('sidebar-port-badge', data.server_port || '11997');
   setText('sidebar-version', 'version: v' + (data.version || '--'));
   const projName = data.project_path ? data.project_path.replace(/\\/g, '/').split('/').filter(Boolean).pop() : '--';
   setText('sys-project', projName);

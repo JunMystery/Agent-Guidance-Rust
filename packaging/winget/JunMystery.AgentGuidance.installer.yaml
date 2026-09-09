@@ -12,6 +12,6 @@ Installers:
       - RelativeFilePath: agent-guidance.exe
         PortableCommandAlias: agent-guidance
     InstallerUrl: https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.5.4/agent-guidance-windows-x86_64.zip
-    InstallerSha256: 7d80d4685ed6893d718cdb086616c72afc3652593f71ae076e051885913827d2
+    InstallerSha256: 59f743d38fdec6a7657a896b581382000428c96773e7a3d80135d15fd1e423bb
 ManifestType: installer
 ManifestVersion: 1.6.0

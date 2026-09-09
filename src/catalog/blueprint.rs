@@ -66,7 +66,7 @@ pub fn generate_dynamic_blueprint(proj_path: &Path, task: &str, arch_pattern: &s
                 file, loc, sym
             ));
             blueprint.push_str(&format!(
-                "  ↳ **Decomposition Plan**: Extract handler/service logic into dedicated sub-module files (< 150 LOC each) before adding new code.\n"
+                "  - **Decomposition Plan**: Extract handler/service logic into dedicated sub-module files (< 150 LOC each) before adding new code.\n"
             ));
         }
         blueprint.push_str("\n");

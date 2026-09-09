@@ -120,7 +120,7 @@ pub fn query_usage_stats(db_path: &PathBuf, proj_filter: Option<&str>) -> Result
         "db_status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
         "project_path": proj_filter.unwrap_or("all"),
-        "server_port": 3000,
+        "server_port": crate::dashboard::get_dashboard_port(),
         "totals": past_24h,
         "summaries": summaries,
         "tool_breakdown": tool_breakdown,

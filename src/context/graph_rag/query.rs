@@ -99,7 +99,7 @@ pub fn execute_local_search(
     // 0. AI Agent Domain Summaries & Semantic Knowledge
     if let Ok(summaries) = db.search_domain_summaries_fts(query, 3) {
         if !summaries.is_empty() {
-            let mut summary_block = String::from("### 🧠 AI Agent Domain Summaries\n");
+            let mut summary_block = String::from("### AI Agent Domain Summaries\n");
             for s in summaries {
                 summary_block.push_str(&format!("- **{}** (`{}`): {}\n", s.title, s.module_path, s.summary));
             }
@@ -126,27 +126,27 @@ pub fn execute_local_search(
         }
 
         if !n.callers.is_empty() {
-            block.push_str(&format!("\n#### 🎯 1-Hop Callers ({})\n", n.callers.len()));
+            block.push_str(&format!("\n#### 1-Hop Callers ({})\n", n.callers.len()));
             for c in n.callers.iter().take(8) {
                 block.push_str(&format!("- `{}` in `{}:L{}` [{}, weight: {:.1}]\n", c.name, c.file_path, c.start_line, c.edge_type, c.weight));
             }
         }
 
         if !n.callees.is_empty() {
-            block.push_str(&format!("\n#### ⚡ 1-Hop Dependencies ({})\n", n.callees.len()));
+            block.push_str(&format!("\n#### 1-Hop Dependencies ({})\n", n.callees.len()));
             for c in n.callees.iter().take(8) {
                 block.push_str(&format!("- `{}` in `{}:L{}` [{}, weight: {:.1}]\n", c.name, c.file_path, c.start_line, c.edge_type, c.weight));
             }
         }
 
         if !n.transitive_chains.is_empty() {
-            block.push_str("\n#### 🔗 2-Hop Transitive Dependency Chains:\n");
+            block.push_str("\n#### 2-Hop Transitive Dependency Chains:\n");
             for (s1, s2, s3) in n.transitive_chains.iter().take(4) {
-                block.push_str(&format!("- `{}` ➔ `{}` ➔ `{}`\n", s1, s2, s3));
+                block.push_str(&format!("- `{}` -> `{}` -> `{}`\n", s1, s2, s3));
             }
         }
 
-        block.push_str(&format!("\n#### 🕸️ Subgraph Neighborhood DAG:\n```mermaid\n{}\n```", n.mermaid_dag));
+        block.push_str(&format!("\n#### Subgraph Neighborhood DAG:\n```mermaid\n{}\n```", n.mermaid_dag));
         sections.push(block);
     } else {
         // Fallback: search symbols matching query
@@ -168,7 +168,7 @@ pub fn execute_local_search(
 
     if let Ok(edges) = db.query_semantic_edges_for_symbol(query) {
         if !edges.is_empty() {
-            let mut edge_block = String::from("#### 💡 Semantic Edges (AI Inferred)\n");
+            let mut edge_block = String::from("#### Semantic Edges (AI Inferred)\n");
             for e in edges.iter().take(6) {
                 let desc = e.description.as_deref().unwrap_or("—");
                 edge_block.push_str(&format!("- `{}` --[{}]--> `{}`: {}\n", e.source_symbol, e.relation_type, e.target_symbol, desc));

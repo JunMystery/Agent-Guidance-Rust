@@ -32,7 +32,8 @@ async fn main() -> Result<()> {
         println!("  --verify-setup      Verify MCP configuration paths in all IDE clients");
         println!("  --upgrade           Download and install latest release package, update IDE configs");
         println!("  --self-update       Alias for --upgrade");
-        println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:3000");
+        println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:11997");
+        println!("  --port, --dashboard-port <PORT> Custom dashboard port (default: 11997)");
         println!("  --project <PATH>    Filter dashboard to a specific project path or name");
         println!("  --prune-missing     Prune deleted/moved projects from usage tracking registry");
         println!("  --cleanup           Auto-clean expired logs, prune dead projects, and vacuum DB");
@@ -77,19 +78,19 @@ async fn main() -> Result<()> {
             0
         };
 
-        println!("✓ Auto-Cleanup & Database Vacuum Completed:");
-        println!("  • Tool calls pruned: {}", summary.tool_calls_pruned);
-        println!("  • Skill loads pruned: {}", summary.skill_loads_pruned);
-        println!("  • Queries pruned: {}", summary.embed_queries_pruned + summary.llm_queries_pruned);
-        println!("  • Daily summaries pruned: {}", summary.daily_summaries_pruned);
-        println!("  • Dead projects pruned: {}", summary.dead_projects_pruned);
+        println!("[OK] Auto-Cleanup & Database Vacuum Completed:");
+        println!("  - Tool calls pruned: {}", summary.tool_calls_pruned);
+        println!("  - Skill loads pruned: {}", summary.skill_loads_pruned);
+        println!("  - Queries pruned: {}", summary.embed_queries_pruned + summary.llm_queries_pruned);
+        println!("  - Daily summaries pruned: {}", summary.daily_summaries_pruned);
+        println!("  - Dead projects pruned: {}", summary.dead_projects_pruned);
         if pruned_snaps > 0 {
-            println!("  • Stale project snapshots pruned: {}", pruned_snaps);
+            println!("  - Stale project snapshots pruned: {}", pruned_snaps);
         }
         if summary.lru_tool_calls_pruned > 0 {
-            println!("  • LRU cap pruned: {}", summary.lru_tool_calls_pruned);
+            println!("  - LRU cap pruned: {}", summary.lru_tool_calls_pruned);
         }
-        println!("  • Current DB size on disk: {:.2} MB", db_bytes as f64 / (1024.0 * 1024.0));
+        println!("  - Current DB size on disk: {:.2} MB", db_bytes as f64 / (1024.0 * 1024.0));
         return Ok(());
     }
 
@@ -98,25 +99,32 @@ async fn main() -> Result<()> {
             .map(|h| h.join(".agent-guidance").join("usage.db"))
             .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
         let count = dashboard::projects::prune_missing_projects(&db_path)?;
-        println!("✓ Pruned {} missing/deleted projects from registry.", count);
+        println!("[OK] Pruned {} missing/deleted projects from registry.", count);
         if !args.contains(&"--dashboard".to_string()) {
             return Ok(());
         }
     }
 
-    if args.contains(&"--dashboard".to_string()) {
-        let mut proj_arg = None;
-        let mut idx = 0;
-        while idx < args.len() {
-            if (args[idx] == "--project" || args[idx] == "-p") && idx + 1 < args.len() {
-                proj_arg = Some(args[idx + 1].clone());
-                break;
-            }
-            idx += 1;
-        }
+    let dashboard_port: u16 = args
+        .iter()
+        .position(|a| a == "--dashboard-port" || a == "--port")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|s| s.parse::<u16>().ok())
+        .or_else(|| {
+            std::env::var("AGENT_GUIDANCE_DASHBOARD_PORT")
+                .ok()
+                .and_then(|s| s.parse::<u16>().ok())
+        })
+        .unwrap_or(dashboard::DEFAULT_DASHBOARD_PORT);
 
-        let port = 3000;
-        dashboard::run_dashboard_server(port, proj_arg)?;
+    let proj_arg = args
+        .iter()
+        .position(|a| a == "--project" || a == "-p")
+        .and_then(|i| args.get(i + 1))
+        .cloned();
+
+    if args.contains(&"--dashboard".to_string()) {
+        dashboard::run_dashboard_server(dashboard_port, proj_arg)?;
         return Ok(());
     }
 
@@ -178,8 +186,8 @@ async fn main() -> Result<()> {
         generate_precomputed_cache()?;
         let elapsed = start.elapsed();
         println!();
-        println!("✓ Semantic skill indexing complete in {:.2?}", elapsed);
-        println!("✓ Vector database & manifest saved to ~/.agent-guidance/");
+        println!("[OK] Semantic skill indexing complete in {:.2?}", elapsed);
+        println!("[OK] Vector database and manifest saved to ~/.agent-guidance/");
         return Ok(());
     }
 
@@ -214,7 +222,7 @@ async fn main() -> Result<()> {
     );
 
     if args.contains(&"--daemon".to_string()) || args.contains(&"--force-daemon".to_string()) {
-        daemon::daemon_main().await;
+        daemon::daemon_main(dashboard_port, proj_arg).await;
         return Ok(());
     }
     if args.contains(&"--proxy".to_string()) || args.contains(&"--force-client".to_string()) {
@@ -233,6 +241,6 @@ async fn main() -> Result<()> {
 
     // 2. No daemon running -> automatically become the Singleton Shared Daemon Master
     // (serves launching IDE's stdio + opens Named Pipe / Unix Socket for other IDEs)
-    daemon::daemon_main().await;
+    daemon::daemon_main(dashboard_port, proj_arg).await;
     Ok(())
 }

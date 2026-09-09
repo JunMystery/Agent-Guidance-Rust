@@ -75,11 +75,13 @@ IDE 1 (Master)  → stdin/stdout ───┐
 IDE 2 (Proxy)   → IPC Channel ──► agent-guidance (MASTER DAEMON)
                                   ├─ Stdio Server Loop
 IDE 3 (Proxy)   → IPC Channel ──► ├─ IPC Server Listener (Named Pipe / Unix Socket)
+                                  ├─ Embedded Web Dashboard (http://127.0.0.1:11997)
                                   ├─ Global Tool Semaphore (4 permits)
                                   └─ ML ThreadPool Queue (2 worker threads)
 ```
 
 - **Master Daemon**: First IDE session runs the full daemon process, holding models in memory and serving both its direct stdio connection and incoming IPC proxy clients.
+- **Embedded Web Dashboard**: Automatically spawned in the background on port `11997` (customizable via `--port`, `--dashboard-port`, or `AGENT_GUIDANCE_DASHBOARD_PORT`), always reachable whenever any agent session is active.
 - **Thin Proxy**: Subsequent IDE sessions detect the active daemon and act as lightweight stdio-to-IPC bridges (< 5MB RAM, ~0.1ms connect time).
 - **Fast-Fail Bypass**: On Windows, checks for `ERROR_FILE_NOT_FOUND (2)` bypass proxy waits instantly (< 0.1ms) when no daemon is active.
 - **Fail-Safe Fallback**: If an IPC lock is held but connections fail, processes automatically fall back to independent direct stdio handling.

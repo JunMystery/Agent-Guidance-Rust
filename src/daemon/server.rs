@@ -47,7 +47,7 @@ fn release_daemon_lock() {
 }
 
 #[cfg(unix)]
-pub async fn daemon_main() {
+pub async fn daemon_main(port: u16, project_path: Option<String>) {
     // Atomic lock to prevent dual-daemon race
     let _lock = match acquire_daemon_lock() {
         Some(l) => l,
@@ -95,6 +95,8 @@ pub async fn daemon_main() {
             info!("Background VRAM model & skill matrix residency warmup completed.");
         }
     });
+
+    crate::dashboard::spawn_dashboard_background(port, project_path);
 
     let socket_connections = Arc::new(AtomicUsize::new(0));
     let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -165,7 +167,7 @@ pub async fn daemon_main() {
 }
 
 #[cfg(windows)]
-pub async fn daemon_main() {
+pub async fn daemon_main(port: u16, project_path: Option<String>) {
     let _lock = match acquire_daemon_lock() {
         Some(l) => l,
         None => {
@@ -197,6 +199,8 @@ pub async fn daemon_main() {
             info!("Background VRAM model & skill matrix residency warmup completed.");
         }
     });
+
+    crate::dashboard::spawn_dashboard_background(port, project_path);
 
     let pipe_connections = Arc::new(AtomicUsize::new(0));
     let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));

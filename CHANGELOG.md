@@ -9,6 +9,7 @@ All notable changes to Agent Guidance Rust MCP Server will be documented in this
 - **Background Auto-Warmup**: Added background auto-warmup thread spawned on stdio MCP connection without blocking handshake; responses serve in < 2ms via Fast-Path, seamlessly upgrading to Candle BERT vector cosine similarity and Cross-Encoder neural reranking once models are in memory across all IDEs.
 - **Robust Precomputed Cache & GraphRAG Auto-Sync**: Eliminated multi-minute CPU embedding stalls by leveraging precomputed skill vectors when count matches, and auto-triggered code graph indexing on Turn 1 pipeline activation.
 - **Global Concurrency & Resource Queue**: Global semaphore limiting concurrent tool execution to 4 permits and Rayon ThreadPool limiting ML vector search & neural reranking to 2 worker threads, preventing CPU/GPU starvation.
+- **Always-On Embedded Dashboard**: Master daemon automatically launches the embedded HTTP analytics dashboard in the background on default port 11997 (customizable via CLI `--port` / `--dashboard-port` or `AGENT_GUIDANCE_DASHBOARD_PORT`), accessible anytime an instance is running.
 
 ## [1.5.3] - 2026-09-09
 

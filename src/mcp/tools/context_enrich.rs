@@ -69,7 +69,7 @@ pub(crate) fn handle_enrich_graph(arguments: &Value, proj_path: &Path) -> String
     }
 
     format!(
-        "# GraphRAG Semantic Enrichment ✓\n\n- Semantic Edges Added/Updated: {}\n- Domain Summaries Added/Updated: {}\n- Enriched By: `{}`\n- Persistence: Saved in `.agent-context/code_graph.db`",
+        "# GraphRAG Semantic Enrichment [OK]\n\n- Semantic Edges Added/Updated: {}\n- Domain Summaries Added/Updated: {}\n- Enriched By: `{}`\n- Persistence: Saved in `.agent-context/code_graph.db`",
         edges_added, summaries_added, agent_id
     )
 }

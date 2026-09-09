@@ -1,9 +1,11 @@
 use anyhow::Result;
 use rust_embed::Embed;
 use serde_json::json;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, mpsc::sync_channel};
 use std::time::{Duration, Instant};
 use tiny_http::{Header, Response, Server, StatusCode};
+use tracing::info;
 
 pub mod graph;
 pub mod projects;
@@ -14,6 +16,24 @@ use stats::handle_api_stats;
 #[derive(Embed)]
 #[folder = "src/dashboard_src/"]
 pub struct DashboardAssets;
+
+pub const DEFAULT_DASHBOARD_PORT: u16 = 11997;
+pub(crate) static DASHBOARD_PORT: AtomicU16 = AtomicU16::new(DEFAULT_DASHBOARD_PORT);
+
+pub fn get_dashboard_port() -> u16 {
+    DASHBOARD_PORT.load(Ordering::Relaxed)
+}
+
+pub fn spawn_dashboard_background(port: u16, project_path: Option<String>) {
+    DASHBOARD_PORT.store(port, Ordering::SeqCst);
+    let _ = std::thread::Builder::new()
+        .name("dashboard-background".to_string())
+        .spawn(move || {
+            if let Err(e) = run_dashboard_server(port, project_path) {
+                tracing::warn!("Dashboard background server could not bind or stopped on port {}: {}", port, e);
+            }
+        });
+}
 
 pub(crate) const STATS_CACHE_TTL: Duration = Duration::from_secs(2);
 const DASHBOARD_WORKERS: usize = 4;
@@ -27,6 +47,7 @@ pub(crate) struct StatsCache {
 }
 
 pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<()> {
+    DASHBOARD_PORT.store(port, Ordering::SeqCst);
     let proj_dir = project_path.unwrap_or_else(|| {
         std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())
@@ -36,15 +57,15 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
     let addr = format!("127.0.0.1:{}", port);
     let server = Server::http(&addr)
         .map_err(|e| anyhow::anyhow!("Failed to bind server to {}: {}", addr, e))?;
-    println!("✓ Usage Dashboard server listening on http://{}", addr);
+    info!("Usage Dashboard server listening on http://{}", addr);
     if proj_dir != "." && proj_dir != "all" {
         if std::path::Path::new(&proj_dir).exists() {
-            println!("  ↳ Focused on project: {}", proj_dir);
+            info!("Focused on project: {}", proj_dir);
         } else {
-            println!("  ↳ ⚠️ Project '{}' not found on disk. Displaying archived historical analytics.", proj_dir);
+            info!("Project '{}' not found on disk. Displaying archived historical analytics.", proj_dir);
         }
     } else {
-        println!("  ↳ Viewing all tracked projects. Use project dropdown in UI to filter.");
+        info!("Viewing all tracked projects. Use project dropdown in UI to filter.");
     }
     let _ = projects::prune_missing_projects(&crate::mcp::db::get_db_path());
     let stats_cache = Arc::new(Mutex::new(StatsCache::default()));
@@ -92,7 +113,7 @@ fn handle_dashboard_request(
         "/" | "/index.html" => serve_asset(request, "index.html", "text/html; charset=utf-8"),
         "/dashboard.css" => serve_asset(request, "dashboard.css", "text/css; charset=utf-8"),
         "/favicon.ico" => {
-            let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚡</text></svg>"#;
+            let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="#3b82f6"/><text x="50" y="65" font-size="45" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">AG</text></svg>"##;
             let header = Header::from_bytes(&b"Content-Type"[..], &b"image/svg+xml"[..]).unwrap();
             let _ = request.respond(Response::from_string(svg).with_header(header));
         }
@@ -164,7 +185,7 @@ fn json_response(request: tiny_http::Request, status_code: u16, data: &serde_jso
         .find(|h| h.field.equiv("Origin"))
         .map(|h| h.value.as_str())
         .filter(|o| o.starts_with("http://127.0.0.1") || o.starts_with("http://localhost"))
-        .unwrap_or("http://127.0.0.1:3000");
+        .unwrap_or("http://127.0.0.1:11997");
     let header_cors = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], origin_str.as_bytes()).unwrap();
     let response = Response::from_string(body)
         .with_header(header_ct)
@@ -204,6 +225,25 @@ fn handle_api_cleanup(request: tiny_http::Request) {
             );
         }
         Err(e) => json_response(request, 500, &json!({"error": e.to_string()})),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_dashboard_port_is_11997() {
+        assert_eq!(DEFAULT_DASHBOARD_PORT, 11997);
+        assert_eq!(get_dashboard_port(), 11997);
+    }
+
+    #[test]
+    fn test_custom_dashboard_port_mutation() {
+        DASHBOARD_PORT.store(12345, Ordering::SeqCst);
+        assert_eq!(get_dashboard_port(), 12345);
+        DASHBOARD_PORT.store(DEFAULT_DASHBOARD_PORT, Ordering::SeqCst);
+        assert_eq!(get_dashboard_port(), 11997);
     }
 }
 

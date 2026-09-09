@@ -45,7 +45,7 @@ pub fn download_models() -> anyhow::Result<()> {
     let _ = ce.get("tokenizer.json");
     let _ = ce.get("model.safetensors");
 
-    println!("  ✓ ML models cached at ~/.cache/huggingface/hub/");
+    println!("  [OK] ML models cached at ~/.cache/huggingface/hub/");
     Ok(())
 }
 

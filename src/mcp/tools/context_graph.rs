@@ -194,7 +194,7 @@ pub(crate) fn handle_blast_radius(proj_path: &Path, query: &str) -> String {
     let risk_level = if risk_score > 6.0 { "HIGH" } else if risk_score > 3.0 { "MEDIUM" } else { "LOW" };
 
     format!(
-        "# Blast Radius Impact Analysis for '{}'\n\n- **Risk Level**: {} (Score: {:.1}/10)\n- **Direct Callers (Upstream Impact)**: {}\n- **Dependencies (Downstream Impact)**: {}\n\n### 🎯 Dependency DAG (Mermaid):\n```mermaid\n{}\n```",
+        "# Blast Radius Impact Analysis for '{}'\n\n- **Risk Level**: {} (Score: {:.1}/10)\n- **Direct Callers (Upstream Impact)**: {}\n- **Dependencies (Downstream Impact)**: {}\n\n### Dependency DAG (Mermaid):\n```mermaid\n{}\n```",
         query.trim(),
         risk_level,
         risk_score,
