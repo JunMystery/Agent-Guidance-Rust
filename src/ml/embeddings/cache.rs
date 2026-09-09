@@ -94,6 +94,7 @@ pub fn warmup_cache() {
             "Loaded precomputed passage cache ({} skills).",
             candidates.len()
         );
+        eager_load_embedding_model();
         return;
     }
 
@@ -105,6 +106,7 @@ pub fn warmup_cache() {
             "Loaded passage cache from disk ({} skills).",
             candidates.len()
         );
+        eager_load_embedding_model();
         return;
     }
 
@@ -139,6 +141,31 @@ pub fn warmup_cache() {
 
     // 4. Preload models so first user query doesn't pay OnceLock init
     eager_load_embedding_model();
+}
+
+static AUTO_WARMUP_TRIGGERED: OnceLock<AtomicBool> = OnceLock::new();
+
+pub fn spawn_background_auto_warmup() {
+    let triggered = AUTO_WARMUP_TRIGGERED.get_or_init(|| AtomicBool::new(false));
+    if triggered.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    if std::env::var("AGENT_GUIDANCE_DISABLE_ML")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
+        info!("[ML Engine] Auto-ML warmup bypassed via AGENT_GUIDANCE_DISABLE_ML");
+        return;
+    }
+
+    let _ = std::thread::Builder::new()
+        .name("ag-ml-warmup".to_string())
+        .spawn(|| {
+            info!("[ML Engine] Background auto-warmup thread running...");
+            warmup_cache();
+            info!("[ML Engine] Background auto-warmup thread finished. Models active.");
+        });
 }
 
 pub fn eager_load_embedding_model() {

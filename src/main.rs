@@ -225,7 +225,14 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Direct, instant, zero-overhead stdio MCP server for all IDEs
-    daemon::handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+    // Auto-Negotiation for Zero-Friction Singleton Shared Daemon Architecture:
+    // 1. Transparently proxy to an existing shared daemon instance if active
+    if daemon::try_proxy_mode().await {
+        return Ok(());
+    }
+
+    // 2. No daemon running -> automatically become the Singleton Shared Daemon Master
+    // (serves launching IDE's stdio + opens Named Pipe / Unix Socket for other IDEs)
+    daemon::daemon_main().await;
     Ok(())
 }

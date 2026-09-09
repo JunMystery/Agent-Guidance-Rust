@@ -46,29 +46,58 @@ src/
 
 ## Transport Architecture
 
-### Daemon / Proxy Auto-Detection
+## Transport Architecture
 
-On every launch, `agent-guidance` auto-detects its role:
+### Cross-Platform Singleton Shared Daemon & Fast Thin Proxy
+
+On launch from any IDE/CLI (VS Code, Cursor, Claude Code, Codex, Antigravity), `agent-guidance` auto-negotiates its runtime role:
 
 ```
 agent-guidance (start)
-  ├─ Unix socket ~/.cache/agent-guidance/mcp.sock EXISTS?
-  │   └─ YES → PROXY mode: connect socket, forward stdin↔socket↔stdout, exit
-  └─ NO → DAEMON mode: bind socket, load models, accept connections
+  ├─ IPC channel active?
+  │   ├─ Windows: Named Pipe `\\.\pipe\agent-guidance-mcp`
+  │   └─ Unix: Domain Socket `~/.cache/agent-guidance/mcp.sock`
+  │   │
+  │   └─ YES → PROXY mode (< 5MB RAM):
+  │            Connect IPC channel, forward stdin↔IPC↔stdout, exit on EOF
+  │
+  └─ NO → DAEMON mode (Singleton Master):
+           Acquire exclusive file lock, bind IPC listener,
+           serve initial IDE via stdio, accept subsequent IDE connections,
+           spawn background auto-warmup for ML models
 ```
 
-### Daemon Mode
+### Shared Singleton Topology
 
 ```
-IDE 1 → stdin/stdout → agent-guidance (DAEMON)
-                            │
-                       Unix socket ←→ agent-guidance (PROXY) ← stdin/stdout → IDE 2
-                                        agent-guidance (PROXY) ← stdin/stdout → IDE 3
+IDE 1 (Master)  → stdin/stdout ───┐
+                                  ▼
+IDE 2 (Proxy)   → IPC Channel ──► agent-guidance (MASTER DAEMON)
+                                  ├─ Stdio Server Loop
+IDE 3 (Proxy)   → IPC Channel ──► ├─ IPC Server Listener (Named Pipe / Unix Socket)
+                                  ├─ Global Tool Semaphore (4 permits)
+                                  └─ ML ThreadPool Queue (2 worker threads)
 ```
 
-- **First process** becomes daemon, binds Unix socket, loads models, handles its own stdio
-- **Subsequent processes** detect existing socket → connect as proxy (stdio↔socket bridge)
-- **Socket path**: `~/.cache/agent-guidance/mcp.sock` (XDG-compliant via `dirs::cache_dir()`)
+- **Master Daemon**: First IDE session runs the full daemon process, holding models in memory and serving both its direct stdio connection and incoming IPC proxy clients.
+- **Thin Proxy**: Subsequent IDE sessions detect the active daemon and act as lightweight stdio-to-IPC bridges (< 5MB RAM, ~0.1ms connect time).
+- **Fast-Fail Bypass**: On Windows, checks for `ERROR_FILE_NOT_FOUND (2)` bypass proxy waits instantly (< 0.1ms) when no daemon is active.
+- **Fail-Safe Fallback**: If an IPC lock is held but connections fail, processes automatically fall back to independent direct stdio handling.
+
+### Global Concurrency & Resource Queues
+
+To prevent CPU/GPU starvation and thread thrashing across multiple connected IDEs:
+
+```
+                     Incoming Tool / ML Requests
+                                │
+        ┌───────────────────────┴───────────────────────┐
+        ▼                                               ▼
+Global Tool Semaphore                          ML Queue (Rayon ThreadPool)
+  - 4 concurrent execution permits               - 2 dedicated worker threads
+  - Throttles heavy file/graph AST scans         - Serializes Candle BERT embeddings
+  - Prevents SQLite lock contention              - Serializes Cross-Encoder reranking
+```
 
 ### Connection Tracking & Idle Shutdown
 
@@ -96,29 +125,33 @@ IDE 1 → stdin/stdout → agent-guidance (DAEMON)
 | Connection closed | `-= 1` | Check if 0 |
 | ref_count reaches 0 | — | Start 30s countdown (checks every 1s) |
 | New connection during countdown | `+= 1` | Cancel countdown |
-| 30s elapsed, still 0 | — | Delete socket, exit process |
+| 30s elapsed, still 0 | — | Delete socket / close pipe, exit process |
 
 ---
 
 ## Model Architecture
 
-### Background Model Warmup
+### Zero-Friction Background Auto-Warmup
 
-The daemon accepts connections immediately and warms both models in a bounded blocking worker:
+The daemon accepts connections immediately without blocking handshake (< 2ms response time via Fast-Path):
 
 ```
-daemon start
-  ├─ warmup_cache()
-  │   ├─ cached_model() → BERT OnceLock init (~0.6s disk load)
-  │   └─ embed all catalog skills as passage vectors (cache miss only)
-  └─ cached_cross_encoder() → CrossEncoder OnceLock init (~0.07s)
+daemon start / connection opened
+  └─ spawn_background_auto_warmup() (detached thread)
+      ├─ load_precomputed_cache() → instant 440-vector load (0.1ms if count matches)
+      ├─ cached_model() → Candle BERT OnceLock init (~0.5s disk load)
+      └─ cached_cross_encoder() → CrossEncoder OnceLock init (~0.07s)
 ```
+
+- **Non-blocking Handshake**: Immediate tool availability; requests initially use fast heuristic paths.
+- **Seamless Upgrade**: As soon as OnceLock initialization completes, subsequent queries automatically leverage BERT vector cosine similarity and Cross-Encoder neural reranking.
+- **Turn-1 GraphRAG Indexing**: `task_pipeline` automatically invokes `ensure_indexed()` on Turn 1 to sync workspace AST symbols and code chunks into SQLite without manual intervention.
 
 | Component | Model | Size | Init Time |
 |---|---|---|---|
-| Embedding | `intfloat/multilingual-e5-small` (384-dim) | 118MB | ~560ms |
-| Cross-encoder | `cross-encoder/ms-marco-MiniLM-L-6-v2` | 80MB | ~70ms |
-| Passage cache | — | 384-dimension f32 vectors, sized by catalog | cache-miss dependent |
+| Embedding | `intfloat/multilingual-e5-small` (384-dim) | 118MB | ~560ms (background) |
+| Cross-encoder | `cross-encoder/ms-marco-MiniLM-L-6-v2` | 80MB | ~70ms (background) |
+| Precomputed Cache | 440 skill passage vectors | — | ~0.1ms (instant) |
 
 ### Cached Passage Embeddings (`PASSAGE_CACHE`)
 

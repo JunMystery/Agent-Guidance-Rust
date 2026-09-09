@@ -2,6 +2,14 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.4] - 2026-09-09
+
+### Singleton Shared MCP Daemon & Fast Thin Proxy
+- **Auto-Negotiated Singleton Shared Daemon**: The first IDE/CLI automatically becomes the master daemon serving stdio and listening on Named Pipe / Unix Socket; subsequent IDE/CLI instances transparently launch as Thin Proxies (< 5MB RAM) with fast Win32 `ERROR_FILE_NOT_FOUND` bypass (< 0.1ms).
+- **Background Auto-Warmup**: Added background auto-warmup thread spawned on stdio MCP connection without blocking handshake; responses serve in < 2ms via Fast-Path, seamlessly upgrading to Candle BERT vector cosine similarity and Cross-Encoder neural reranking once models are in memory across all IDEs.
+- **Robust Precomputed Cache & GraphRAG Auto-Sync**: Eliminated multi-minute CPU embedding stalls by leveraging precomputed skill vectors when count matches, and auto-triggered code graph indexing on Turn 1 pipeline activation.
+- **Global Concurrency & Resource Queue**: Global semaphore limiting concurrent tool execution to 4 permits and Rayon ThreadPool limiting ML vector search & neural reranking to 2 worker threads, preventing CPU/GPU starvation.
+
 ## [1.5.3] - 2026-09-09
 
 ### Automated Snapshot Retention & Cleanup

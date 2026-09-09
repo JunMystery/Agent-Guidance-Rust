@@ -59,8 +59,9 @@ pub async fn daemon_main() {
                     return;
                 }
             }
-            error!("Daemon lock held and could not proxy. Exiting.");
-            std::process::exit(1);
+            tracing::warn!("Daemon lock held and could not proxy. Falling back to direct stdio server.");
+            handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+            return;
         }
     };
 
@@ -175,8 +176,9 @@ pub async fn daemon_main() {
                     return;
                 }
             }
-            error!("Daemon lock held and could not proxy. Exiting.");
-            std::process::exit(1);
+            tracing::warn!("Daemon lock held and could not proxy. Falling back to direct stdio server.");
+            handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+            return;
         }
     };
 

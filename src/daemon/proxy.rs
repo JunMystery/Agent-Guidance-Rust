@@ -53,7 +53,12 @@ pub async fn try_proxy_mode() -> bool {
                 proxy_stream(rx, tx).await;
                 return true;
             }
-            Err(_) => {
+            Err(e) => {
+                // If named pipe does not exist (Win32 ERROR_FILE_NOT_FOUND = 2), daemon is not running.
+                // Exit immediately on attempt 0 so initial master starts without delay.
+                if e.raw_os_error() == Some(2) {
+                    return false;
+                }
                 tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
             }
         }

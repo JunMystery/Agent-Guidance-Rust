@@ -138,3 +138,17 @@
         assert!((scores[1] - 1.0).abs() < 1e-5);
         assert!((scores[2] - (-1.0)).abs() < 1e-5);
     }
+
+    #[test]
+    fn test_spawn_background_auto_warmup_activates_models() {
+        spawn_background_auto_warmup();
+        for _ in 0..100 {
+            if is_warmup_complete() && try_cached_model().is_some() && crate::ml::cross_encoder::try_cached_cross_encoder().is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(is_warmup_complete());
+        assert!(try_cached_model().is_some(), "EmbeddingModel must be active after warmup");
+        assert!(crate::ml::cross_encoder::try_cached_cross_encoder().is_some(), "CrossEncoder must be active after warmup");
+    }

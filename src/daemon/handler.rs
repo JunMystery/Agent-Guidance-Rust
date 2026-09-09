@@ -24,6 +24,9 @@ where
     let client_name = std::env::var("AGENT_CLIENT_NAME").ok();
     let state = Arc::new(Mutex::new(ServerState::with_client_name(client_name)));
 
+    // Eagerly warm up ML models in background without blocking initial handshake
+    crate::ml::embeddings::spawn_background_auto_warmup();
+
     const MAX_LINE_BYTES: usize = 10 * 1024 * 1024;
     const REQUEST_TIMEOUT_SECS: u64 = 60;
 

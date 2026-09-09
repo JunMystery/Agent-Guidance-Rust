@@ -5,6 +5,7 @@ pub mod device;
 pub mod gpu;
 pub mod model;
 pub mod precomputed;
+pub mod precomputed_gen;
 pub mod providers;
 pub mod quantized;
 pub mod search;
@@ -19,7 +20,7 @@ pub use providers::{ExecutionProvider, detect_optimal_provider};
 pub use quantized::OnnxQuantizedModel;
 pub use cache::{
     cached_model, clear_passage_cache, embed_skills_cache, is_warmup_complete,
-    mark_warmup_complete, try_cached_model, warmup_cache,
+    mark_warmup_complete, spawn_background_auto_warmup, try_cached_model, warmup_cache,
 };
 pub use precomputed::{
     catalog_fingerprint, generate_precomputed_cache, load_passage_cache, save_passage_cache,

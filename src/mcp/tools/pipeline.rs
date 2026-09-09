@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::context::cache::project_snapshot;
 use crate::mcp::state::ServerState;
-use super::{detect_project_architecture, detect_project_path, ensure_not_cancelled};
+use super::{detect_project_architecture, detect_project_path, ensure_indexed, ensure_not_cancelled};
 
 pub(crate) fn handle(
     arguments: Value,
@@ -81,6 +81,7 @@ pub(crate) fn handle(
         project_snapshot(&proj_path).files.len()
     };
     ensure_not_cancelled(state)?;
+    let _ = ensure_indexed(&proj_path);
 
     let detected_arch = detect_project_architecture(&proj_path);
     state.active_architecture_pattern = Some(detected_arch.clone());
