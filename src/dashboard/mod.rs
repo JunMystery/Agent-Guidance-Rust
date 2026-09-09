@@ -8,6 +8,7 @@ use tiny_http::{Header, Response, Server, StatusCode};
 use tracing::info;
 
 pub mod graph;
+pub mod logs_api;
 pub mod projects;
 pub mod stats;
 pub mod stats_query;
@@ -67,6 +68,7 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
     } else {
         info!("Viewing all tracked projects. Use project dropdown in UI to filter.");
     }
+    let _ = crate::mcp::db::init_db();
     let _ = projects::prune_missing_projects(&crate::mcp::db::get_db_path());
     let stats_cache = Arc::new(Mutex::new(StatsCache::default()));
 
@@ -132,6 +134,7 @@ fn handle_dashboard_request(
         }
         "/api/graph" => graph::handle_api_graph(request, project_path),
         "/api/cleanup" => handle_api_cleanup(request),
+        "/api/logs" | "/api/logs/clear" => logs_api::handle_api_logs(request),
         "/health" => {
             let db_bytes = crate::mcp::db::get_db_size_bytes();
             let json_data = json!({

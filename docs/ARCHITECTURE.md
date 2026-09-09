@@ -305,6 +305,21 @@ The dashboard server (`src/dashboard.rs`) aggregates metrics dynamically across 
 - **`last_30d`**: Aggregated sum from `daily_summaries` (`WHERE day >= cutoff_30d`).
 - **`lifetime`**: Permanent sum of all records in `daily_summaries`.
 
+### MCP Crash & Diagnostic Logging Subsystem (`mcp_logger.rs`)
+To ensure total runtime observability and instant root-cause identification:
+- **Panic Hook Interception**: Global `std::panic::set_hook` intercepts panics, capturing exact source locations `[file:line:column]`, payload strings, and complete unmasked backtraces via `std::backtrace::Backtrace::force_capture()`.
+- **Double-Write Resilience**:
+  1. High-speed indexed persistence in the `mcp_logs` SQLite table.
+  2. Unbuffered hardware sync (`sync_all()`) to emergency fallback file `~/.agent-guidance/logs/crash.log` (rotating cap: 5 files x 2 MB).
+- **Multi-Tier Retention Policy**:
+  - `CRASH`: **30 days** retention (critical post-mortem).
+  - `ERROR`: **14 days** retention (tool timeouts, IO failures).
+  - `WARN`: **7 days** retention (token/file boundaries, STDIO disconnects).
+  - `INFO`: **3 days** retention (debug diagnostics).
+  - Hard rolling quota of **10,000 entries** managed via FIFO cleanup.
+- **Web Dashboard Diagnostics View (`#logs`)**:
+  - Dedicated `⚠️ Diagnostics` view exposing live KPI status cards, level filters, real-time message/stacktrace search, and an expandable drawer to inspect complete runtime stack traces.
+
 ---
 
 ## Deployment

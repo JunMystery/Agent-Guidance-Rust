@@ -1,5 +1,6 @@
 import { el } from '../dom.js';
 import { initGraphCanvas } from './graphCanvas.js';
+import { computeHubThreshold } from './graphLabels.js';
 
 let activeCanvasInstance = null;
 
@@ -44,7 +45,10 @@ export function renderGraphView(data) {
     n.inDeg = inDegree.get(n.id) || 0;
     n.outDeg = outDegree.get(n.id) || 0;
     n.deg = n.inDeg + n.outDeg;
-    n.isHub = n.deg >= 3;
+  });
+  const hubThreshold = computeHubThreshold(nodes);
+  nodes.forEach(n => {
+    n.isHub = n.deg >= hubThreshold;
   });
 
   container.innerHTML = `

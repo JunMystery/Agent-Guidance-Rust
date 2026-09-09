@@ -18,6 +18,7 @@ pub struct CleanupSummary {
     pub dead_projects_pruned: usize,
     pub lru_tool_calls_pruned: usize,
     pub vacuum_executed: bool,
+    pub mcp_logs_pruned: usize,
 }
 
 pub fn run_auto_cleanup(conn: &Connection, retention_days: i64) -> Result<CleanupSummary> {
@@ -91,13 +92,22 @@ pub fn run_auto_cleanup(conn: &Connection, retention_days: i64) -> Result<Cleanu
         )?;
     }
 
-    // 5. Disk space reclamation
-    let vacuum_executed = conn
-        .execute_batch(
-            "PRAGMA incremental_vacuum;
-             PRAGMA wal_checkpoint(TRUNCATE);",
-        )
-        .is_ok();
+    // 5. Prune MCP Diagnostic Logs (Crash 30d, Error 14d, Warn 7d, Info 3d)
+    let crash_cutoff = now - retention_days.max(30) * 86400;
+    let error_cutoff = now - retention_days.max(14) * 86400;
+    let warn_cutoff = now - retention_days.min(7) * 86400;
+    let info_cutoff = now - retention_days.min(3) * 86400;
+    let mcp_logs_pruned = conn.execute(
+        "DELETE FROM mcp_logs WHERE
+         (level = 'CRASH' AND timestamp < ?1) OR
+         (level = 'ERROR' AND timestamp < ?2) OR
+         (level = 'WARN' AND timestamp < ?3) OR
+         (level = 'INFO' AND timestamp < ?4)",
+        params![crash_cutoff, error_cutoff, warn_cutoff, info_cutoff],
+    ).unwrap_or(0);
+
+    // 6. Vacuum database
+    let vacuum_executed = conn.execute_batch("VACUUM;").is_ok();
 
     Ok(CleanupSummary {
         tool_calls_pruned,
@@ -108,6 +118,7 @@ pub fn run_auto_cleanup(conn: &Connection, retention_days: i64) -> Result<Cleanu
         dead_projects_pruned,
         lru_tool_calls_pruned,
         vacuum_executed,
+        mcp_logs_pruned,
     })
 }
 

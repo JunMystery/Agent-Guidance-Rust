@@ -95,10 +95,21 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
             total_calls INTEGER DEFAULT 0,
             total_tokens_saved INTEGER DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS mcp_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp INTEGER NOT NULL,
+            level TEXT NOT NULL,
+            source TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details TEXT,
+            project_path TEXT
+        );
         CREATE INDEX IF NOT EXISTS idx_tool_calls_started ON tool_calls(started_at);
         CREATE INDEX IF NOT EXISTS idx_skill_loads_loaded ON skill_loads(loaded_at);
         CREATE INDEX IF NOT EXISTS idx_embed_queries_created ON embed_queries(queried_at);
         CREATE INDEX IF NOT EXISTS idx_tracked_projects_active ON tracked_projects(last_active);
+        CREATE INDEX IF NOT EXISTS idx_mcp_logs_level_time ON mcp_logs(level, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_mcp_logs_time ON mcp_logs(timestamp DESC);
         DELETE FROM tool_calls WHERE tool_name = 'mcp_tool';",
     )?;
 

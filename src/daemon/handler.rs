@@ -33,9 +33,25 @@ where
     loop {
         let line = match reader.next_line().await {
             Ok(Some(l)) => l,
-            Ok(None) => break,
+            Ok(None) => {
+                crate::mcp::mcp_logger::log_mcp(
+                    crate::mcp::mcp_logger::LogLevel::Warn,
+                    "mcp_stdio",
+                    "Client disconnected (EOF on stdio stream). Session terminated cleanly.",
+                    None,
+                    None,
+                );
+                break;
+            }
             Err(e) => {
                 error!("MCP read error: {}", e);
+                crate::mcp::mcp_logger::log_mcp(
+                    crate::mcp::mcp_logger::LogLevel::Error,
+                    "mcp_stdio",
+                    &format!("MCP stream read error: {}", e),
+                    None,
+                    None,
+                );
                 break;
             }
         };

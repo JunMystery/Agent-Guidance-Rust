@@ -117,3 +117,22 @@ export async function refreshEmbedStatus() {
     if (btn) { btn.disabled = false; btn.textContent = 'Refresh Model Status'; }
   }
 }
+
+export async function fetchLogs({ level = 'all', search = '', limit = 50, offset = 0 } = {}) {
+  const query = new URLSearchParams();
+  if (level && level !== 'all') query.set('level', level);
+  if (search && search.trim()) query.set('search', search.trim());
+  if (limit) query.set('limit', limit);
+  if (offset) query.set('offset', offset);
+
+  const res = await fetch('/api/logs?' + query.toString());
+  if (!res.ok) throw new Error('Failed to fetch logs: ' + res.statusText);
+  return res.json();
+}
+
+export async function clearLogs(level = 'all') {
+  const query = level && level !== 'all' ? `?level=${encodeURIComponent(level)}` : '';
+  const res = await fetch('/api/logs/clear' + query, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to clear logs: ' + res.statusText);
+  return res.json();
+}

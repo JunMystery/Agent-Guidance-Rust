@@ -21,6 +21,7 @@ use daemon::handle_mcp_lines;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    crate::mcp::mcp_logger::init_mcp_logger();
     // Handle flags that don't need logging
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--version".to_string()) || args.contains(&"-v".to_string()) {

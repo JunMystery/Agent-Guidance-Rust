@@ -2,6 +2,7 @@ pub mod config;
 pub mod db;
 pub mod impact;
 pub mod learnings;
+pub mod mcp_logger;
 pub mod protocol;
 pub mod router;
 pub mod snapshots;

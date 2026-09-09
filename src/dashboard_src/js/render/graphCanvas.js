@@ -1,5 +1,6 @@
 // Force-directed Canvas Architecture Graph Renderer with Community Auras & Linker Pulses
 import { partitionAndLayoutGraph } from './graphLayout.js';
+import { drawNodeLabels } from './graphLabels.js';
 
 export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, onZoom) {
   const canvas = document.getElementById(canvasId);
@@ -51,7 +52,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
     const gh = Math.max(maxY - minY, 120);
     const pad = 48;
     const targetScale = Math.min((W - pad * 2) / gw, (H - pad * 2) / gh);
-    scale = Math.max(0.25, Math.min(targetScale, 1.15));
+    scale = Math.max(0.18, Math.min(targetScale, 1.25));
     panX = W / 2 - ((minX + maxX) / 2) * scale;
     panY = H / 2 - ((minY + maxY) / 2) * scale;
     if (onZoom) onZoom(scale);
@@ -61,7 +62,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
 
   function render() {
     if (!running) return;
-    animTime += 0.012;
+    animTime += 0.016;
     ctx.save();
     ctx.clearRect(0, 0, W, H);
 
@@ -96,7 +97,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       ctx.restore();
     });
 
-    // 2. Draw Curved Bezier Edges & Animated Energy Particles
+    // 2. Draw Silky Fiber Linkers & Rapid Photon Comet Pulses
     edgeList.forEach(e => {
       const src = nodeMap.get(e.source);
       const tgt = nodeMap.get(e.target);
@@ -105,41 +106,82 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
 
       const isConn = activeTargetId && (e.source === activeTargetId || e.target === activeTargetId);
       const isSemantic = e.origin === 'semantic' || e.dashed;
-      const alpha = activeTargetId ? (isConn ? 0.95 : 0.05) : (isSemantic ? 0.65 : (e.type === 'calls' ? 0.38 : 0.22));
-      ctx.lineWidth = isConn ? 2.2 : (isSemantic ? 1.6 : (e.type === 'calls' ? 1.3 : 0.9));
-      ctx.strokeStyle = isConn ? '#00e5ff' : (isSemantic ? `rgba(236, 72, 153, ${alpha})` : (e.type === 'calls' ? `rgba(0, 229, 255, ${alpha})` : `rgba(167, 139, 250, ${alpha})`));
 
-      const mx = (src.x + tgt.x) / 2;
-      const my = (src.y + tgt.y) / 2;
       const dx = tgt.x - src.x;
       const dy = tgt.y - src.y;
       const len = Math.hypot(dx, dy) || 1;
-      const cx = mx - (dy / len) * 16;
-      const cy = my + (dx / len) * 16;
+      const curveOffset = Math.min(20, Math.max(6, len * 0.075));
+      const mx = (src.x + tgt.x) / 2;
+      const my = (src.y + tgt.y) / 2;
+      const cx = mx - (dy / len) * curveOffset;
+      const cy = my + (dx / len) * curveOffset;
 
-      if (isSemantic) ctx.setLineDash([5, 4]);
+      // Ultra-fine, silky thread styling
+      ctx.save();
+      if (activeTargetId) {
+        if (isConn) {
+          ctx.lineWidth = 1.35;
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
+          ctx.shadowColor = '#00e5ff';
+          ctx.shadowBlur = 4;
+        } else {
+          ctx.lineWidth = 0.4;
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.04)';
+        }
+      } else {
+        if (isSemantic) {
+          ctx.lineWidth = 0.6;
+          ctx.strokeStyle = 'rgba(244, 114, 182, 0.32)';
+          ctx.setLineDash([3, 4]);
+        } else if (e.type === 'calls') {
+          ctx.lineWidth = 0.65;
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.26)';
+        } else {
+          ctx.lineWidth = 0.5;
+          ctx.strokeStyle = 'rgba(167, 139, 250, 0.22)';
+        }
+      }
+
       ctx.beginPath();
       ctx.moveTo(src.x, src.y);
       ctx.quadraticCurveTo(cx, cy, tgt.x, tgt.y);
       ctx.stroke();
-      if (isSemantic) ctx.setLineDash([]);
+      ctx.restore();
 
-      // Flowing Energy Particle Pulse
+      // Photon Comet Pulses: slow and graceful traversal (speed 0.4)
       if (pulseEnabled && (isConn || !activeTargetId)) {
-        const t = (animTime * (e.type === 'calls' ? 0.85 : 0.55) + e.offset) % 1.0;
-        const px = (1 - t) * (1 - t) * src.x + 2 * (1 - t) * t * cx + t * t * tgt.x;
-        const py = (1 - t) * (1 - t) * src.y + 2 * (1 - t) * t * cy + t * t * tgt.y;
+        const speed = e.type === 'calls' ? 0.4 : 0.32;
+        const t = (animTime * speed + e.offset) % 1.0;
+        const tHead = t;
+        const tTail = Math.max(0, t - (isConn ? 0.045 : 0.03));
+
+        const pxHead = (1 - tHead) * (1 - tHead) * src.x + 2 * (1 - tHead) * tHead * cx + tHead * tHead * tgt.x;
+        const pyHead = (1 - tHead) * (1 - tHead) * src.y + 2 * (1 - tHead) * tHead * cy + tHead * tHead * tgt.y;
+        const pxTail = (1 - tTail) * (1 - tTail) * src.x + 2 * (1 - tTail) * tTail * cx + tTail * tTail * tgt.x;
+        const pyTail = (1 - tTail) * (1 - tTail) * src.y + 2 * (1 - tTail) * tTail * cy + tTail * tTail * tgt.y;
+
+        ctx.save();
+        // Luminous streak tail
         ctx.beginPath();
-        ctx.arc(px, py, isConn ? 3.2 : 2.0, 0, 2 * Math.PI);
-        ctx.fillStyle = isSemantic ? '#ec4899' : (e.type === 'calls' ? '#00e5ff' : '#a78bfa');
-        ctx.shadowColor = ctx.fillStyle;
-        ctx.shadowBlur = 6;
+        ctx.moveTo(pxTail, pyTail);
+        ctx.lineTo(pxHead, pyHead);
+        ctx.strokeStyle = isConn ? 'rgba(56, 189, 248, 0.9)' : (isSemantic ? 'rgba(244, 114, 182, 0.7)' : 'rgba(56, 189, 248, 0.6)');
+        ctx.lineWidth = isConn ? 2.2 : 1.35;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Brilliant photon head
+        ctx.beginPath();
+        ctx.arc(pxHead, pyHead, isConn ? 2.2 : 1.5, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = isSemantic ? '#ec4899' : (e.type === 'calls' ? '#00e5ff' : '#a78bfa');
+        ctx.shadowBlur = isConn ? 9 : 5;
         ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.restore();
       }
     });
 
-    // 3. Draw Nodes with Smart Label LOD
+    // 3. Draw Nodes with Glowing Hub Rings
     nodeArr.forEach(n => {
       if (hideOrphans && n.isOrphan) return;
       const matchFilter = filter === 'all' || (filter === 'hubs' ? n.isHub : n.kind === filter);
@@ -172,14 +214,17 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       ctx.strokeStyle = isSelected ? '#ffffff' : (n.isOrphan ? '#64748b' : 'rgba(255,255,255,0.7)');
       ctx.lineWidth = isSelected ? 2.5 : 1.0;
       ctx.stroke();
+    });
 
-      // Label LOD: Hide non-hub labels when zoomed out (< 0.8) to eliminate text crowding
-      const showLabel = matchFilter && isHigh && !n.isOrphan && (scale >= 0.8 || n.isHub || isSelected || isHovered);
-      if (showLabel) {
-        ctx.fillStyle = (isSelected || isHovered) ? '#00e5ff' : '#e2e8f0';
-        ctx.font = `${Math.round(Math.max(9, Math.min(13, 11 / Math.sqrt(scale))))}px Inter, sans-serif`;
-        ctx.fillText(n.label, n.x + n.radius + 5, n.y + 3);
-      }
+    // 4. Draw Non-Colliding Labels with Priority LOD & Halos
+    ctx.globalAlpha = 1.0;
+    drawNodeLabels(ctx, nodeArr, {
+      selectedId,
+      hoverId,
+      neighborIds,
+      scale,
+      filter,
+      hideOrphans
     });
 
     ctx.restore();
@@ -192,7 +237,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.14 : 0.88;
-    const newScale = Math.min(4.0, Math.max(0.2, scale * zoomFactor));
+    const newScale = Math.min(4.0, Math.max(0.15, scale * zoomFactor));
     const cr = canvas.getBoundingClientRect();
     const mx = e.clientX - cr.left;
     const my = e.clientY - cr.top;
@@ -270,7 +315,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       if (onZoom) onZoom(scale);
     },
     zoomOut: () => {
-      scale = Math.max(0.2, scale * 0.8);
+      scale = Math.max(0.15, scale * 0.8);
       if (onZoom) onZoom(scale);
     },
     resetFit: fitToView,

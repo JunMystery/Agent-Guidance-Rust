@@ -349,7 +349,7 @@ Comprehensive diagnostics across 7 subsystems:
 | URI | MIME | Description |
 |---|---|---|
 | `standards://manifest` | `application/json` | Full manifest: entry_count, kinds, categories, all entries with identifiers/paths/URIs |
-| `standards://version` | `application/json` | `{"server": "agent-guidance-mcp", "version": "1.5.5", "mcp_protocol": "2024-11-05"}` |
+| `standards://version` | `application/json` | `{"server": "agent-guidance-mcp", "version": "1.5.6", "mcp_protocol": "2024-11-05"}` |
 | `standards://document/{identifier}` | `text/markdown` | Standards document content by slug (token-optimized) |
 | `standards://skill/{name}` | `text/markdown` | On-demand skill capsule by name (token-optimized) |
 | `agent-guidance-mcp://system/priority` | `text/markdown` | Priority gate instructions — returned by `PRIORITY_REQUIRED` errors |

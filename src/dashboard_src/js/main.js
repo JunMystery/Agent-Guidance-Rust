@@ -1,15 +1,20 @@
 import { qsa, el } from './dom.js';
 import { fetchData, refreshEmbedStatus, fetchProjects, pruneProjects, setSelectedProject, triggerAutoCleanup, fetchGraphData } from './api.js';
 import { renderGraphView } from './render/graphView.js';
+import { renderLogsView } from './render/logsView.js';
 import { startPoll, stopPoll } from './poll.js';
 import { showConfirm, showAlert } from './dialog.js';
 import { changeProjectPath, closeDirBrowser, selectDirPath } from './dirBrowser.js';
 
-const VIEWS = ['dashboard', 'top-skills', 'actions', 'recent-calls', 'graph'];
+const VIEWS = ['dashboard', 'top-skills', 'actions', 'recent-calls', 'graph', 'logs'];
 
 export async function loadAndRenderGraph() {
   const data = await fetchGraphData();
   renderGraphView(data);
+}
+
+export async function loadAndRenderLogs() {
+  await renderLogsView();
 }
 
 function syncView(view, { push = true } = {}) {
@@ -32,6 +37,9 @@ function syncView(view, { push = true } = {}) {
   if (view === 'graph') {
     stopPoll();
     loadAndRenderGraph();
+  } else if (view === 'logs') {
+    stopPoll();
+    loadAndRenderLogs();
   } else {
     startPoll();
   }

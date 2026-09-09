@@ -2,6 +2,24 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.6] - 2026-09-09
+
+### Real-Time MCP Crash/Diagnostics Engine & Architecture Graph Visual Overhaul
+- **Real-Time Crash & Diagnostics Engine (`mcp_logger.rs`)**:
+  - Global `std::panic::set_hook` capturing panic payload, location `[file:line:column]`, and unmasked backtraces via `std::backtrace::Backtrace::force_capture()`.
+  - Double-write architecture: High-speed SQLite persistence in `mcp_logs` table + Emergency fallback file `~/.agent-guidance/logs/crash.log` with unbuffered `sync_all()` hardware fsync.
+  - Multi-tier retention policies (Crash: 30 days, Error: 14 days, Warn: 7 days, Info: 3 days) with 10,000-entry FIFO rolling quota and 5-file rotating crash log cap.
+  - STDIO EOF & Pipe Disconnection Detection: Distinguishes between clean IDE disconnects and I/O stream failures.
+- **Web Dashboard Diagnostics (`--dashboard` / `#logs`)**:
+  - Added new `⚠️ Diagnostics` view with real-time KPI stat cards (Crashes, Errors, Warnings, Total).
+  - Multi-level quick filter pills (`All`, `💥 Crashes`, `❌ Errors`, `⚠️ Warnings`) and real-time substring search across messages, sources, and stack traces.
+  - Interactive collapsible drawer to inspect complete runtime stack traces, error context, and execution metadata.
+  - Integrated with automated `--cleanup` and interactive `🧹 Clear` action.
+- **Architecture Graph `#graph` Visual Overhaul**:
+  - **Spacious Node Layout**: Replaced overlapping radial distribution with Fermat spiral (phyllotaxis) initial placement, tuned ForceAtlas2 edge rest lengths (95–115px), softened repulsion falloff, and widened community macro separation.
+  - **Zero Label Collision**: Implemented greedy bounding-box label collision culling, multi-tier Zoom Level-of-Detail (LOD), dynamic top ~12% hub detection, and dark contrast halos (`strokeText` 3.5px) for 100% readable text labels.
+  - **Silky Fiber Linkers & Rapid Photons**: Redesigned graph linkers as delicate, translucent optical fibers (0.5px–0.65px) with graceful Bezier draping and tuned photon comet pulses with neon glow trails.
+
 ## [1.5.5] - 2026-09-09
 
 ### Detached Singleton Daemon, 60s Idle Cooldown & Resilient Multi-IDE Architecture
