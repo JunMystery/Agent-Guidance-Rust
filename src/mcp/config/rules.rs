@@ -102,27 +102,37 @@ pub(crate) fn configure_global_rules(home: &Path) -> Result<()> {
         (
             "Gemini/Antigravity Root",
             home.join(".gemini").join("GEMINI.md"),
+            TargetClient::Antigravity,
         ),
         (
             "Gemini/Antigravity Config",
             home.join(".gemini").join("config").join("AGENTS.md"),
+            TargetClient::Antigravity,
         ),
         (
             "OpenCode",
             home.join(".config").join("opencode").join("AGENTS.md"),
+            TargetClient::Generic,
         ),
         (
             "Claude Code Compatibility",
             home.join(".claude").join("CLAUDE.md"),
+            TargetClient::ClaudeCode,
         ),
-        ("ChatGPT/Codex", home.join(".codex").join("AGENTS.md")),
+        ("ChatGPT/Codex", home.join(".codex").join("AGENTS.md"), TargetClient::ChatGptCodex),
+        (
+            "Cursor Global Rules",
+            home.join(".cursor").join("rules").join("agent-guidance.mdc"),
+            TargetClient::Cursor,
+        ),
         (
             "Windsurf",
             home.join(".codeium").join("windsurf").join("AGENTS.md"),
+            TargetClient::Generic,
         ),
     ];
 
-    for (_name, path) in targets {
+    for (_name, path, client) in targets {
         let content = if path.exists() {
             fs::read_to_string(&path).unwrap_or_default()
         } else {
@@ -133,7 +143,7 @@ pub(crate) fn configure_global_rules(home: &Path) -> Result<()> {
             &content,
             AGENT_GUIDANCE_TAG_START,
             AGENT_GUIDANCE_TAG_END,
-            crate::mcp::templates::AGENT_RULES_BLOCK.trim(),
+            get_client_rules(client).trim(),
         );
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -152,6 +162,7 @@ pub(crate) fn configure_skills_enforcer(home: &Path) -> Result<()> {
                 .join("skills")
                 .join("agent-guidance")
                 .join("SKILL.md"),
+            TargetClient::ClaudeCode,
         ),
         (
             "OpenCode Global",
@@ -160,6 +171,7 @@ pub(crate) fn configure_skills_enforcer(home: &Path) -> Result<()> {
                 .join("skills")
                 .join("agent-guidance")
                 .join("SKILL.md"),
+            TargetClient::Generic,
         ),
         (
             "Cline/Roo-Code Global",
@@ -167,6 +179,7 @@ pub(crate) fn configure_skills_enforcer(home: &Path) -> Result<()> {
                 .join("skills")
                 .join("agent-guidance")
                 .join("SKILL.md"),
+            TargetClient::Generic,
         ),
         (
             "ChatGPT/Codex Global",
@@ -174,6 +187,15 @@ pub(crate) fn configure_skills_enforcer(home: &Path) -> Result<()> {
                 .join("skills")
                 .join("agent-guidance")
                 .join("SKILL.md"),
+            TargetClient::ChatGptCodex,
+        ),
+        (
+            "Cursor Global",
+            home.join(".cursor")
+                .join("skills")
+                .join("agent-guidance")
+                .join("SKILL.md"),
+            TargetClient::Cursor,
         ),
         (
             "Windsurf Global",
@@ -182,10 +204,11 @@ pub(crate) fn configure_skills_enforcer(home: &Path) -> Result<()> {
                 .join("skills")
                 .join("agent-guidance")
                 .join("SKILL.md"),
+            TargetClient::Generic,
         ),
     ];
 
-    for (_name, path) in global_targets {
+    for (_name, path, client) in global_targets {
         let content = if path.exists() {
             fs::read_to_string(&path).unwrap_or_default()
         } else {
@@ -196,7 +219,7 @@ pub(crate) fn configure_skills_enforcer(home: &Path) -> Result<()> {
             &content,
             AGENT_GUIDANCE_SKILL_TAG_START,
             AGENT_GUIDANCE_SKILL_TAG_END,
-            crate::mcp::templates::ENFORCER_SKILL_CONTENT.trim(),
+            get_client_enforcer_skill(client).trim(),
         );
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -238,3 +261,7 @@ pub fn replace_or_append_tagged_section(
         res
     }
 }
+
+#[cfg(test)]
+#[path = "rules_tests.rs"]
+mod tests;

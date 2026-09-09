@@ -24,10 +24,14 @@ pub(crate) fn handle(
     let user_confirmed = arguments
         .get("user_confirmed")
         .or_else(|| arguments.get("confirmed"))
+        .or_else(|| arguments.get("plan_approved"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     let user_msg = arguments.get("user_message").and_then(|u| u.as_str());
 
+    if user_confirmed {
+        state.approve_plan();
+    }
     if let Some(msg) = user_msg {
         state.process_user_message(msg);
     }
@@ -46,7 +50,7 @@ pub(crate) fn handle(
         "set_stage" => handle_set_stage(state, stage_target, &proj_path),
         "status" => handle_status(state),
         "set_architecture" => handle_set_architecture(&arguments, state, &proj_path),
-        "advance" => handle_advance(&arguments, state, &proj_path),
+        "advance" | "advance_stage" => handle_advance(&arguments, state, &proj_path),
         "authorize_edit" => handle_authorize_edit(&arguments, state),
         "rollback" => handle_rollback(state, &proj_path),
         _ => handle_check(state),

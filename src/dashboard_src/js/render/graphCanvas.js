@@ -31,6 +31,34 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
   let hideOrphans = false;
   let animTime = 0, running = true;
 
+  function fitToView() {
+    const visibleNodes = nodeArr.filter(n => !(hideOrphans && n.isOrphan));
+    if (!visibleNodes.length) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    visibleNodes.forEach(n => {
+      minX = Math.min(minX, n.x - n.radius);
+      maxX = Math.max(maxX, n.x + n.radius);
+      minY = Math.min(minY, n.y - n.radius);
+      maxY = Math.max(maxY, n.y + n.radius);
+    });
+    auras.forEach(a => {
+      minX = Math.min(minX, a.x - a.radius);
+      maxX = Math.max(maxX, a.x + a.radius);
+      minY = Math.min(minY, a.y - a.radius);
+      maxY = Math.max(maxY, a.y + a.radius);
+    });
+    const gw = Math.max(maxX - minX, 120);
+    const gh = Math.max(maxY - minY, 120);
+    const pad = 48;
+    const targetScale = Math.min((W - pad * 2) / gw, (H - pad * 2) / gh);
+    scale = Math.max(0.25, Math.min(targetScale, 1.15));
+    panX = W / 2 - ((minX + maxX) / 2) * scale;
+    panY = H / 2 - ((minY + maxY) / 2) * scale;
+    if (onZoom) onZoom(scale);
+  }
+
+  fitToView();
+
   function render() {
     if (!running) return;
     animTime += 0.012;
@@ -149,7 +177,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       const showLabel = matchFilter && isHigh && !n.isOrphan && (scale >= 0.8 || n.isHub || isSelected || isHovered);
       if (showLabel) {
         ctx.fillStyle = (isSelected || isHovered) ? '#00e5ff' : '#e2e8f0';
-        ctx.font = `${Math.max(10, Math.min(13, 11 / scale))}px Inter, sans-serif`;
+        ctx.font = `${Math.round(Math.max(9, Math.min(13, 11 / Math.sqrt(scale))))}px Inter, sans-serif`;
         ctx.fillText(n.label, n.x + n.radius + 5, n.y + 3);
       }
     });
@@ -236,7 +264,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
   return {
     setFilter: (f) => { filter = f; },
     setPulse: (p) => { pulseEnabled = p; },
-    toggleOrphans: (hide) => { hideOrphans = hide; },
+    toggleOrphans: (hide) => { hideOrphans = hide; fitToView(); },
     zoomIn: () => {
       scale = Math.min(4.0, scale * 1.25);
       if (onZoom) onZoom(scale);
@@ -245,12 +273,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       scale = Math.max(0.2, scale * 0.8);
       if (onZoom) onZoom(scale);
     },
-    resetFit: () => {
-      scale = 0.82;
-      panX = W / 2;
-      panY = H / 2;
-      if (onZoom) onZoom(scale);
-    },
+    resetFit: fitToView,
     destroy: () => { running = false; }
   };
 }

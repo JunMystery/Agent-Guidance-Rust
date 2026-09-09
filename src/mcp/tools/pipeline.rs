@@ -31,8 +31,15 @@ pub(crate) fn handle(
 
     // Record active phase and auto-reset approval state when starting a new planning phase
     let is_same_task = state.user_intent_summary.as_deref() == Some(task);
+    let is_approval_msg = state.process_user_message(task);
     state.active_phase = Some(phase.to_string());
-    if phase == "plan" {
+    if is_approval_msg {
+        state.workflow_stage = "Build".to_string();
+        state.plan_approved = true;
+        state.edit_authorized = true;
+        let _ = state.save_to_dir(&proj_path);
+        tracing::info!("Detected plan approval in task pipeline; transitioned to Build stage with plan_approved=true.");
+    } else if phase == "plan" {
         // Only reset approval if this is a different task or if not already in Build/Test_Recheck
         if !is_same_task || (state.workflow_stage != "Build" && state.workflow_stage != "Test_Recheck") {
             state.workflow_stage = "Plan".to_string();
@@ -46,6 +53,9 @@ pub(crate) fn handle(
                 "Reset workflow stage to 'Plan' and plan_approved to false for new task pipeline execution."
             );
         }
+    } else if phase == "build" && state.plan_approved {
+        state.workflow_stage = "Build".to_string();
+        state.edit_authorized = true;
     }
     state.user_intent_summary = Some(task.to_string());
 

@@ -137,7 +137,7 @@ elif command -v wget &>/dev/null; then
     VERSION="$(wget -qO- "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 fi
 if [ -z "$VERSION" ]; then
-    VERSION="v1.5.2"
+    VERSION="v1.5.3"
     echo -e "  ${YELLOW}⚠️  Could not fetch latest release tag, defaulting to ${VERSION}${NC}"
 else
     echo -e "  ${GRAY}Latest release: ${VERSION}${NC}"
@@ -264,12 +264,25 @@ echo -e ""
 echo -e "${PURPLE}▶${NC} Registering server with detected IDE clients..."
 "$LOCAL_BIN/agent-guidance" --setup
 
+register_cursor_mcp() {
+    local bin="$1" cdir="$HOME/.cursor"
+    mkdir -p "$cdir" 2>/dev/null || true
+    if [ ! -f "$cdir/mcp.json" ]; then
+        printf '{\n  "mcpServers": {\n    "agent-guidance": {\n      "command": "%s",\n      "args": []\n    }\n  }\n}\n' "$bin" > "$cdir/mcp.json"
+    fi
+}
+register_cursor_mcp "$LOCAL_BIN/agent-guidance"
+
+register_ide_cli_mcp() {
+    local bin="$1" payload="{\"name\":\"agent-guidance\",\"type\":\"stdio\",\"command\":\"$bin\",\"args\":[]}"
+    for cmd in code code-insiders; do command -v "$cmd" &>/dev/null && "$cmd" --add-mcp "$payload" &>/dev/null || true; done
+    command -v claude &>/dev/null && claude mcp add --scope user agent-guidance -- "$bin" &>/dev/null || true
+    command -v codex &>/dev/null && codex mcp add agent-guidance -- "$bin" &>/dev/null || true
+}
+register_ide_cli_mcp "$LOCAL_BIN/agent-guidance"
+
 # ── Done ──────────────────────────────────────────────────────────────────────
-echo -e ""
-echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}${BOLD}║         ✓  Agent Guidance Installed / Updated!               ║${NC}"
-echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
-echo -e ""
+echo -e "\n${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗\n║         ✓  Agent Guidance Installed / Updated!               ║\n╚══════════════════════════════════════════════════════════════╝${NC}"
 echo -e "  ${BOLD}Binary:${NC}       ${GREEN}${LOCAL_BIN}/agent-guidance${NC}"
 echo -e "  ${BOLD}MCP Config:${NC}   ${GRAY}Automatic across all detected IDE clients${NC}"
-echo -e ""
+echo -e "  ${BOLD}Recommendation:${NC} ${CYAN}Copy the corresponding rule and skill files into your IDE/CLI workspace for optimal MCP guidance.${NC}\n"

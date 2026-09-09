@@ -31,13 +31,13 @@ pub(crate) fn handle_set_stage(
             Err(err_msg) => {
                 let _ = state.auto_checkpoint(proj_path);
                 format!(
-                    "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}. Trigger IDE/CLI `ask_question` tool to request user approval for stage transition.",
+                    "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: {}. If user approved via GUI or chat, pass user_confirmed=true (or trigger ask_question only if interactive clarification needed).",
                     err_msg
                 )
             }
         }
     } else {
-        "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: target_stage argument is required for set_stage action. Trigger IDE/CLI `ask_question` tool to clarify desired stage.".to_string()
+        "# Workflow Gate: [set_stage]\n\nStatus: BLOCKED | Error: target_stage argument is required for set_stage action.".to_string()
     }
 }
 
@@ -50,6 +50,17 @@ pub(crate) fn handle_advance(
         .get("target_stage")
         .and_then(|t| t.as_str())
         .unwrap_or("Build");
+
+    let user_confirmed = arguments
+        .get("user_confirmed")
+        .or_else(|| arguments.get("confirmed"))
+        .or_else(|| arguments.get("plan_approved"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if user_confirmed {
+        state.approve_plan();
+    }
 
     // 300 LOC Post-Edit Hard Trap: Block advancing if any modified/created code file >= 300 LOC
     if target_stage == "Proposal" || target_stage == "Review" {
@@ -128,7 +139,7 @@ pub(crate) fn handle_check(state: &ServerState) -> String {
         status_str, state.plan_approved, state.workflow_stage, state.fix_attempts
     );
     if state.workflow_stage == "Build" && !state.plan_approved {
-        resp.push_str("\n\nTrigger IDE/CLI `ask_question` tool to request explicit user plan approval before editing code.");
+        resp.push_str("\n\nPlan approval required before editing code. If user approved via GUI/chat, invoke workflow_gate with user_confirmed=true (or ask_question if interactive approval needed).");
     }
     if state.workflow_stage == "Test_Recheck" {
         resp.push_str("\n\n**ANTI-HALLUCINATION ENFORCER ACTIVE**: Re-read the original user prompt & verify all requested features against real build/test outputs before declaring task complete.");

@@ -39,8 +39,9 @@ pub(crate) fn handle_clear(state: &mut ServerState, proj_path: &Path) -> String 
     if dir.exists() {
         let _ = std::fs::remove_dir_all(&dir);
     }
+    let _ = crate::mcp::snapshots::clear_all_snapshots(proj_path);
     *state = ServerState::new();
-    "# Session Continuity: [clear]\n\nSession snapshots cleared successfully. Active session state reset.".to_string()
+    "# Session Continuity: [clear]\n\nSession state and rollback snapshots cleared successfully. Active session state reset.".to_string()
 }
 
 pub(crate) fn handle_list(state: &ServerState, proj_path: &Path) -> String {

@@ -11,7 +11,7 @@ pub(crate) fn handle_approve_plan(
     proj_path: &Path,
 ) -> String {
     if !user_confirmed && !state.plan_approved && user_msg.is_none() {
-        return "# Workflow Gate: [approve_plan]\n\nStatus: BLOCKED | Error: USER_APPROVAL_REQUIRED: Plan approval cannot be self-granted by AI agents. Trigger the IDE/CLI `ask_question` tool to request user approval on the implementation plan. Re-invoke `workflow_gate(action=\"approve_plan\", user_confirmed=true)` once approved.".to_string();
+        return "# Workflow Gate: [approve_plan]\n\nStatus: BLOCKED | Error: USER_APPROVAL_REQUIRED: Plan approval cannot be self-granted by AI agents. If user approved via GUI/chat, re-invoke `workflow_gate(action=\"approve_plan\", user_confirmed=true)` (or trigger `ask_question` only if interactive choice is needed).".to_string();
     }
 
     state.approve_plan();

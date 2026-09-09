@@ -55,13 +55,20 @@ pub(crate) fn merge_mcp_config(config_path: &Path, server_id: &str, bin_path: &s
         .expect("Server entry must be object");
     servers_map.remove(crate::mcp::templates::OLD_SERVER_ID);
 
-    servers_map.insert(
-        server_id.to_string(),
+    let server_entry = if key == "servers" || config_path.to_string_lossy().ends_with(".claude.json") {
+        json!({
+            "type": "stdio",
+            "command": bin_path,
+            "args": []
+        })
+    } else {
         json!({
             "command": bin_path,
             "args": []
-        }),
-    );
+        })
+    };
+
+    servers_map.insert(server_id.to_string(), server_entry);
 
     if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent)?;

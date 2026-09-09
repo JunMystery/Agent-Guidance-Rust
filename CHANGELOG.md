@@ -2,6 +2,28 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.3] - 2026-09-09
+
+### Automated Snapshot Retention & Cleanup
+- **Snapshot TTL & LRU Pruning**: Added automatic background cleanup in `src/mcp/snapshots.rs` enforcing a 7-day TTL expiration policy and a maximum of 20 session snapshot folders.
+- **Backward Compatibility**: Modularized snapshot lifecycle methods and re-exported clean APIs in `src/mcp/impact.rs`.
+
+### Multi-Client MCP Auto-Registration & Verification
+- **VS Code CLI Registration**: Integrated automatic registration via `code --add-mcp` across Windows and Unix install scripts and Rust `--setup` command.
+- **Cursor MCP Support**: Added global `~/.cursor/mcp.json` and `%APPDATA%\Cursor\User\mcp.json` auto-configuration and verification.
+- **Claude Code CLI Registration**: Integrated user-scoped registration via `claude mcp add --scope user agent-guidance -- <bin>`.
+- **ChatGPT / OpenAI Codex Integration**: Added official `~/.codex/config.toml` TOML generator, CLI registration via `codex mcp add`, and verification in `agent-guidance --verify-setup`.
+
+### IDE GUI Plan Approval & Gate Flow Fixes
+- **GUI Approval Detection**: Expanded `process_user_message` to recognize IDE-generated approval signals (`The user has approved this document`, `Proceeded with Implementation Plan`, `Comments on artifact URI:`, `proceed with`).
+- **Zero-Turn Approval Ingestion in Pipeline**: `task_pipeline` automatically senses GUI approval messages and transitions to `Build` without wiping plan approval state.
+- **Flexible Workflow Gate**: Added support for `plan_approved: true` in `set_stage` / `advance`, added `"advance_stage"` alias, and eliminated aggressive mandatory `ask_question` prompting.
+
+### Architecture Graph Layout & Viewport Fixes
+- **Concentric Layout Engine**: Re-centered ForceAtlas2 simulation coordinates to `(0, 0)` and partitioned orphan nodes into clean concentric orbital rings, eliminating off-center drift and circle distortions.
+- **Dynamic Auto-Fit Viewport**: Implemented `fitToView` viewport calculations with auto-centering on graph load, fit reset, and filter changes.
+- **Community Aura Bounding**: Capped community boundary radii to prevent outlier nodes from blowing up cluster auras.
+
 ## [1.5.2] - 2026-09-08
 
 ### AI Agent Direct Orchestration for GraphRAG Semantic Layer

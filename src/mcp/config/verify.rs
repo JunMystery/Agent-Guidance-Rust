@@ -23,13 +23,65 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
         if exists { "found" } else { "NOT FOUND" }
     );
 
+    let code_user_mcp = if cfg!(target_os = "windows") {
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+        PathBuf::from(appdata).join("Code").join("User").join("mcp.json")
+    } else if cfg!(target_os = "macos") {
+        home.join("Library")
+            .join("Application Support")
+            .join("Code")
+            .join("User")
+            .join("mcp.json")
+    } else {
+        home.join(".config").join("Code").join("User").join("mcp.json")
+    };
+
+    let cursor_user_mcp = if cfg!(target_os = "windows") {
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+        PathBuf::from(appdata).join("Cursor").join("User").join("mcp.json")
+    } else if cfg!(target_os = "macos") {
+        home.join("Library")
+            .join("Application Support")
+            .join("Cursor")
+            .join("User")
+            .join("mcp.json")
+    } else {
+        home.join(".config").join("Cursor").join("User").join("mcp.json")
+    };
+
+    let cursor_target = if home.join(".cursor").join("mcp.json").exists() {
+        home.join(".cursor").join("mcp.json")
+    } else {
+        cursor_user_mcp
+    };
+
+    let claude_desktop_path = if cfg!(target_os = "windows") {
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+        PathBuf::from(appdata)
+            .join("Claude")
+            .join("claude_desktop_config.json")
+    } else if cfg!(target_os = "macos") {
+        home.join("Library")
+            .join("Application Support")
+            .join("Claude")
+            .join("claude_desktop_config.json")
+    } else {
+        home.join(".config")
+            .join("Claude")
+            .join("claude_desktop_config.json")
+    };
+
+    let claude_code_target = if home.join(".claude.json").exists() {
+        home.join(".claude.json")
+    } else {
+        home.join(".claude").join("mcp.json")
+    };
+
     // 2. Check MCP configs
     let mcp_targets: Vec<(&str, PathBuf, &str)> = vec![
         (
             "Claude Desktop",
-            home.join(".config")
-                .join("Claude")
-                .join("claude_desktop_config.json"),
+            claude_desktop_path,
             "mcpServers",
         ),
         (
@@ -46,15 +98,12 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
         ),
         (
             "Cursor",
-            home.join(".cursor").join("mcp.json"),
+            cursor_target,
             "mcpServers",
         ),
         (
             "VS Code",
-            home.join(".config")
-                .join("Code")
-                .join("User")
-                .join("mcp.json"),
+            code_user_mcp,
             "servers",
         ),
         (
@@ -74,7 +123,7 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
         ),
         (
             "Claude Code",
-            home.join(".claude").join("mcp.json"),
+            claude_code_target,
             "mcpServers",
         ),
         (
@@ -88,6 +137,11 @@ pub fn run_verify_setup(binary_path: &Path) -> Result<()> {
             "OpenCode",
             home.join(".config").join("opencode").join("opencode.json"),
             "mcp",
+        ),
+        (
+            "ChatGPT / Codex",
+            home.join(".codex").join("config.toml"),
+            "mcp_servers",
         ),
     ];
 

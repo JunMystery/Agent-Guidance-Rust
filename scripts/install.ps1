@@ -179,7 +179,7 @@ try {
     $version = $latestMeta.tag_name
     Write-Host "  Latest release: $version" -ForegroundColor Gray
 } catch {
-    $version = "v1.5.2"
+    $version = "v1.5.3"
     Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
 }
 
@@ -251,17 +251,45 @@ if (-not $installedPrebuilt) {
     }
 }
 
-# ── Register with IDEs ────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host ">> Registering server with detected IDE clients..." -ForegroundColor Magenta
-& "$localBin\agent-guidance.exe" --setup
+function Merge-JsonMCPConfig {
+    param([string]$Path, [string]$Bin, [string]$Key = "mcpServers", [bool]$WithStdio = $false)
+    $parent = Split-Path -Parent $Path
+    if (-not (Test-Path $parent) -and (Test-Path (Split-Path -Parent $parent))) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    if (Test-Path $parent) {
+        try {
+            $j = if (Test-Path $Path) { Get-Content $Path -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue } else { $null }
+            if (-not $j) { $j = [PSCustomObject]@{} }
+            if (-not $j.PSObject.Properties[$Key]) { $j | Add-Member -NotePropertyName $Key -NotePropertyValue ([PSCustomObject]@{}) }
+            $def = if ($WithStdio) { [PSCustomObject]@{ type = "stdio"; command = $Bin; args = @() } } else { [PSCustomObject]@{ command = $Bin; args = @() } }
+            if ($j.$Key.PSObject.Properties["agent-guidance"]) { $j.$Key."agent-guidance" = $def } else { $j.$Key | Add-Member -NotePropertyName "agent-guidance" -NotePropertyValue $def }
+            $j | ConvertTo-Json -Depth 10 | Set-Content $Path -Encoding UTF8
+        } catch { Write-Host "  Warning: Failed updating ${Path}: $_" -ForegroundColor Yellow }
+    }
+}
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+function Register-IDEMCP {
+    param([string]$BinPath)
+    $escapedBin = $BinPath -replace '\\', '\\'
+    $payload = "{\`"name\`":\`"agent-guidance\`",\`"type\`":\`"stdio\`",\`"command\`":\`"$escapedBin\`",\`"args\`":[]}"
+    foreach ($cmd in @("code", "code-insiders")) { if (Get-Command $cmd -ErrorAction SilentlyContinue) { try { & $cmd --add-mcp $payload 2>$null | Out-Null } catch {} } }
+    foreach ($cmd in @("claude", "claude.cmd")) { if (Get-Command $cmd -ErrorAction SilentlyContinue) { try { & $cmd mcp add --scope user agent-guidance -- $BinPath 2>$null | Out-Null; break } catch {} } }
+    foreach ($cmd in @("codex", "codex.cmd")) { if (Get-Command $cmd -ErrorAction SilentlyContinue) { try { & $cmd mcp add agent-guidance -- $BinPath 2>$null | Out-Null; break } catch {} } }
+    @( (Join-Path $env:APPDATA "Code\User\mcp.json"), (Join-Path $env:APPDATA "Code - Insiders\User\mcp.json") ) | ForEach-Object { Merge-JsonMCPConfig -Path $_ -Bin $BinPath -Key "servers" -WithStdio $true }
+    @( (Join-Path $HOME ".copilot\mcp-config.json"), (Join-Path $HOME ".cursor\mcp.json"), (Join-Path $env:APPDATA "Cursor\User\mcp.json"), (Join-Path $env:APPDATA "Claude\claude_desktop_config.json") ) | ForEach-Object { Merge-JsonMCPConfig -Path $_ -Bin $BinPath -Key "mcpServers" }
+    Merge-JsonMCPConfig -Path (Join-Path $HOME ".claude.json") -Bin $BinPath -Key "mcpServers" -WithStdio $true
+}
+
+Write-Host "`nRegistering server with detected IDE clients..." -ForegroundColor Magenta
+& "$localBin\agent-guidance.exe" --setup
+Register-IDEMCP -BinPath "$localBin\agent-guidance.exe"
+
 Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-Write-Host "|         OK  Agent Guidance Installed / Updated!              |" -ForegroundColor Green
+Write-Host "|         Agent Guidance Installed / Updated!                  |" -ForegroundColor Green
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-Write-Host ""
 Write-Host "  Binary:       $localBin\agent-guidance.exe" -ForegroundColor Green
 Write-Host "  MCP Config:   Automatic across all detected IDE clients" -ForegroundColor DarkGray
+Write-Host "  Recommendation: Copy the corresponding rule and skill files into your IDE/CLI workspace for optimal MCP guidance." -ForegroundColor Cyan
 Write-Host ""

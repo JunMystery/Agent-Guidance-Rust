@@ -71,6 +71,7 @@ impl ServerState {
 
     pub fn load_from_dir(proj_path: &Path) -> Result<Self, String> {
         Self::cleanup_stale_sessions(proj_path);
+        crate::mcp::snapshots::cleanup_stale_snapshots(proj_path, 7, 20);
         let dir = proj_path.join(".agent-context").join("sessions");
 
         // 1. Try finding most recent session file in sessions/

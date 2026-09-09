@@ -173,7 +173,7 @@ pub(crate) fn handle_authorize_edit(
         resp
     } else {
         format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\nError: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. Trigger IDE/CLI `ask_question` tool to request user approval on the plan, then invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\")`.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\nError: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. If user approved via GUI/chat, invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\", user_confirmed=true)`. Only trigger `ask_question` if interactive user approval is required.",
             proj_path.display(),
             state.workflow_stage,
             state.plan_approved

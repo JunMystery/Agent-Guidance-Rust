@@ -48,13 +48,13 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   const commKeys = Array.from(commGroups.keys());
   const commCount = Math.max(commKeys.length, 1);
   const commAnchors = new Map();
-  const R_comm = Math.min(W, H) * 0.36;
+  const R_comm = commCount > 1 ? Math.min(W, H) * 0.32 : 0;
 
   commKeys.forEach((key, idx) => {
     const angle = (idx / commCount) * 2 * Math.PI - Math.PI / 2;
     commAnchors.set(key, {
-      cx: R_comm * Math.cos(angle),
-      cy: R_comm * Math.sin(angle),
+      cx: commCount > 1 ? R_comm * Math.cos(angle) : 0,
+      cy: commCount > 1 ? R_comm * Math.sin(angle) : 0,
       color: COMM_COLORS[idx % COMM_COLORS.length],
       count: commGroups.get(key).length,
       name: key
@@ -149,14 +149,33 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
     }
   }
 
-  // 3. Position Orphans in Peripheral Orbit Dock (Clean outer ring)
-  const R_orbit = Math.min(W, H) * 0.49;
+  // Re-center connected nodes strictly around (0, 0)
+  if (connNodes.length > 0) {
+    const cX = connNodes.reduce((s, n) => s + n.x, 0) / connNodes.length;
+    const cY = connNodes.reduce((s, n) => s + n.y, 0) / connNodes.length;
+    connNodes.forEach(n => {
+      n.x -= cX;
+      n.y -= cY;
+    });
+  }
+
+  const maxConnR = connNodes.reduce((max, n) => Math.max(max, Math.hypot(n.x, n.y)), 0);
+
+  // 3. Position Orphans in Peripheral Orbit Dock (Clean concentric rings outside graph)
+  const numOrphans = orphans.length;
+  const numRings = numOrphans > 70 ? 3 : (numOrphans > 32 ? 2 : 1);
+  const baseOrbitR = Math.max(maxConnR + 45, Math.min(W, H) * 0.38);
+
   orphans.forEach((n, idx) => {
-    const angle = (idx / Math.max(orphans.length, 1)) * 2 * Math.PI;
+    const ringIdx = idx % numRings;
+    const perRing = Math.ceil(numOrphans / numRings);
+    const posInRing = Math.floor(idx / numRings);
+    const angle = (posInRing / Math.max(perRing, 1)) * 2 * Math.PI;
+    const r = baseOrbitR + ringIdx * 24;
     nodeMap.set(n.id, {
       ...n,
-      x: R_orbit * Math.cos(angle),
-      y: R_orbit * Math.sin(angle),
+      x: r * Math.cos(angle),
+      y: r * Math.sin(angle),
       isOrphan: true,
       color: '#475569'
     });
@@ -166,7 +185,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   const auras = [];
   commAnchors.forEach((anc, key) => {
     const members = connNodes.filter(n => n.commKey === key);
-    if (!members.length) return;
+    if (members.length < 2) return;
     const avgX = members.reduce((s, m) => s + m.x, 0) / members.length;
     const avgY = members.reduce((s, m) => s + m.y, 0) / members.length;
     const maxR = members.reduce((max, m) => Math.max(max, Math.hypot(m.x - avgX, m.y - avgY)), 0);
@@ -175,7 +194,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
       name: anc.name,
       x: avgX,
       y: avgY,
-      radius: Math.max(50, maxR + 35),
+      radius: Math.min(Math.max(40, maxR + 25), Math.min(W, H) * 0.45),
       color: anc.color,
       count: members.length
     });

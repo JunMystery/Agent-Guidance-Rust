@@ -40,3 +40,30 @@
                 .contains("Priority Gate Instructions")
         );
     }
+
+    #[test]
+    fn test_all_tool_array_schemas_have_items() {
+        let mut state = ServerState::new();
+        let list_res = handle_request("tools/list", None, &mut state);
+        assert!(list_res.is_ok());
+        let list_val = list_res.unwrap();
+        let tools = list_val["tools"].as_array().expect("tools array");
+
+        for tool in tools {
+            let tool_name = tool["name"].as_str().unwrap_or("unknown");
+            let props = tool["inputSchema"]["properties"]
+                .as_object()
+                .expect("properties object");
+
+            for (prop_name, prop_val) in props {
+                if prop_val.get("type").and_then(|t| t.as_str()) == Some("array") {
+                    assert!(
+                        prop_val.get("items").is_some(),
+                        "Tool '{}' parameter '{}' has type 'array' but is missing 'items'",
+                        tool_name,
+                        prop_name
+                    );
+                }
+            }
+        }
+    }

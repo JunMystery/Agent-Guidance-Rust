@@ -29,9 +29,56 @@ The `.vscode/mcp.json` entry should point to the `agent-guidance` binary:
 }
 ```
 
+You can also register directly via the VS Code CLI:
+
+```bash
+code --add-mcp '{"name":"agent-guidance","type":"stdio","command":"/path/to/agent-guidance","args":[]}'
+```
+
+## Cursor
+
+Cursor detects MCP servers via `~/.cursor/mcp.json` (global) or `%APPDATA%\Cursor\User\mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agent-guidance": {
+      "command": "/path/to/agent-guidance",
+      "args": []
+    }
+  }
+}
+```
+
+## Claude Code CLI
+
+Register user-wide directly via the Claude Code CLI:
+
+```bash
+claude mcp add --scope user agent-guidance -- /path/to/agent-guidance
+```
+
+Configuration is stored in `~/.claude.json` or `~/.claude/mcp.json`.
+
+## ChatGPT / OpenAI Codex
+
+ChatGPT desktop app and OpenAI Codex CLI use `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.agent-guidance]
+command = "/path/to/agent-guidance"
+args = []
+```
+
+Or register via the Codex CLI:
+
+```bash
+codex mcp add agent-guidance -- /path/to/agent-guidance
+```
+
 ## Generic MCP Client Config
 
-Use this structure for Claude Desktop, Cursor, and other MCP-compatible clients:
+Use this structure for Claude Desktop and other MCP-compatible clients:
 
 ```json
 {

@@ -64,12 +64,28 @@ async fn main() -> Result<()> {
 
         let summary = mcp::db::run_auto_cleanup(&conn, retention)?;
         let db_bytes = mcp::db::get_db_size_bytes();
+
+        let proj_path = args
+            .iter()
+            .position(|a| a == "--project")
+            .and_then(|i| args.get(i + 1))
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let pruned_snaps = if proj_path.exists() {
+            mcp::snapshots::cleanup_stale_snapshots(&proj_path, retention, 20)
+        } else {
+            0
+        };
+
         println!("✓ Auto-Cleanup & Database Vacuum Completed:");
         println!("  • Tool calls pruned: {}", summary.tool_calls_pruned);
         println!("  • Skill loads pruned: {}", summary.skill_loads_pruned);
         println!("  • Queries pruned: {}", summary.embed_queries_pruned + summary.llm_queries_pruned);
         println!("  • Daily summaries pruned: {}", summary.daily_summaries_pruned);
         println!("  • Dead projects pruned: {}", summary.dead_projects_pruned);
+        if pruned_snaps > 0 {
+            println!("  • Stale project snapshots pruned: {}", pruned_snaps);
+        }
         if summary.lru_tool_calls_pruned > 0 {
             println!("  • LRU cap pruned: {}", summary.lru_tool_calls_pruned);
         }
