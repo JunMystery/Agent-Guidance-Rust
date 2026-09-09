@@ -12,7 +12,7 @@ use crate::mcp::router::handle_request;
 use crate::mcp::state::ServerState;
 use super::ACTIVE_CLIENTS;
 
-const MAX_REQUEST_WORKERS: usize = 4;
+const MAX_REQUEST_WORKERS: usize = 32;
 static REQUEST_WORKERS: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
 
 pub async fn handle_mcp_lines<R, W>(reader: R, mut writer: W)

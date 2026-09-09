@@ -23,6 +23,10 @@ use daemon::handle_mcp_lines;
 async fn main() -> Result<()> {
     // Handle flags that don't need logging
     let args: Vec<String> = env::args().collect();
+    if args.contains(&"--version".to_string()) || args.contains(&"-v".to_string()) {
+        println!("agent-guidance {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     if args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
         println!("Agent Guidance MCP Server & CLI Tool v{}", env!("CARGO_PKG_VERSION"));
         println!("Usage: agent-guidance [OPTIONS]");
@@ -216,6 +220,18 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
+    let is_mcp_server_mode = args.len() == 1
+        || args.contains(&"--daemon".to_string())
+        || args.contains(&"--force-daemon".to_string())
+        || args.contains(&"--proxy".to_string())
+        || args.contains(&"--force-client".to_string());
+
+    if !is_mcp_server_mode {
+        eprintln!("Unknown argument(s): {:?}", &args[1..]);
+        eprintln!("Run 'agent-guidance --help' for usage.");
+        std::process::exit(1);
+    }
+
     info!(
         "Starting Agent Guidance MCP Rust Server v{}",
         env!("CARGO_PKG_VERSION")
@@ -234,13 +250,13 @@ async fn main() -> Result<()> {
     }
 
     // Auto-Negotiation for Zero-Friction Singleton Shared Daemon Architecture:
-    // 1. Transparently proxy to an existing shared daemon instance if active
+    // 1. Transparently proxy to an existing shared daemon instance or auto-spawn a detached one
     if daemon::try_proxy_mode().await {
         return Ok(());
     }
 
-    // 2. No daemon running -> automatically become the Singleton Shared Daemon Master
-    // (serves launching IDE's stdio + opens Named Pipe / Unix Socket for other IDEs)
-    daemon::daemon_main(dashboard_port, proj_arg).await;
+    // 2. Fallback: if proxy mode could not connect or spawn daemon, run direct stdio server
+    tracing::warn!("Could not connect to shared daemon — falling back to direct stdio server.");
+    daemon::handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
     Ok(())
 }

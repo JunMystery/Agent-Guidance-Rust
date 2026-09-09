@@ -1,11 +1,52 @@
+pub mod cross_encoder;
 pub mod embeddings;
 pub mod llm_selector;
 pub mod onnx_engine;
 
 use rayon::ThreadPool;
-use std::sync::OnceLock;
+use std::sync::{Condvar, Mutex, OnceLock};
 
 const ML_WORKER_THREADS: usize = 2;
+
+pub struct SyncMlQueue {
+    permits: Mutex<usize>,
+    cvar: Condvar,
+}
+
+impl SyncMlQueue {
+    pub fn new(max_permits: usize) -> Self {
+        Self {
+            permits: Mutex::new(max_permits),
+            cvar: Condvar::new(),
+        }
+    }
+
+    pub fn acquire(&self) -> SyncMlPermit<'_> {
+        let mut count = self.permits.lock().unwrap_or_else(|p| p.into_inner());
+        while *count == 0 {
+            count = self.cvar.wait(count).unwrap_or_else(|p| p.into_inner());
+        }
+        *count -= 1;
+        SyncMlPermit { queue: self }
+    }
+}
+
+pub struct SyncMlPermit<'a> {
+    queue: &'a SyncMlQueue,
+}
+
+impl<'a> Drop for SyncMlPermit<'a> {
+    fn drop(&mut self) {
+        let mut count = self.queue.permits.lock().unwrap_or_else(|p| p.into_inner());
+        *count += 1;
+        self.queue.cvar.notify_one();
+    }
+}
+
+pub fn ml_queue() -> &'static SyncMlQueue {
+    static QUEUE: OnceLock<SyncMlQueue> = OnceLock::new();
+    QUEUE.get_or_init(|| SyncMlQueue::new(2))
+}
 
 pub fn inference_pool() -> &'static ThreadPool {
     static POOL: OnceLock<ThreadPool> = OnceLock::new();
@@ -48,5 +89,3 @@ pub fn download_models() -> anyhow::Result<()> {
     println!("  [OK] ML models cached at ~/.cache/huggingface/hub/");
     Ok(())
 }
-
-pub mod cross_encoder;

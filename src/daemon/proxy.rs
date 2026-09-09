@@ -1,7 +1,8 @@
-use std::fs;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tracing::info;
+
+use super::ensure_daemon_running;
 
 #[cfg(unix)]
 use tokio::net::UnixStream;
@@ -16,36 +17,41 @@ use super::WINDOWS_PIPE_NAME;
 #[cfg(unix)]
 pub async fn try_proxy_mode() -> bool {
     let path = socket_path();
-    if !path.exists() {
-        return false;
-    }
-    for attempt in 0..3 {
+    let mut spawned = false;
+    for attempt in 0..30 {
         if path.exists() {
             match UnixStream::connect(&path).await {
                 Ok(stream) => {
+                    info!("Connected to background daemon via Unix socket: {:?}", path);
                     let (rx, tx) = stream.into_split();
                     proxy_stream(rx, tx).await;
                     return true;
                 }
                 Err(e) => {
-                    info!("Socket connect failed ({}), retrying...", e);
-                    if attempt == 2 {
-                        let _ = fs::remove_file(&path);
-                        info!("Removed stale socket: {:?}", path);
+                    if attempt == 0 && !spawned {
+                        let _ = ensure_daemon_running();
+                        spawned = true;
+                    }
+                    if attempt % 5 == 0 {
+                        info!("Socket connect pending ({}), retrying...", e);
                     }
                 }
             }
+        } else if !spawned {
+            let _ = ensure_daemon_running();
+            spawned = true;
         }
-        tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    info!("Could not connect to existing daemon — will start new one.");
+    info!("Could not connect to background daemon socket.");
     false
 }
 
 #[cfg(windows)]
 pub async fn try_proxy_mode() -> bool {
     let pipe_name = WINDOWS_PIPE_NAME;
-    for attempt in 0..3 {
+    let mut spawned = false;
+    for attempt in 0..30 {
         match ClientOptions::new().open(pipe_name) {
             Ok(client) => {
                 info!("Connected to background daemon via Named Pipe: {}", pipe_name);
@@ -54,16 +60,18 @@ pub async fn try_proxy_mode() -> bool {
                 return true;
             }
             Err(e) => {
-                // If named pipe does not exist (Win32 ERROR_FILE_NOT_FOUND = 2), daemon is not running.
-                // Exit immediately on attempt 0 so initial master starts without delay.
-                if e.raw_os_error() == Some(2) {
-                    return false;
+                if !spawned {
+                    let _ = ensure_daemon_running();
+                    spawned = true;
                 }
-                tokio::time::sleep(Duration::from_millis(100 * (attempt + 1))).await;
+                if attempt % 5 == 0 {
+                    info!("Named pipe connect pending ({}), retrying...", e);
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
     }
-    info!("Could not connect to existing Windows daemon pipe — will start new daemon.");
+    info!("Could not connect to background daemon Windows Named Pipe.");
     false
 }
 
@@ -72,7 +80,7 @@ where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
 {
-    let to_daemon = tokio::spawn(async move {
+    let to_daemon = async {
         let mut stdin = BufReader::new(tokio::io::stdin()).lines();
         loop {
             match stdin.next_line().await {
@@ -92,9 +100,9 @@ where
                 Err(_) => break,
             }
         }
-    });
+    };
 
-    let to_stdout = tokio::spawn(async move {
+    let to_stdout = async {
         let mut reader = BufReader::new(socket_rx).lines();
         let mut stdout = tokio::io::stdout();
         loop {
@@ -112,7 +120,10 @@ where
                 Err(_) => break,
             }
         }
-    });
+    };
 
-    let _ = tokio::join!(to_daemon, to_stdout);
+    tokio::select! {
+        _ = to_daemon => {},
+        _ = to_stdout => {},
+    }
 }

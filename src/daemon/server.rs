@@ -1,66 +1,52 @@
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tracing::{error, info};
 
-#[cfg(unix)]
-use tokio::net::UnixListener;
-#[cfg(unix)]
-use super::socket_path;
-
-use super::{ACTIVE_CLIENTS, lock_path};
+use super::{ACTIVE_CLIENTS, acquire_daemon_lock};
 use super::handler::handle_mcp_lines;
 
-fn acquire_daemon_lock() -> Option<std::fs::File> {
-    let path = lock_path();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    // Use advisory flock / LockFileEx so the lock auto-releases when the process dies
-    match fs::OpenOptions::new().write(true).create(true).truncate(false).open(&path) {
-        Ok(file) => {
-            use fs2::FileExt;
-            match file.try_lock_exclusive() {
-                Ok(()) => {
-                    info!("Daemon lock acquired.");
-                    let _ = fs::write(&path, format!("{}", std::process::id()));
-                    Some(file)
-                }
-                Err(_) => {
-                    info!("Another daemon is already running (lock held).");
-                    None
-                }
-            }
-        }
-        Err(e) => {
-            error!("Failed to open daemon lock file: {}", e);
-            None
-        }
-    }
-}
+pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 60;
 
-fn release_daemon_lock() {
-    let path = lock_path();
-    let _ = fs::remove_file(&path);
+async fn monitor_idle_cooldown(timeout_secs: u64) {
+    let mut idle_elapsed = 0u64;
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let active = ACTIVE_CLIENTS.load(Ordering::SeqCst);
+        if active == 0 {
+            idle_elapsed += 1;
+            if idle_elapsed % 15 == 0 || (timeout_secs.saturating_sub(idle_elapsed) <= 10 && idle_elapsed % 2 == 0) {
+                info!(
+                    "No active IDE clients connected. Daemon shutdown in {}s...",
+                    timeout_secs.saturating_sub(idle_elapsed)
+                );
+            }
+            if idle_elapsed >= timeout_secs {
+                info!(
+                    "Idle cooldown reached ({}s with 0 active IDEs). Shutting down singleton daemon cleanly.",
+                    timeout_secs
+                );
+                break;
+            }
+        } else if idle_elapsed > 0 {
+            info!(
+                "Active IDE client reconnected ({} active). Cancelled shutdown cooldown.",
+                active
+            );
+            idle_elapsed = 0;
+        }
+    }
 }
 
 #[cfg(unix)]
 pub async fn daemon_main(port: u16, project_path: Option<String>) {
-    // Atomic lock to prevent dual-daemon race
+    use std::fs;
+    use tokio::net::UnixListener;
+    use super::socket_path;
+
     let _lock = match acquire_daemon_lock() {
         Some(l) => l,
         None => {
-            info!("Daemon lock held by another process. Attempting client proxy connection...");
-            for _ in 0..5 {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                if super::try_proxy_mode().await {
-                    return;
-                }
-            }
-            tracing::warn!("Daemon lock held and could not proxy. Falling back to direct stdio server.");
-            handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+            info!("Daemon lock held by another process. Exiting.");
             return;
         }
     };
@@ -81,10 +67,9 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
             return;
         }
     };
-    info!("Daemon listening on {:?}", path);
+    info!("Daemon listening on Unix socket: {:?}", path);
 
-    // Background ML model warmup — daemon accepts connections immediately
-    info!("Starting background ML model and VRAM residency warmup...");
+    // Background ML model warmup
     tokio::spawn(async {
         let warmup = tokio::task::spawn_blocking(|| {
             let _ = crate::ml::embeddings::eager_vram_warmup();
@@ -98,31 +83,15 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
 
     crate::dashboard::spawn_dashboard_background(port, project_path);
 
-    let socket_connections = Arc::new(AtomicUsize::new(0));
-    let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-    let sc = stdio_closed.clone();
-    tokio::spawn(async move {
-        info!("Handling initial stdio connection.");
-        ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
-        handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
-        ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
-        sc.store(true, Ordering::SeqCst);
-    });
-
-    let c_accept = socket_connections.clone();
     tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    c_accept.fetch_add(1, Ordering::SeqCst);
                     ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
-                    let c_sock = c_accept.clone();
                     tokio::spawn(async move {
                         let (reader, writer) = stream.into_split();
                         handle_mcp_lines(reader, writer).await;
                         ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
-                        c_sock.fetch_sub(1, Ordering::SeqCst);
                     });
                 }
                 Err(e) => {
@@ -136,59 +105,29 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
     let idle_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(600); // 10 minutes default
+        .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
 
-    loop {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        if stdio_closed.load(Ordering::SeqCst) && socket_connections.load(Ordering::SeqCst) == 0 {
-            info!(
-                "No active connections — daemon will shut down in {}s.",
-                idle_timeout_secs
-            );
-            for remaining in (1..=idle_timeout_secs).rev() {
-                if remaining % 60 == 0 || (remaining <= 10 && remaining % 2 == 0) {
-                    info!("Shutdown in {}s...", remaining);
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                if socket_connections.load(Ordering::SeqCst) > 0 {
-                    info!("New connection arrived — cancelled shutdown.");
-                    break;
-                }
-            }
-            if socket_connections.load(Ordering::SeqCst) == 0 {
-                info!("Idle timeout reached — shutting down daemon.");
-                break;
-            }
-        }
-    }
-
+    monitor_idle_cooldown(idle_timeout_secs).await;
     let _ = fs::remove_file(&path);
-    release_daemon_lock();
 }
 
 #[cfg(windows)]
 pub async fn daemon_main(port: u16, project_path: Option<String>) {
+    use tokio::net::windows::named_pipe::ServerOptions;
+    use super::WINDOWS_PIPE_NAME;
+
     let _lock = match acquire_daemon_lock() {
         Some(l) => l,
         None => {
-            info!("Daemon lock held by another process. Attempting client proxy connection...");
-            for _ in 0..5 {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                if super::try_proxy_mode().await {
-                    return;
-                }
-            }
-            tracing::warn!("Daemon lock held and could not proxy. Falling back to direct stdio server.");
-            handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
+            info!("Daemon lock held by another process. Exiting.");
             return;
         }
     };
 
-    let pipe_name = super::WINDOWS_PIPE_NAME;
+    let pipe_name = WINDOWS_PIPE_NAME;
     info!("Daemon listening on Windows Named Pipe: {}", pipe_name);
 
-    // Background ML model and VRAM residency warmup
-    info!("Starting background ML model and VRAM residency warmup...");
+    // Background ML model warmup
     tokio::spawn(async {
         let warmup = tokio::task::spawn_blocking(|| {
             let _ = crate::ml::embeddings::eager_vram_warmup();
@@ -202,22 +141,7 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
 
     crate::dashboard::spawn_dashboard_background(port, project_path);
 
-    let pipe_connections = Arc::new(AtomicUsize::new(0));
-    let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-    let sc = stdio_closed.clone();
     tokio::spawn(async move {
-        info!("Handling initial stdio connection.");
-        ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
-        handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;
-        ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
-        sc.store(true, Ordering::SeqCst);
-    });
-
-    let c_accept = pipe_connections.clone();
-    tokio::spawn(async move {
-        use tokio::net::windows::named_pipe::ServerOptions;
-
         let mut is_first = true;
         loop {
             let server_res = ServerOptions::new()
@@ -236,14 +160,11 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
 
             match server.connect().await {
                 Ok(()) => {
-                    c_accept.fetch_add(1, Ordering::SeqCst);
                     ACTIVE_CLIENTS.fetch_add(1, Ordering::SeqCst);
-                    let c_pipe = c_accept.clone();
                     tokio::spawn(async move {
                         let (reader, writer) = tokio::io::split(server);
                         handle_mcp_lines(reader, writer).await;
                         ACTIVE_CLIENTS.fetch_sub(1, Ordering::SeqCst);
-                        c_pipe.fetch_sub(1, Ordering::SeqCst);
                     });
                 }
                 Err(e) => {
@@ -257,31 +178,7 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
     let idle_timeout_secs: u64 = std::env::var("AGENT_GUIDANCE_IDLE_TIMEOUT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(600); // 10 minutes default
+        .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
 
-    loop {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        if stdio_closed.load(Ordering::SeqCst) && pipe_connections.load(Ordering::SeqCst) == 0 {
-            info!(
-                "No active connections — daemon will shut down in {}s.",
-                idle_timeout_secs
-            );
-            for remaining in (1..=idle_timeout_secs).rev() {
-                if remaining % 60 == 0 || (remaining <= 10 && remaining % 2 == 0) {
-                    info!("Shutdown in {}s...", remaining);
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                if pipe_connections.load(Ordering::SeqCst) > 0 {
-                    info!("New connection arrived — cancelled shutdown.");
-                    break;
-                }
-            }
-            if pipe_connections.load(Ordering::SeqCst) == 0 {
-                info!("Idle timeout reached — shutting down daemon.");
-                break;
-            }
-        }
-    }
-
-    release_daemon_lock();
+    monitor_idle_cooldown(idle_timeout_secs).await;
 }

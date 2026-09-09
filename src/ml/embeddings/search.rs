@@ -20,6 +20,7 @@ pub fn hybrid_vector_search(
     let model_res = super::cache::try_cached_model().ok_or_else(|| "Model warming up in background".to_string());
     let (q_vec, c_vecs) = match &model_res {
         Ok(model) => {
+            let _permit = crate::ml::ml_queue().acquire();
             let q = model.embed_text(query, Some("query")).ok();
             let c = embed_skills_cache(candidates, model);
             (q, c)

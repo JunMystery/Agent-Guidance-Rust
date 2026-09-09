@@ -4,10 +4,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub mod proxy;
 pub mod handler;
 pub mod server;
+pub mod lock;
+pub mod spawn;
 
 pub use proxy::try_proxy_mode;
 pub use handler::handle_mcp_lines;
 pub use server::daemon_main;
+pub use lock::{acquire_daemon_lock, DaemonLock};
+pub use spawn::ensure_daemon_running;
 
 pub static ACTIVE_CLIENTS: AtomicUsize = AtomicUsize::new(0);
 

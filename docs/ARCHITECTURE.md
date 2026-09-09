@@ -48,7 +48,7 @@ src/
 
 ## Transport Architecture
 
-### Cross-Platform Singleton Shared Daemon & Fast Thin Proxy
+### Cross-Platform Detached Singleton Daemon & Thin Proxy
 
 On launch from any IDE/CLI (VS Code, Cursor, Claude Code, Codex, Antigravity), `agent-guidance` auto-negotiates its runtime role:
 
@@ -59,34 +59,32 @@ agent-guidance (start)
   │   └─ Unix: Domain Socket `~/.cache/agent-guidance/mcp.sock`
   │   │
   │   └─ YES → PROXY mode (< 5MB RAM):
-  │            Connect IPC channel, forward stdin↔IPC↔stdout, exit on EOF
+  │            Connect IPC channel, forward stdin↔IPC↔stdout via tokio::select!, exit on EOF
   │
-  └─ NO → DAEMON mode (Singleton Master):
-           Acquire exclusive file lock, bind IPC listener,
-           serve initial IDE via stdio, accept subsequent IDE connections,
-           spawn background auto-warmup for ML models
+  └─ NO → Spawn DETACHED Daemon & Connect as PROXY:
+           Spawn detached background daemon process (`DETACHED_PROCESS` on Windows, nohup on Unix),
+           wait up to 3s for IPC channel to become ready, connect as Thin Proxy
 ```
 
 ### Shared Singleton Topology
 
 ```
-IDE 1 (Master)  → stdin/stdout ───┐
-                                  ▼
-IDE 2 (Proxy)   → IPC Channel ──► agent-guidance (MASTER DAEMON)
-                                  ├─ Stdio Server Loop
-IDE 3 (Proxy)   → IPC Channel ──► ├─ IPC Server Listener (Named Pipe / Unix Socket)
-                                  ├─ Embedded Web Dashboard (http://127.0.0.1:11997)
-                                  ├─ Global Tool Semaphore (4 permits)
-                                  └─ ML ThreadPool Queue (2 worker threads)
+IDE 1 (Proxy) ──► Named Pipe / Unix Socket ──┐
+                                             ▼
+IDE 2 (Proxy) ──► Named Pipe / Unix Socket ──► agent-guidance (DETACHED BACKGROUND DAEMON)
+                                             ├─ IPC Server Listener (Named Pipe / Unix Socket)
+IDE 3 (Proxy) ──► Named Pipe / Unix Socket ──┤─ Embedded Web Dashboard (http://127.0.0.1:11997)
+                                             ├─ Global Tool Worker Pool (32 workers)
+                                             ├─ SyncMlQueue Concurrency Limiter (2 permits)
+                                             └─ Per-Project Isolated GraphRAG Sync
 ```
 
-- **Master Daemon**: First IDE session runs the full daemon process, holding models in memory and serving both its direct stdio connection and incoming IPC proxy clients.
+- **Detached Background Daemon**: Runs completely decoupled from IDE parent process trees (`DETACHED_PROCESS` / `CREATE_NO_WINDOW` on Windows). Closing or reloading any IDE never kills the daemon, preventing fate-sharing crashes (`0xc0000409`).
 - **Embedded Web Dashboard**: Automatically spawned in the background on port `11997` (customizable via `--port`, `--dashboard-port`, or `AGENT_GUIDANCE_DASHBOARD_PORT`), always reachable whenever any agent session is active.
-- **Thin Proxy**: Subsequent IDE sessions detect the active daemon and act as lightweight stdio-to-IPC bridges (< 5MB RAM, ~0.1ms connect time).
-- **Fast-Fail Bypass**: On Windows, checks for `ERROR_FILE_NOT_FOUND (2)` bypass proxy waits instantly (< 0.1ms) when no daemon is active.
-- **Fail-Safe Fallback**: If an IPC lock is held but connections fail, processes automatically fall back to independent direct stdio handling.
+- **Thin Proxy**: Every IDE session acts as a lightweight stdio-to-IPC bridge (< 5MB RAM, ~0.1ms connect time), exiting cleanly via `tokio::select!` without leaving zombie processes.
+- **Fail-Safe Fallback**: If IPC spawning fails, processes automatically fall back to direct stdio handling.
 
-### Global Concurrency & Resource Queues
+### Global Concurrency, ML Queue & Per-Project GraphRAG
 
 To prevent CPU/GPU starvation and thread thrashing across multiple connected IDEs:
 
@@ -95,39 +93,42 @@ To prevent CPU/GPU starvation and thread thrashing across multiple connected IDE
                                 │
         ┌───────────────────────┴───────────────────────┐
         ▼                                               ▼
-Global Tool Semaphore                          ML Queue (Rayon ThreadPool)
-  - 4 concurrent execution permits               - 2 dedicated worker threads
-  - Throttles heavy file/graph AST scans         - Serializes Candle BERT embeddings
-  - Prevents SQLite lock contention              - Serializes Cross-Encoder reranking
+Global Worker Pool (32 workers)                SyncMlQueue (RAII SyncMlPermit)
+  - 32 concurrent execution permits              - Max 2 concurrent heavy ML inferences
+  - Throttles file reading & AST scans           - FIFO admission for Candle BERT embeddings
+  - Prevents SQLite lock contention              - Prevents VRAM/RAM exhaustion across IDEs
 ```
 
-### Connection Tracking & Idle Shutdown
+- **Per-Project GraphRAG JIT Sync**: `PROJECT_LAST_SYNC: RwLock<HashMap<PathBuf, u64>>` tracks debounce intervals per canonical project path. Inspecting code in Repo A never delays or blocks GraphRAG updates for Repo B.
+
+### Connection Tracking & 60s Idle Cooldown
 
 ```
-                    Arc<AtomicUsize>
-                    ┌────────────────┐
-                    │  ref_count = N  │
-                    └────────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │  30s timer   │
-                    │  (when 0)    │
-                    └──────┬──────┘
-                           │
-              ╔════════════╧════════════╗
-              ║ All connections closed  ║
-              ║ → wait 30s             ║
-              ║ → still 0? → exit      ║
-              ╚════════════════════════╝
+                    ACTIVE_CLIENTS (AtomicUsize)
+                    ┌──────────────────────────┐
+                    │     active_clients = N   │
+                    └──────────────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │  60s cooldown timer     │
+                    │  (triggered when N == 0)│
+                    └────────────┬────────────┘
+                                 │
+              ╔══════════════════╧══════════════════╗
+              ║ All IDE connections closed (N = 0)  ║
+              ║ → start 60s cooldown timer         ║
+              ║ → IDE reconnects? → cancel cooldown║
+              ║ → still 0 after 60s? → clean exit   ║
+              ╚═════════════════════════════════════╝
 ```
 
-| Event | `ref_count` | Action |
+| Event | `active_clients` | Action |
 |---|---|---|
 | New connection accepted | `+= 1` | Spawn `handle_mcp_lines` task |
 | Connection closed | `-= 1` | Check if 0 |
-| ref_count reaches 0 | — | Start 30s countdown (checks every 1s) |
+| active_clients reaches 0 | — | Start 60s countdown (checks every 1s) |
 | New connection during countdown | `+= 1` | Cancel countdown |
-| 30s elapsed, still 0 | — | Delete socket / close pipe, exit process |
+| 60s elapsed, still 0 | — | Delete socket / close pipe, exit process |
 
 ---
 

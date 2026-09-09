@@ -2,6 +2,15 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.5] - 2026-09-09
+
+### Detached Singleton Daemon, 60s Idle Cooldown & Resilient Multi-IDE Architecture
+- **True Detached Background Daemon**: Decoupled Master Daemon from IDE parent process trees using Windows `DETACHED_PROCESS` and `CREATE_NO_WINDOW`. Closing or reloading any IDE never terminates the daemon, eliminating fate-sharing crashes (`0xc0000409`).
+- **60s Idle Cooldown Lifecycle**: Ref-counted active connections via `ACTIVE_CLIENTS`. When all IDE sessions disconnect, the daemon enters a 60-second cooldown timer. If an IDE connects within 60s, shutdown is cancelled; if 60s expires with zero connections, daemon cleanly shuts down.
+- **Sync ML Inference Queue**: Added `SyncMlQueue` with RAII `SyncMlPermit` limiting concurrent heavy ML embedding inference to 2 permits, preventing VRAM/RAM exhaustion when multiple IDEs search skills simultaneously.
+- **Per-Project Isolated GraphRAG JIT Sync**: Converted single global sync timestamp into a per-project canonical path map (`PROJECT_LAST_SYNC: RwLock<HashMap<PathBuf, u64>>`), allowing independent repos to sync and update their code graphs without blocking each other.
+- **CLI Guard & Zombie Elimination**: Added `--version` / `-v` flags for instant exit, guarded CLI flags to prevent accidental stdio hangs on invalid args, and upgraded `proxy_stream` to `tokio::select!` preventing zombie processes.
+
 ## [1.5.4] - 2026-09-09
 
 ### Singleton Shared MCP Daemon & Fast Thin Proxy
