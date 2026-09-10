@@ -39,11 +39,15 @@ export function bindChartTooltip(scope) {
 
       // Populate rich glass tooltip
       const hourTitle = meta.is_current ? `${meta.hour} ${t('chart.current_suffix')}` : `${meta.hour}`;
+      const calls = meta.calls || 0;
+      const latency = meta.avg_duration_ms || 0;
+      const opt = meta.opt || 0;
+
       tip.innerHTML = '<div class="glass-tip-inner">' +
-        '<div class="tip-header"><span>' + hourTitle + '</span><span class="tip-badge">' + t('chart.saved_badge', { pct: meta.pct }) + '</span></div>' +
-        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_net_saved') + '</span><span class="tip-val tip-saved font-bold">+' + fmtTokens(meta.saved) + '</span></div>' +
-        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_optimized') + '</span><span class="tip-val font-mono">' + fmtTokens(meta.opt) + '</span></div>' +
-        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_original') + '</span><span class="tip-val font-mono text-muted">' + fmtTokens(meta.orig) + '</span></div>' +
+        '<div class="tip-header"><span>' + hourTitle + '</span><span class="tip-badge font-mono">' + latency + 'ms</span></div>' +
+        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_calls') + '</span><span class="tip-val tip-saved font-bold">' + calls + ' ' + t('chart.calls_unit') + '</span></div>' +
+        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_latency') + '</span><span class="tip-val font-mono">' + latency + 'ms</span></div>' +
+        '<div class="tip-row"><span class="tip-label">' + t('chart.tip_payload') + '</span><span class="tip-val font-mono text-muted">' + fmtTokens(opt) + '</span></div>' +
         '</div>';
       tip.style.opacity = '1';
     };

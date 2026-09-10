@@ -22,13 +22,8 @@ pub fn build_community_hierarchy(
     // 1. Group entities by file path & top directory (Level 0: Macro Subsystems)
     let mut macro_groups: HashMap<String, Vec<&GraphEntity>> = HashMap::new();
     for entity in entities {
-        let clean_path = entity.file_path.replace('\\', "/");
-        let top_dir = clean_path
-            .split('/')
-            .take(if clean_path.starts_with("src/") { 2 } else { 1 })
-            .collect::<Vec<_>>()
-            .join("/");
-        macro_groups.entry(top_dir).or_default().push(entity);
+        let dir = extract_macro_subsystem(&entity.file_path);
+        macro_groups.entry(dir).or_default().push(entity);
     }
 
     let mut level_0_communities = Vec::new();
@@ -122,7 +117,7 @@ pub fn build_community_hierarchy(
             }
         }
 
-        if !cluster_entities.is_empty() {
+        if cluster_entities.len() >= 3 {
             let primary_name = &cluster_entities[0].name;
             let comm_id = format!("micro_{}_{}", primary_name, level_2_communities.len());
             let parent_id = level_1_communities
@@ -162,4 +157,29 @@ pub fn build_community_hierarchy(
     hierarchy.communities.extend(level_2_communities);
 
     hierarchy
+}
+
+fn extract_macro_subsystem(file_path: &str) -> String {
+    let clean = file_path.replace('\\', "/");
+    let trimmed = clean
+        .strip_prefix("app/src/main/java/")
+        .or_else(|| clean.strip_prefix("app/src/main/kotlin/"))
+        .or_else(|| clean.strip_prefix("src/main/java/"))
+        .or_else(|| clean.strip_prefix("src/main/kotlin/"))
+        .or_else(|| clean.strip_prefix("src/"))
+        .or_else(|| clean.strip_prefix("lib/"))
+        .unwrap_or(&clean);
+
+    let mut parts: Vec<&str> = trimmed.split('/').collect();
+    if parts.len() > 2 && (parts[0] == "com" || parts[0] == "org" || parts[0] == "io" || parts[0] == "net") {
+        parts = parts[2..].to_vec();
+    }
+
+    if parts.len() > 2 {
+        format!("{}/{}", parts[0], parts[1])
+    } else if parts.len() > 1 {
+        parts[0].to_string()
+    } else {
+        "core".to_string()
+    }
 }

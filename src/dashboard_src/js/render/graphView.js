@@ -35,6 +35,8 @@ export function renderGraphView(data) {
   const nodes = data.nodes || [];
   const edges = data.edges || [];
   const communities = Array.isArray(data.communities) ? data.communities : (data.communities?.communities || []);
+  const macroComms = communities.filter(c => c.level === 'MacroSubsystem' || c.level === 0 || !c.level);
+  const clusterCount = macroComms.length > 0 ? macroComms.length : (communities.length > 0 ? communities.length : 1);
   const mermaidDag = data.mermaid_dag || '';
 
   // Calculate degrees & hub status
@@ -66,7 +68,7 @@ export function renderGraphView(data) {
       </div>
       <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: var(--border-radius-sm);">
         <span style="color: var(--text-secondary); font-size: 11px;">${t('graph.clusters')}</span>
-        <strong style="margin-left: 6px; color: #a78bfa; font-size: 13px;">${communities.length}</strong>
+        <strong style="margin-left: 6px; color: #a78bfa; font-size: 13px;">${clusterCount}</strong>
       </div>
 
       <div style="display: flex; gap: 6px; align-items: center; margin-left: 8px;">
@@ -76,6 +78,18 @@ export function renderGraphView(data) {
         <button id="btn-filter-mod" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">${t('graph.modules')}</button>
         <button id="btn-filter-hubs" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px;">${t('graph.hubs')}</button>
         <button id="btn-toggle-orphans" class="btn btn-sm btn-secondary" style="padding: 4px 10px; font-size: 11px; margin-left: 6px; border-color: #334155;" title="${t('graph.connected_only')}">${t('graph.connected_only')}</button>
+        <select id="select-lang-filter" style="background: var(--bg-secondary); border: 1px solid var(--border-color); color: #38bdf8; font-size: 11px; padding: 4px 8px; border-radius: var(--border-radius-sm); outline: none; margin-left: 6px; cursor: pointer;">
+          <option value="all">🌐 All Languages</option>
+          <option value="rust">🦀 Rust</option>
+          <option value="kotlin">📱 Kotlin</option>
+          <option value="java">☕ Java</option>
+          <option value="typescript">🟦 TS / JS</option>
+          <option value="python">🐍 Python</option>
+          <option value="go">🐹 Go</option>
+          <option value="cpp">⚙️ C / C++</option>
+          <option value="csharp">🔷 C#</option>
+          <option value="shell">🐚 Shell</option>
+        </select>
       </div>
 
       <div style="flex: 1;"></div>
@@ -184,6 +198,17 @@ export function renderGraphView(data) {
     };
   }
 
+  const langSelect = el('select-lang-filter');
+  let currentKind = 'all';
+  let currentLang = 'all';
+
+  if (langSelect) {
+    langSelect.onchange = (e) => {
+      currentLang = e.target.value;
+      activeCanvasInstance.setFilter(currentKind, currentLang);
+    };
+  }
+
   const setupFilter = (id, filter) => {
     const btn = el(id);
     if (!btn) return;
@@ -192,7 +217,8 @@ export function renderGraphView(data) {
         const b = el(bId);
         if (b) b.className = 'btn btn-sm ' + (bId === id ? 'btn-primary' : 'btn-secondary');
       });
-      activeCanvasInstance.setFilter(filter);
+      currentKind = filter;
+      activeCanvasInstance.setFilter(currentKind, currentLang);
     };
   };
 

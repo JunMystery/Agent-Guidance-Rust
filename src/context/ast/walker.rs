@@ -6,7 +6,20 @@ use super::types::{AstCall, AstLanguage, AstSymbol};
 /// Extracts all top-level and nested symbols from an AST root.
 pub fn extract_symbols(root: Node, source: &[u8], lang: AstLanguage) -> Vec<AstSymbol> {
     let mut symbols = Vec::new();
-    collect_symbols(root, source, lang, None, &mut symbols);
+    let package = if lang == AstLanguage::Go {
+        let mut cur = root.walk();
+        root.children(&mut cur)
+            .find(|c| c.kind() == "package_clause")
+            .and_then(|c| {
+                let mut cur2 = c.walk();
+                c.children(&mut cur2)
+                    .find(|ch| ch.kind() == "package_identifier")
+            })
+            .map(|n| node_text(&n, source).to_string())
+    } else {
+        None
+    };
+    collect_symbols(root, source, lang, None, package.as_deref(), &mut symbols);
     symbols
 }
 
@@ -26,6 +39,7 @@ fn collect_symbols(
     source: &[u8],
     lang: AstLanguage,
     parent_sym: Option<&str>,
+    package: Option<&str>,
     symbols: &mut Vec<AstSymbol>,
 ) {
     if let Some((name, kind, body_node)) = match_symbol_node(node, source, lang, parent_sym) {
@@ -49,20 +63,23 @@ fn collect_symbols(
             signature: sig,
             body_start_line: body_node.map(|b| b.start_position().row + 1),
             body_end_line: body_node.map(|b| b.end_position().row + 1),
+            parent_symbol: parent_sym.map(|s| s.to_string()),
+            package: package.map(|p| p.to_string()),
+            language: lang.as_str().to_string(),
         };
         symbols.push(sym);
 
         // Recurse into children with this symbol as parent
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            collect_symbols(child, source, lang, Some(&name), symbols);
+            collect_symbols(child, source, lang, Some(&name), package, symbols);
         }
         return;
     }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_symbols(child, source, lang, parent_sym, symbols);
+        collect_symbols(child, source, lang, parent_sym, package, symbols);
     }
 }
 
@@ -138,7 +155,7 @@ fn match_symbol_node<'a>(
             }
             _ => None,
         },
-        AstLanguage::Unsupported => None,
+        _ => None,
     }
 }
 
@@ -166,12 +183,14 @@ fn collect_calls(
 
     if is_call {
         if let Some(func_node) = node.child_by_field_name("function") {
-            let callee_name = extract_callee_name(func_node, source);
+            let (callee_name, receiver, namespace) = extract_callee_details(func_node, source);
             if !callee_name.is_empty() {
                 calls.push(AstCall {
                     caller_name: active_caller.map(|s| s.to_string()),
                     callee_name,
                     line: node.start_position().row + 1,
+                    receiver,
+                    namespace,
                 });
             }
         }
@@ -183,16 +202,25 @@ fn collect_calls(
     }
 }
 
-fn extract_callee_name(func_node: Node, source: &[u8]) -> String {
-    // If it's a field / attribute access (e.g. obj.foo() or obj->foo()), extract property name
+fn extract_callee_details(func_node: Node, source: &[u8]) -> (String, Option<String>, Option<String>) {
+    // If it's a field / attribute access (e.g. obj.foo() or obj->foo()), extract property name & receiver
     if let Some(field) = func_node.child_by_field_name("field") {
-        return node_text(&field, source).to_string();
+        let rec = func_node.child_by_field_name("value").or_else(|| func_node.child_by_field_name("operand")).map(|v| node_text(&v, source).to_string());
+        return (node_text(&field, source).to_string(), rec, None);
     }
     if let Some(attr) = func_node.child_by_field_name("attribute") {
-        return node_text(&attr, source).to_string();
+        let rec = func_node.child_by_field_name("value").map(|v| node_text(&v, source).to_string());
+        return (node_text(&attr, source).to_string(), rec, None);
     }
     if let Some(prop) = func_node.child_by_field_name("property") {
-        return node_text(&prop, source).to_string();
+        let rec = func_node.child_by_field_name("object").map(|o| node_text(&o, source).to_string());
+        return (node_text(&prop, source).to_string(), rec, None);
     }
-    node_text(&func_node, source).to_string()
+    if func_node.kind() == "scoped_identifier" {
+        if let Some(name_node) = func_node.child_by_field_name("name") {
+            let path_node = func_node.child_by_field_name("path").map(|p| node_text(&p, source).to_string());
+            return (node_text(&name_node, source).to_string(), path_node.clone(), path_node);
+        }
+    }
+    (node_text(&func_node, source).to_string(), None, None)
 }

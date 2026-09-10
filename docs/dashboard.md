@@ -41,13 +41,14 @@ agent-guidance --dashboard --project "e:\Github\MyProject"
 The web dashboard is organized into 4 primary views accessible via the responsive sidebar:
 
 ### 1. Dashboard (Overview)
-- **Token Efficiency & Velocity Dynamics**: Visual charts tracking original prompt token waves vs. compressed outgoing payloads, calculating real-time token reduction percentages (typically 30–50% savings).
-- **Executive Metric Cards**:
-  - Total MCP Tool Calls executed across sessions.
-  - Raw tokens ingested vs. compressed tokens returned.
-  - Overall token savings percentage.
-  - Peak processing velocity (tokens/sec).
+- **Agent Invocations & Latency Wave**: Dual-axis spline chart displaying hourly tool invocations (left Y-axis) correlated with average execution latency in milliseconds (right Y-axis), tracking activity against the user's system timezone across the past 24 hours.
+- **Executive Metric Cards & KPI Header**:
+  - Total Operations / Tool Invocations executed across sessions.
+  - Ingestion Velocity (Saved vs. Ingestion tokens).
+  - Average execution latency (ms).
+  - Context reduction percentage (typically 30–50% savings).
   - Active IDE client sessions.
+- **Multi-Repository Project Root Resolution**: Automatic detection of project boundaries using `.agent-context/` or `.git/` anchors, ensuring nested folders within a repository map to the true project root.
 - **Recent Activity Summary**: Quick-glance stream of recently executed tool actions and active workflow stages.
 
 ### 2. Actions Log
@@ -88,8 +89,8 @@ The embedded HTTP server exposes a complete REST API for programmatic telemetry 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/stats` | Aggregated metrics (tool call counts, token savings, duration, active sessions). Accepts optional `?project=<path>`. |
-| `GET` | `/api/projects` | List of all registered and tracked repositories in `~/.agent-guidance/usage.db`. |
-| `POST` | `/api/projects/prune` | Remove stale or missing projects from the registry. |
+| `GET` | `/api/projects` | List of all registered repositories in `~/.agent-guidance/usage.db`, automatically resolved to their project roots. |
+| `POST` | `/api/projects/prune` | Remove stale, missing, or redundant child directory records from the registry. |
 | `GET` | `/api/graph` | Code graph data (nodes, edges, communities, blast radius metrics). Requires `?project=<path>`. |
 | `POST` | `/api/cleanup` | Trigger database vacuuming, expired log pruning, and dead project cleanup. |
 | `GET` | `/api/logs` | Paginated action logs. Parameters: `page` (default 1), `limit` (default 10), `search` (optional keyword). |

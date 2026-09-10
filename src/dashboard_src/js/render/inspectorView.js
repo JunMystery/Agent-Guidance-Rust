@@ -26,8 +26,12 @@ export function renderSymbolInspector(container, node, edges, allNodes, onSelect
     origin: e.origin || 'ast'
   }));
 
+  const memberMethods = (node.kind === 'struct' || node.kind === 'class' || node.kind === 'interface')
+    ? allNodes.filter(n => n.parent === node.label && n.file === node.file)
+    : [];
+
   const role = inferFunctionalRole(node);
-  const blastRisk = getBlastRadiusRisk(node.inDeg || 0);
+  const blastRisk = getBlastRadiusRisk(node, incoming.length, outgoing.length);
 
   const kindColors = {
     function: '#10b981',
@@ -45,6 +49,7 @@ export function renderSymbolInspector(container, node, edges, allNodes, onSelect
         <span style="font-size: 10px; text-transform: uppercase; font-weight: 700; color: ${kindColor}; background: ${kindColor}18; border: 1px solid ${kindColor}40; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px;">
           ${node.kind || 'symbol'}
         </span>
+        ${node.lang ? `<span style="font-size: 10px; text-transform: uppercase; font-weight: 700; color: #38bdf8; background: #0284c718; border: 1px solid #0284c740; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-left: 4px; margin-bottom: 4px;">${node.lang}</span>` : ''}
         <h4 style="color: #f8fafc; font-size: 14px; margin: 0; font-family: var(--font-mono); word-break: break-all; line-height: 1.3;">
           ${escapeHtml(node.label)}
         </h4>
@@ -92,6 +97,29 @@ export function renderSymbolInspector(container, node, edges, allNodes, onSelect
         ${escapeHtml(node.file || '--')} <span style="color: #64748b;">(${node.loc || '--'} LOC)</span>
       </div>
     </div>
+
+    ${node.parent ? `
+      <div style="margin-bottom: 10px; font-size: 11px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px 8px;">
+        <span style="color: #64748b; font-weight: 600; font-size: 10px;">ENCLOSING PARENT:</span>
+        <div style="color: #38bdf8; font-family: var(--font-mono); font-size: 11px; margin-top: 2px;">${escapeHtml(node.parent)}</div>
+      </div>
+    ` : ''}
+
+    ${memberMethods.length ? `
+      <div style="margin-bottom: 10px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 11px; font-weight: 600; color: #a78bfa;">MEMBER METHODS (${memberMethods.length})</span>
+        </div>
+        <div style="max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;">
+          ${memberMethods.map(m => `
+            <div class="node-jumper" data-node-id="${escapeHtml(m.id)}" style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 3px; padding: 3px 6px; cursor: pointer;">
+              <span style="font-family: var(--font-mono); font-size: 10px; color: #e2e8f0;">${escapeHtml(m.label)}</span>
+              <span style="font-size: 9px; color: #64748b;">L${m.loc || 1}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
 
     <!-- Incoming Callers Details -->
     <div style="margin-bottom: 10px; border-top: 1px solid var(--border-color); padding-top: 8px;">
@@ -194,10 +222,11 @@ function inferFunctionalRole(node) {
   return { tier: t('inspector.tier_app'), description: t('inspector.desc_app', { kind: node.kind || 'symbol' }) };
 }
 
-function getBlastRadiusRisk(inDeg) {
-  if (inDeg >= 8) return { label: t('inspector.blast_critical'), color: '#ef4444' };
-  if (inDeg >= 4) return { label: t('inspector.blast_moderate'), color: '#f59e0b' };
-  if (inDeg >= 1) return { label: t('inspector.blast_low'), color: '#10b981' };
+function getBlastRadiusRisk(node, incomingLen, outgoingLen) {
+  const total = (node.inDeg || incomingLen || 0) * 1.5 + (node.outDeg || outgoingLen || 0);
+  if (total >= 8) return { label: t('inspector.blast_critical'), color: '#ef4444' };
+  if (total >= 4) return { label: t('inspector.blast_moderate'), color: '#f59e0b' };
+  if (total >= 1 || (node.kind === 'module' && node.loc > 20)) return { label: t('inspector.blast_low'), color: '#10b981' };
   return { label: t('inspector.blast_isolated'), color: '#94a3b8' };
 }
 

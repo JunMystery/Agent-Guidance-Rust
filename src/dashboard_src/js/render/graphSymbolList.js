@@ -66,11 +66,12 @@ export function initGraphSymbolList(container, nodes, onSelectNode) {
 
       const f = (n.file || '').toLowerCase();
       const l = (n.label || '').toLowerCase();
+      const lang = (n.lang || '').toLowerCase();
 
       if (rawQ.includes('->') || rawQ.includes(' ')) {
         return f.includes(fileQuery) && l.includes(funcQuery);
       }
-      return f.includes(rawQ) || l.includes(rawQ);
+      return f.includes(rawQ) || l.includes(rawQ) || lang.includes(rawQ);
     });
 
     if (countBadge) {
@@ -143,6 +144,7 @@ export function initGraphSymbolList(container, nodes, onSelectNode) {
         <div style="min-width: 0; flex: 1;">
           <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
             <span style="font-size: 9px; font-weight: 700; color: ${color}; background: ${color}15; border: 1px solid ${color}35; padding: 1px 4px; border-radius: 3px;">${n.kind || 'sym'}</span>
+            ${n.lang ? `<span style="font-size: 8px; font-weight: 700; color: #38bdf8; background: #0284c718; border: 1px solid #0284c730; padding: 1px 3px; border-radius: 2px;">${n.lang}</span>` : ''}
             <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: #f1f5f9; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(n.label)}</span>
           </div>
           <div style="font-size: 9px; color: #64748b;">

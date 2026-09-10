@@ -24,6 +24,7 @@ fn test_query_graph_data_missing_db() {
 #[test]
 fn test_query_graph_data_success() {
     let temp_dir = std::env::temp_dir().join(format!("graph_test_ok_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&temp_dir);
     let context_dir = temp_dir.join(".agent-context");
     let _ = fs::create_dir_all(&context_dir);
 
@@ -38,13 +39,19 @@ fn test_query_graph_data_success() {
             parent TEXT,
             start_line INTEGER NOT NULL,
             end_line INTEGER NOT NULL,
-            signature TEXT
+            signature TEXT,
+            language TEXT DEFAULT 'unknown',
+            namespace TEXT,
+            receiver TEXT
         );
         CREATE TABLE symbol_edges (
             source_id TEXT NOT NULL,
             target_id TEXT NOT NULL,
             edge_type TEXT NOT NULL,
             weight REAL DEFAULT 1.0,
+            confidence REAL DEFAULT 1.0,
+            category TEXT DEFAULT 'symbol',
+            call_line INTEGER,
             PRIMARY KEY (source_id, target_id, edge_type)
         );
         INSERT INTO symbols (id, name, kind, file_path, start_line, end_line)

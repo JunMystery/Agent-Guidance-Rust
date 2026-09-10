@@ -907,9 +907,11 @@ tr:hover td {
     font-size: 10px;
     dominant-baseline: central;
     font-family: var(--font-mono);
+    fill: var(--text-muted);
 }
 
 .axis-left { text-anchor: end; fill: var(--text-muted); }
+.axis-right { text-anchor: start; fill: #38bdf8; }
 
 .chart-xlabel {
     fill: var(--text-muted);

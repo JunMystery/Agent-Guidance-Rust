@@ -8,38 +8,47 @@ pub fn query_hourly_savings(conn: &Connection, now: i64, is_proj: bool, p1: &str
 
     for i in 0..24 {
         let h = start_hour + (i * 3600);
-        hourly_map.insert(h, (0i64, 0i64, 0i64));
+        hourly_map.insert(h, (0i64, 0i64, 0i64, 0.0f64));
     }
 
     let h_sql = if is_proj {
-        "SELECT (started_at / 3600) * 3600 as hour, COUNT(*), COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0)
+        "SELECT (started_at / 3600) * 3600 as hour, COUNT(*), COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0), COALESCE(AVG(duration_ms), 0.0)
          FROM tool_calls WHERE started_at >= ?1 AND tool_name != 'mcp_tool' AND (project_path = ?2 COLLATE NOCASE OR project_path = ?3 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?2 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?3 COLLATE NOCASE) GROUP BY hour"
     } else {
-        "SELECT (started_at / 3600) * 3600 as hour, COUNT(*), COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0)
+        "SELECT (started_at / 3600) * 3600 as hour, COUNT(*), COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0), COALESCE(AVG(duration_ms), 0.0)
          FROM tool_calls WHERE started_at >= ?1 AND tool_name != 'mcp_tool' GROUP BY hour"
     };
 
     if let Ok(mut stmt) = conn.prepare(h_sql) {
-        let mapper = |row: &rusqlite::Row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?));
+        let mapper = |row: &rusqlite::Row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, f64>(4)?));
         let rows = if is_proj { stmt.query_map(params![start_hour, p1, p2], mapper) }
                    else { stmt.query_map([start_hour], mapper) };
         if let Ok(iter) = rows {
-            for (h, cnt, orig, opt) in iter.flatten() {
-                hourly_map.insert(h, (cnt, orig, opt));
+            for (h, cnt, orig, opt, dur) in iter.flatten() {
+                hourly_map.insert(h, (cnt, orig, opt, dur));
             }
         }
     }
 
+    let total_len = hourly_map.len();
     hourly_map
         .into_iter()
-        .map(|(h, (cnt, orig, opt))| {
+        .enumerate()
+        .map(|(idx, (h, (cnt, orig, opt, dur)))| {
             let saved = orig - opt;
+            let is_current = idx + 1 == total_len;
             json!({
                 "hour": h,
+                "timestamp": h,
                 "calls": cnt,
+                "avg_duration_ms": dur.round() as i64,
                 "tokens_original": orig,
                 "tokens_optimized": opt,
-                "tokens_saved": saved
+                "tokens_saved": saved,
+                "original": orig,
+                "optimized": opt,
+                "saved": saved,
+                "is_current": is_current
             })
         })
         .collect()
@@ -111,4 +120,52 @@ pub fn query_summaries(conn: &Connection, now: i64, cutoff_24h: i64, is_proj: bo
         "last_30d": query_timeframe_summary(conn, now.saturating_sub(30 * 86400), is_proj, p1, p2),
         "lifetime": query_timeframe_summary(conn, 0, is_proj, p1, p2),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn test_query_hourly_savings_metrics_and_is_current() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE tool_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tool_name TEXT NOT NULL,
+                operation TEXT,
+                started_at INTEGER NOT NULL,
+                duration_ms INTEGER,
+                tokens_original INTEGER DEFAULT 0,
+                tokens_optimized INTEGER DEFAULT 0,
+                error_message TEXT,
+                project_path TEXT,
+                target TEXT
+            )",
+            [],
+        ).unwrap();
+
+        let now = 1773187200; // test epoch
+        conn.execute(
+            "INSERT INTO tool_calls (tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, project_path)
+             VALUES ('project_context', 'read', ?1, 120, 1000, 200, 'test_proj')",
+            [now],
+        ).unwrap();
+
+        let res = query_hourly_savings(&conn, now, false, "", "");
+        assert_eq!(res.len(), 24);
+
+        let last = &res[23];
+        assert_eq!(last["is_current"], true);
+        assert_eq!(last["calls"], 1);
+        assert_eq!(last["avg_duration_ms"], 120);
+        assert_eq!(last["tokens_optimized"], 200);
+        assert_eq!(last["optimized"], 200);
+        assert!(last["timestamp"].is_number());
+
+        let first = &res[0];
+        assert_eq!(first["is_current"], false);
+        assert_eq!(first["calls"], 0);
+    }
 }

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::json_response;
-pub use super::projects_path::{is_temp_project_path, normalize_project_path};
+pub use super::projects_path::{find_project_root, is_temp_project_path, normalize_project_path};
 pub use super::projects_prune::prune_missing_projects;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,6 +71,12 @@ pub fn list_tracked_projects(db_path: &Path) -> Result<Vec<TrackedProject>> {
             continue;
         }
 
+        let root_name = Path::new(&norm_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&name)
+            .to_string();
+
         let entry = map.entry(norm_path.clone()).or_insert_with(|| {
             let status = if Path::new(&norm_path).exists() {
                 "active".to_string()
@@ -78,7 +84,7 @@ pub fn list_tracked_projects(db_path: &Path) -> Result<Vec<TrackedProject>> {
                 "missing".to_string()
             };
             TrackedProject {
-                name,
+                name: root_name,
                 path: norm_path,
                 status,
                 first_seen,
@@ -105,7 +111,7 @@ pub fn list_tracked_projects(db_path: &Path) -> Result<Vec<TrackedProject>> {
     if let Ok(curr) = std::env::current_dir() {
         let norm_curr = normalize_project_path(&curr.to_string_lossy());
         if !norm_curr.is_empty() && !is_temp_project_path(&norm_curr) && !projects.iter().any(|p| p.path == norm_curr) {
-            let name = curr
+            let name = Path::new(&norm_curr)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("current_project")

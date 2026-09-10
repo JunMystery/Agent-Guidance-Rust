@@ -64,67 +64,9 @@ pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
 
-    let mut stmt = conn.prepare(
-        "SELECT s.id, s.name, s.kind, s.file_path, s.start_line, s.end_line,
-                (SELECT COUNT(*) FROM symbol_edges e WHERE e.source_id = s.id OR e.target_id = s.id) as degree
-         FROM symbols s
-         ORDER BY degree DESC, (s.end_line - s.start_line) DESC
-         LIMIT 250",
-    )?;
-
-    let mut node_set = std::collections::HashSet::new();
-    let nodes: Vec<serde_json::Value> = stmt
-        .query_map([], |row| {
-            let id: String = row.get(0)?;
-            let s_line: usize = row.get(4)?;
-            let e_line: usize = row.get(5)?;
-            let loc = (e_line.saturating_sub(s_line) + 1) as i64;
-            let deg: i64 = row.get(6).unwrap_or(0);
-            Ok((
-                id.clone(),
-                json!({
-                    "id": id,
-                    "label": row.get::<_, String>(1)?,
-                    "kind": row.get::<_, String>(2)?,
-                    "file": row.get::<_, String>(3)?,
-                    "loc": loc,
-                    "deg": deg,
-                }),
-            ))
-        })?
-        .filter_map(|r| r.ok())
-        .map(|(id, v)| {
-            node_set.insert(id);
-            v
-        })
-        .collect();
-
-    let mut stmt = conn.prepare(
-        "SELECT source_id, target_id, edge_type, weight
-         FROM symbol_edges LIMIT 1000",
-    )?;
-
-    let mut edges: Vec<serde_json::Value> = stmt
-        .query_map([], |row| {
-            let src: String = row.get(0)?;
-            let tgt: String = row.get(1)?;
-            let etype: String = row.get(2)?;
-            let weight: f64 = row.get(3)?;
-            Ok((src, tgt, etype, weight))
-        })?
-        .filter_map(|r| r.ok())
-        .filter(|(src, tgt, _, _)| node_set.contains(src) && node_set.contains(tgt))
-        .map(|(src, tgt, etype, weight)| {
-            json!({
-                "source": src,
-                "target": tgt,
-                "type": etype,
-                "weight": weight,
-                "origin": "ast",
-                "dashed": false,
-            })
-        })
-        .collect();
+    let query_res = super::graph_query::load_connected_graph_data(&conn, 300)?;
+    let nodes = query_res.nodes;
+    let mut edges = query_res.edges;
 
     // Query semantic edges contributed by AI Agents
     if let Ok(mut sem_stmt) = conn.prepare(

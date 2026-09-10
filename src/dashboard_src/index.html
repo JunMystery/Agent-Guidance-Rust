@@ -10,6 +10,15 @@
 <link rel="apple-touch-icon" href="/docs/images/logo.png">
 <!-- fetch: /api/stats -->
 <link rel="stylesheet" href="/dashboard.css?v={{css_hash}}">
+<script>
+  // Suppress Chromium 152 DevTools auto-injected Soft Navigation live-metrics bug (Chromium #555794190)
+  window.addEventListener('error', function(e) {
+    if (e && e.message && e.message.includes("reading 'startTime'") && (!e.filename || e.filename.includes('VM'))) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  });
+</script>
 </head>
 <body>
 <a class="skip-link" href="#main-content" data-i18n="nav.skip_link">Skip to content</a>
@@ -205,7 +214,7 @@
                   <h3 data-i18n="deck.title">Subsystems &amp; Neural Engine Matrix</h3>
                 </div>
                 <div class="hud-deck-meta">
-                  <span class="hud-meta-pill">VERSION <span id="sys-version">v1.5.8</span></span>
+                  <span class="hud-meta-pill">VERSION <span id="sys-version">v1.5.9</span></span>
                   <span class="hud-meta-pill">PORT <span id="sidebar-port-badge">11997</span></span>
                 </div>
               </div>
@@ -469,11 +478,11 @@
           <div class="terminal-dot dot-yellow"></div>
           <div class="terminal-dot dot-green"></div>
         </div>
-        <div class="terminal-title" data-i18n="actions.chart_title">Token Savings &amp; Velocity Dynamics</div>
+        <div class="terminal-title" data-i18n="actions.chart_title">Agent Invocations &amp; Latency Wave</div>
       </div>
       <div class="terminal-body-raw">
         <div class="chart-card">
-          <div class="chart-card-title" data-i18n="actions.chart_subtitle">Token Savings Velocity &amp; Payload Wave · Last 24h</div>
+          <div class="chart-card-title" data-i18n="actions.chart_subtitle">Tool Call Volume &amp; Execution Latency (ms) · Last 24h</div>
           <div id="hourly-chart" class="hourly-chart"></div>
         </div>
         <div class="cards" style="margin-top:20px" id="token-summary-cards"></div>

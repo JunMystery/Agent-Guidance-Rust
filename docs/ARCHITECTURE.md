@@ -29,15 +29,20 @@ src/
 │   ├── rules.rs       # Tech stack & language-specific micro-rulesets
 │   └── mod.rs
 ├── context/           # Project Context, AST Analysis & GraphRAG Engine
+│   ├── ast/           # Polyglot AST parsers (Rust, TS/JS, Python, Go, Kotlin, Vue, Svelte, Astro, SQL, Prisma)
+│   ├── indexer/       # Symbol indexing, doc data extraction, and cross-file edge parsing (< 200 LOC each)
 │   ├── scanner.rs     # Bounded workspace scanner (max_depth=3 default, .gitignore filters)
-│   ├── db.rs          # SQLite code_graph.db (FTS5 symbols, call edges, AST metadata)
+│   ├── db/            # SQLite code_graph.db (FTS5 symbols, call edges, AST metadata, schema migrations)
 │   ├── graph_rag/     # Hierarchical Leiden community clustering & RAG summarization
 │   └── hnsw/          # High-performance in-memory vector index for symbol retrieval
 ├── dashboard/         # Embedded Web Dashboard Server & REST API (< 300 LOC each)
 │   ├── stats.rs       # GET /api/stats with 2s TTL in-memory cache
 │   ├── stats_query.rs # SQLite queries for 24h summaries, tool breakdown, phase cadence
 │   ├── graph.rs       # GET /api/graph code graph serializer & Mermaid DAG exporter
-│   ├── projects.rs    # GET /api/projects multi-repository registry with active/missing disk checks
+│   ├── graph_query.rs # Graph query builder and caller/callee edge extraction
+│   ├── projects.rs    # GET /api/projects multi-repository registry with active/missing disk checks & root resolution
+│   ├── projects_path.rs # Project root resolution (.agent-context & .git anchor detection)
+│   ├── projects_prune.rs# Auto-prune and stale project cleaner
 │   ├── logs_api.rs    # GET /api/logs paginated diagnostic log query & clear endpoint
 │   └── mod.rs         # tiny_http worker pool, asset router, port allocator (11997)
 ├── dashboard_src/     # Dashboard Frontend SPA (HTML5, Vanilla ES Modules, CSS, SVG)
@@ -45,6 +50,7 @@ src/
 │   ├── router/        # MCP JSON-RPC protocol router & tool schema definitions
 │   ├── state/         # ServerState, stage state machine, 31-keyword multi-lingual approval
 │   ├── tools/         # 6 core tool dispatchers (pipeline, skills, guidance, context, gate, continuity)
+│   ├── fingerprint.rs # Security provenance, pure-Rust SHA-256 digest, platform digital signature detection
 │   ├── db.rs          # SQLite usage.db telemetry logging & daily aggregations
 │   └── mod.rs
 ├── ml/                # Machine Learning & Vector Search Engine

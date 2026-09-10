@@ -29,6 +29,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
   let lastMouseX = 0, lastMouseY = 0, startX = 0, startY = 0;
   let selectedId = null, hoverId = null;
   let filter = 'all';
+  let langFilter = 'all';
   let pulseEnabled = true;
   let hideOrphans = false;
   let animTime = 0, running = true;
@@ -93,8 +94,8 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = a.color;
-      ctx.font = '600 11px Inter, sans-serif';
-      ctx.fillText(`${a.name.toUpperCase()} (${a.count})`, a.x - a.radius * 0.6, a.y - a.radius + 16);
+      ctx.font = '600 9px Inter, sans-serif';
+      ctx.fillText(`${a.name.toUpperCase()} (${a.count})`, a.x - a.radius * 0.6, a.y - a.radius + 13);
       ctx.restore();
     });
 
@@ -109,26 +110,30 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
     // 3. Draw Nodes with Glowing Hub Rings
     nodeArr.forEach(n => {
       if (hideOrphans && n.isOrphan) return;
-      const matchFilter = filter === 'all' || (filter === 'hubs' ? n.isHub : n.kind === filter);
+      const matchKind = filter === 'all' || (filter === 'hubs' ? n.isHub : n.kind === filter);
+      const nLang = n.lang || detectNodeLang(n.file);
+      const matchLang = langFilter === 'all' || nLang === langFilter;
+      const matchFilter = matchKind && matchLang;
+
       const isHigh = !activeTargetId || neighborIds.has(n.id);
       const isSelected = n.id === selectedId;
       const isHovered = n.id === hoverId;
       ctx.globalAlpha = matchFilter ? (isHigh ? 1.0 : 0.12) : 0.05;
 
       if (n.isHub && matchFilter) {
-        const pulseR = n.radius + 4 + Math.sin(animTime * 3) * 1.5;
+        const pulseR = n.radius + 2.8 + Math.sin(animTime * 3) * 1.1;
         ctx.beginPath();
         ctx.arc(n.x, n.y, pulseR, 0, 2 * Math.PI);
         ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 1.4;
         ctx.stroke();
       }
 
       if (isSelected || isHovered) {
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.radius + 5.5, 0, 2 * Math.PI);
+        ctx.arc(n.x, n.y, n.radius + 3.8, 0, 2 * Math.PI);
         ctx.strokeStyle = '#00e5ff';
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 1.8;
         ctx.stroke();
       }
 
@@ -137,7 +142,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       ctx.fillStyle = n.isOrphan ? '#475569' : (n.kind === 'function' ? '#10b981' : (n.kind === 'struct' ? '#00e5ff' : (n.kind === 'module' ? '#8b5cf6' : '#ec4899')));
       ctx.fill();
       ctx.strokeStyle = isSelected ? '#ffffff' : (n.isOrphan ? '#64748b' : 'rgba(255,255,255,0.7)');
-      ctx.lineWidth = isSelected ? 2.5 : 1.0;
+      ctx.lineWidth = isSelected ? 1.8 : 0.8;
       ctx.stroke();
     });
 
@@ -199,7 +204,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
     let found = null;
     for (const n of nodeArr) {
       if (hideOrphans && n.isOrphan) continue;
-      if (Math.hypot(n.x - worldX, n.y - worldY) <= n.radius + 6) {
+      if (Math.hypot(n.x - worldX, n.y - worldY) <= n.radius + 4.5) {
         found = n;
         break;
       }
@@ -222,7 +227,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
     let clicked = null;
     for (const n of nodeArr) {
       if (hideOrphans && n.isOrphan) continue;
-      if (Math.hypot(n.x - worldX, n.y - worldY) <= n.radius + 6) {
+      if (Math.hypot(n.x - worldX, n.y - worldY) <= n.radius + 4.5) {
         clicked = n;
         break;
       }
@@ -232,7 +237,10 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
   });
 
   return {
-    setFilter: (f) => { filter = f; },
+    setFilter: (f, l) => {
+      if (f !== undefined && f !== null) filter = f;
+      if (l !== undefined && l !== null) langFilter = l;
+    },
     setPulse: (p) => { pulseEnabled = p; },
     toggleOrphans: (hide) => { hideOrphans = hide; fitToView(); },
     zoomIn: () => {
@@ -254,4 +262,21 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
     },
     destroy: () => { running = false; }
   };
+}
+
+function detectNodeLang(file) {
+  if (!file) return 'other';
+  const ext = file.split('.').pop().toLowerCase();
+  if (ext === 'rs') return 'rust';
+  if (['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs'].includes(ext)) return 'typescript';
+  if (['py', 'pyw'].includes(ext)) return 'python';
+  if (ext === 'go') return 'go';
+  if (['kt', 'kts'].includes(ext)) return 'kotlin';
+  if (ext === 'java') return 'java';
+  if (['c', 'h', 'cpp', 'hpp', 'cc', 'cxx'].includes(ext)) return 'cpp';
+  if (ext === 'cs') return 'csharp';
+  if (['sh', 'bash', 'zsh', 'ps1'].includes(ext)) return 'shell';
+  if (['vue', 'svelte', 'astro', 'html', 'css'].includes(ext)) return ext;
+  if (['sql', 'prisma', 'graphql', 'gql'].includes(ext)) return ext;
+  return 'other';
 }

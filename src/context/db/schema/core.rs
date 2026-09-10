@@ -23,10 +23,18 @@ pub fn create_core_tables(tx: &Transaction) -> Result<()> {
             start_line INTEGER NOT NULL,
             end_line INTEGER NOT NULL,
             signature TEXT,
+            language TEXT DEFAULT 'unknown',
+            namespace TEXT,
+            receiver TEXT,
             FOREIGN KEY (file_path) REFERENCES files(path) ON DELETE CASCADE
         );",
         [],
     )?;
+
+    // Safe backward compatibility migrations
+    let _ = tx.execute("ALTER TABLE symbols ADD COLUMN language TEXT DEFAULT 'unknown';", []);
+    let _ = tx.execute("ALTER TABLE symbols ADD COLUMN namespace TEXT;", []);
+    let _ = tx.execute("ALTER TABLE symbols ADD COLUMN receiver TEXT;", []);
 
     tx.execute(
         "CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(

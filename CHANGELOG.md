@@ -2,6 +2,35 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.9] - 2026-09-10
+
+### Polyglot AST, HUD Radial Spacing, Binary Signing & Provenance Fingerprinting
+- **Deep Polyglot & Database Code Graph Engine**:
+  - Full pure-Rust AST extractors for frontend components (`Vue` SFCs with setup/templates, `Svelte`, `Astro`, `Html`, `Css`) and database schemas (`Sql` tables/views/procedures/FKs, `Prisma` models/relations, and `Graphql` types).
+  - Emits component file stems (`Button.vue` -> `Button`), scoped cross-file reference links, `@import` and `@use` resolution, receiver-aware edges, call lines, confidence, and categories.
+  - Extended SQLite persistence (`symbols` and `symbol_edges`) with resilient backwards-compatible fallback queries.
+- **HUD Architecture Visualizer Spacing & Scaling Refinements**:
+  - Increased radial spacing between nodes via wider Fermat spiral dispersion (`35 + 32*sqrt(i)`), macro community anchor expansion (`0.42`), boosted LinLog repulsion, and expanded anti-collision push buffers (`+56px`, push factor `0.75`) without linker stretching.
+  - Scaled down node circle radii by ~40% (`[3.2, 9.0]px`) and label font size down to `7-10px` with tight LOD culling.
+- **Cross-Platform Binary Signing & Windows PE Provenance**:
+  - Embedded Windows PE Version Information (Publisher: `Jun Mystery <darkzeuslk@gmail.com>`, Product, Description, Copyright, Version) and modern `asInvoker` application manifest with Windows 10/11 compatibility GUIDs into PE headers via `build.rs` to prevent Windows Defender / SmartScreen heuristic false positives.
+  - Provided automated Windows Authenticode signing with RFC-3161 timestamping and `TrustedPublisher` enrollment ([`scripts/sign-binary.ps1`](scripts/sign-binary.ps1)).
+  - Provided unified Unix signing script ([`scripts/sign-binary.sh`](scripts/sign-binary.sh)) supporting macOS `codesign` (hardened runtime ad-hoc / Apple Developer ID) and Linux GPG detached signatures + SHA-256/SHA-512 manifests.
+- **CLI Security Fingerprint & Provenance Command**:
+  - Added `--fingerprint` and `--verify-signature` CLI options with zero-dependency pure-Rust SHA-256 hashing and platform digital signature inspection.
+- **Telemetry Chart Overhaul & Local System Time Correlation**:
+  - Replaced legacy payload wave chart with "Agent Invocations & Latency Wave" correlating hourly tool invocations (left Y-axis) with average execution latency in milliseconds (right Y-axis).
+  - Dynamically aligns chart time buckets with client system time across the last 24 hours.
+  - Enhanced dark mode readability with `#38bdf8` right Y-axis values.
+- **Multi-Repository Project Root Resolution & Pruning**:
+  - Resolved tracked project indexing to always detect project root boundaries via `.agent-context/` or `.git/` anchors rather than recording nested subdirectories.
+  - Added auto-pruning to clean redundant child directory records from registry when parent roots are recognized.
+- **Strict Single Responsibility Decomposition (< 300 LOC Standard)**:
+  - Decomposed `src/context/indexer/parsers.rs` into `edge_parser.rs` and `doc_data.rs`.
+  - Decomposed `src/dashboard/graph.rs` into `graph_query.rs`.
+- **Automated Remote GitHub Actions Release Workflow**:
+  - Integrated automated Windows, macOS, and Linux binary signing, fingerprint logging, and release asset packaging into [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
 ## [1.5.8] - 2026-09-10
 
 ### Strict Modularity (< 300 LOC), Silent Tray Launch & Dashboard Polish

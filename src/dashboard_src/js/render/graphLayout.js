@@ -16,23 +16,37 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
 
   const commMap = new Map();
   const commList = Array.isArray(rawCommunities) ? rawCommunities : (rawCommunities?.communities || []);
-  commList.forEach(c => {
+  const macroComms = commList.filter(c => c.level === 'MacroSubsystem' || c.level === 0 || !c.level);
+  (macroComms.length ? macroComms : commList).forEach(c => {
     const title = c.summary?.title || c.id;
-    (c.entity_ids || []).forEach(eid => commMap.set(eid, title));
-    (c.file_paths || []).forEach(fp => commMap.set(fp, title));
+    const entities = c.member_entity_ids || c.entity_ids || [];
+    const files = c.member_files || c.file_paths || [];
+    entities.forEach(eid => commMap.set(eid, title));
+    files.forEach(fp => commMap.set(fp, title));
   });
 
   const processed = [];
   for (let i = 0; i < nodeCount; i++) {
     const n = nodes[i];
     const deg = (inDegree.get(n.id) || 0) + (outDegree.get(n.id) || 0);
-    const commKey = commMap.get(n.id) || commMap.get(n.file) || n.file?.split(/[/\\]/)[0] || 'core';
+    const cleanFile = n.file ? n.file.replace(/\\/g, '/') : '';
+    let commKey = commMap.get(n.id) || commMap.get(n.file) || commMap.get(cleanFile);
+    if (!commKey) {
+      const parts = cleanFile.split('/');
+      if (parts[0] === 'src' && parts.length > 2) {
+        commKey = `${parts[0]}/${parts[1]}`;
+      } else if (parts.length > 0 && parts[0]) {
+        commKey = parts[0];
+      } else {
+        commKey = 'core';
+      }
+    }
     processed.push({
       ...n,
       deg,
       isHub: false,
       commKey,
-      radius: Math.max(5, Math.min(15, 5 + deg * 1.2))
+      radius: Math.max(3.2, Math.min(9.0, 3.2 + Math.sqrt(deg) * 1.2))
     });
   }
 
@@ -55,7 +69,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   const commKeys = Array.from(commGroups.keys());
   const commCount = Math.max(commKeys.length, 1);
   const commAnchors = new Map();
-  const R_comm = commCount > 1 ? Math.min(W, H) * 0.34 : 0;
+  const R_comm = commCount > 1 ? Math.min(W, H) * 0.42 : 0;
 
   commKeys.forEach((key, idx) => {
     const angle = (idx / commCount) * 2 * Math.PI - Math.PI / 2;
@@ -72,7 +86,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   connected.forEach((n, idx) => {
     const anchor = commAnchors.get(n.commKey) || { cx: 0, cy: 0 };
     const phi = idx * 2.3999632;
-    const spread = 21 + Math.sqrt(idx + 1) * 21;
+    const spread = 35 + Math.sqrt(idx + 1) * 32;
     nodeMap.set(n.id, {
       ...n,
       x: anchor.cx + spread * Math.cos(phi),
@@ -98,8 +112,8 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
         const dy = b.y - a.y;
         const dist = Math.hypot(dx, dy) || 1;
         const crossComm = a.commKey !== b.commKey;
-        const kRepel = crossComm ? 720 : 360;
-        const f = Math.min((kRepel * Math.sqrt((a.deg + 1) * (b.deg + 1)) * temp) / (dist * dist + 150), 16);
+        const kRepel = crossComm ? 1100 : 620;
+        const f = Math.min((kRepel * Math.sqrt((a.deg + 1) * (b.deg + 1)) * temp) / (dist * dist + 80), 18);
         const nx = dx / dist;
         const ny = dy / dist;
         a.x -= nx * f;
@@ -144,9 +158,9 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.hypot(dx, dy) || 1;
-        const minDist = a.radius + b.radius + 36;
+        const minDist = a.radius + b.radius + 56;
         if (dist < minDist) {
-          const push = ((minDist - dist) / 2) * 0.7;
+          const push = ((minDist - dist) / 2) * 0.75;
           const nx = dx / dist;
           const ny = dy / dist;
           a.x -= nx * push;
@@ -173,14 +187,14 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
   // 3. Position Orphans in Peripheral Orbit Dock
   const numOrphans = orphans.length;
   const numRings = numOrphans > 70 ? 3 : (numOrphans > 32 ? 2 : 1);
-  const baseOrbitR = Math.max(maxConnR + 45, Math.min(W, H) * 0.44);
+  const baseOrbitR = Math.max(maxConnR + 60, Math.min(W, H) * 0.48);
 
   orphans.forEach((n, idx) => {
     const ringIdx = idx % numRings;
     const perRing = Math.ceil(numOrphans / numRings);
     const posInRing = Math.floor(idx / numRings);
     const angle = (posInRing / Math.max(perRing, 1)) * 2 * Math.PI;
-    const r = baseOrbitR + ringIdx * 24;
+    const r = baseOrbitR + ringIdx * 26;
     nodeMap.set(n.id, {
       ...n,
       x: r * Math.cos(angle),
@@ -203,7 +217,7 @@ export function partitionAndLayoutGraph(nodes, edges, rawCommunities, W, H) {
       name: anc.name,
       x: avgX,
       y: avgY,
-      radius: Math.max(45, maxR + 26),
+      radius: Math.max(50, maxR + 32),
       color: anc.color,
       count: members.length
     });

@@ -56,7 +56,7 @@ export function drawNodeLabels(ctx, nodeArr, opts) {
 
   // 3. Greedy Bounding-Box Collision Culling
   const placedBoxes = [];
-  const baseFontSize = Math.round(Math.max(10, Math.min(13, 11 / Math.sqrt(scale))));
+  const baseFontSize = Math.max(7, Math.min(10, Math.round(8.5 / Math.sqrt(scale))));
 
   for (let i = 0; i < candidates.length; i++) {
     const { node: n, isTarget, isNeighbor, isHigh } = candidates[i];
@@ -68,7 +68,7 @@ export function drawNodeLabels(ctx, nodeArr, opts) {
       : n.label;
 
     const tw = ctx.measureText(labelText).width;
-    const lx = n.x + n.radius + 6;
+    const lx = n.x + n.radius + 4;
     const ly = n.y + fontSize * 0.35;
     const box = {
       x1: lx - 3,
@@ -95,7 +95,7 @@ export function drawNodeLabels(ctx, nodeArr, opts) {
 
     // 4. Render with Dark Halo for Crystal-Clear Readability
     ctx.strokeStyle = '#080c14';
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 2.4;
     ctx.lineJoin = 'round';
     ctx.strokeText(labelText, lx, ly);
 

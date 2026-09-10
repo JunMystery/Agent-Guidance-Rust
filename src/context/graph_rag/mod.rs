@@ -211,4 +211,57 @@ mod tests {
         let global = query::execute_global_search("user", &hierarchy);
         assert!(!global.sections.is_empty());
     }
+
+    #[test]
+    fn test_android_package_prefix_stripping_and_community_summary_scoping() {
+        let entities = vec![
+            GraphEntity {
+                id: "e1".into(),
+                name: "MainViewModel".into(),
+                kind: "class".into(),
+                file_path: "app/src/main/java/com/example/feature/MainViewModel.kt".into(),
+                start_line: 1,
+                end_line: 20,
+                signature: None,
+            },
+            GraphEntity {
+                id: "e2".into(),
+                name: "SettingsViewModel".into(),
+                kind: "class".into(),
+                file_path: "app/src/main/java/com/example/settings/SettingsViewModel.kt".into(),
+                start_line: 1,
+                end_line: 20,
+                signature: None,
+            },
+            GraphEntity {
+                id: "e3".into(),
+                name: "AnalyticsService".into(),
+                kind: "class".into(),
+                file_path: "app/src/main/java/com/example/core/AnalyticsService.kt".into(),
+                start_line: 1,
+                end_line: 20,
+                signature: None,
+            },
+        ];
+
+        let edges = vec![
+            GraphEdge {
+                source_id: "e1".into(),
+                target_id: "e3".into(),
+                edge_type: "calls".into(),
+                weight: 1.0,
+            },
+        ];
+
+        let hierarchy = leiden::build_community_hierarchy("android_app", &entities, &edges, "Clean_Architecture");
+        let macros = hierarchy.get_by_level(CommunityLevel::MacroSubsystem);
+        assert!(macros.iter().all(|c| c.id != "macro_app"));
+        assert!(macros.len() >= 2);
+
+        // Feature module communities: e1 depends on e3, e2 has zero dependencies
+        let comm_e1 = hierarchy.communities.iter().find(|c| c.level == CommunityLevel::FeatureModule && c.member_entity_ids.contains(&"e1".to_string())).unwrap();
+        let comm_e2 = hierarchy.communities.iter().find(|c| c.level == CommunityLevel::FeatureModule && c.member_entity_ids.contains(&"e2".to_string())).unwrap();
+        assert!(comm_e1.summary.dependencies.contains(&"e3".to_string()));
+        assert!(!comm_e2.summary.dependencies.contains(&"e3".to_string()));
+    }
 }

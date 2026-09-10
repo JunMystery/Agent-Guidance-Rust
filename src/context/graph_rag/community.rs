@@ -140,9 +140,13 @@ pub fn synthesize_community_summary(
             CommunityLevel::MicroCluster => "Symbol Cluster".to_string(),
         });
 
+    let member_set: HashSet<&str> = entities.iter().map(|e| e.id.as_str()).collect();
+
     for edge in edges {
-        if !deps_set.contains(&edge.target_id) && deps_set.len() < 6 {
-            deps_set.insert(edge.target_id.clone());
+        if member_set.contains(edge.source_id.as_str()) && !member_set.contains(edge.target_id.as_str()) {
+            if !deps_set.contains(&edge.target_id) && deps_set.len() < 6 {
+                deps_set.insert(edge.target_id.clone());
+            }
         }
     }
 

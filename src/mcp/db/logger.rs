@@ -120,6 +120,11 @@ pub fn log_tool_call(
     let day_str = get_today_string(now);
     let tokens_saved = orig_tokens.saturating_sub(opt_tokens);
 
+    let normalized_proj = project_path.map(crate::dashboard::projects::normalize_project_path);
+    let effective_proj = normalized_proj
+        .as_deref()
+        .filter(|s| !s.is_empty() && !crate::dashboard::projects::is_temp_project_path(s));
+
     with_db(|conn| {
         maybe_prune(conn, now);
 
@@ -134,30 +139,27 @@ pub fn log_tool_call(
                 orig_tokens as i64,
                 opt_tokens as i64,
                 error_message,
-                project_path,
+                effective_proj,
                 target
             ],
         )?;
 
-        if let Some(proj) = project_path {
-            let normalized = crate::dashboard::projects::normalize_project_path(proj);
-            if !normalized.is_empty() && !crate::dashboard::projects::is_temp_project_path(&normalized) {
-                let p = std::path::Path::new(&normalized);
-                let proj_name = p
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("project");
+        if let Some(normalized) = effective_proj {
+            let p = std::path::Path::new(normalized);
+            let proj_name = p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("project");
 
-                let _ = conn.execute(
-                    "INSERT INTO tracked_projects (project_path, project_name, first_seen, last_active, total_calls, total_tokens_saved)
-                     VALUES (?1, ?2, ?3, ?3, 1, ?4)
-                     ON CONFLICT(project_path) DO UPDATE SET
-                         last_active = ?3,
-                         total_calls = total_calls + 1,
-                         total_tokens_saved = total_tokens_saved + ?4",
-                    params![normalized, proj_name, now, tokens_saved as i64],
-                );
-            }
+            let _ = conn.execute(
+                "INSERT INTO tracked_projects (project_path, project_name, first_seen, last_active, total_calls, total_tokens_saved)
+                 VALUES (?1, ?2, ?3, ?3, 1, ?4)
+                 ON CONFLICT(project_path) DO UPDATE SET
+                     last_active = ?3,
+                     total_calls = total_calls + 1,
+                     total_tokens_saved = total_tokens_saved + ?4",
+                params![normalized, proj_name, now, tokens_saved as i64],
+            );
         }
 
         update_daily_summary(

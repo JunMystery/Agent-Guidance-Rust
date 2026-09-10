@@ -28,11 +28,21 @@ async fn main() -> Result<()> {
         println!("agent-guidance {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    if args.contains(&"--fingerprint".to_string()) || args.contains(&"--verify-signature".to_string()) {
+        if let Some(fp) = mcp::fingerprint::BinaryFingerprint::current() {
+            fp.print_report();
+        } else {
+            eprintln!("Error: Unable to resolve executable binary path.");
+        }
+        return Ok(());
+    }
     if args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
         println!("Agent Guidance MCP Server & CLI Tool v{}", env!("CARGO_PKG_VERSION"));
         println!("Usage: agent-guidance [OPTIONS]");
         println!();
         println!("Options:");
+        println!("  --fingerprint       Print binary provenance, SHA-256 hash, and signature report");
+        println!("  --verify-signature  Alias for --fingerprint");
         println!("  --setup             Install and configure MCP server across all IDE clients");
         println!("  --verify-setup      Verify MCP configuration paths in all IDE clients");
         println!("  --upgrade           Download and install latest release package, update IDE configs");
@@ -130,6 +140,24 @@ async fn main() -> Result<()> {
 
     if args.contains(&"--dashboard".to_string()) {
         dashboard::run_dashboard_server(dashboard_port, proj_arg)?;
+        return Ok(());
+    }
+
+    if args.contains(&"--reindex".to_string()) {
+        let proj = proj_arg
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        println!("Reindexing code graph for project: {}", proj.display());
+        let mut indexer = context::indexer::IncrementalIndexer::new(&proj)?;
+        let report = indexer.full_index()?;
+        println!("[OK] Full Index Complete in {} ms:", report.duration_ms);
+        println!("  - Files scanned: {}", report.files_scanned);
+        println!("  - Files indexed: {}", report.files_indexed);
+        println!("  - Files skipped: {}", report.files_skipped);
+        println!("  - Symbols extracted: {}", report.symbols_extracted);
+        println!("  - Edges created: {}", report.edges_created);
+        let _ = indexer.update_graph_rag("Auto");
+        println!("  - Communities refreshed: .agent-context/communities.json");
         return Ok(());
     }
 

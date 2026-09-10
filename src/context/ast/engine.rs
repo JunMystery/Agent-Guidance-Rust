@@ -15,7 +15,7 @@ impl AstEngine {
             AstLanguage::Tsx | AstLanguage::JavaScript => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
             AstLanguage::Python => Some(tree_sitter_python::LANGUAGE.into()),
             AstLanguage::Go => Some(tree_sitter_go::LANGUAGE.into()),
-            AstLanguage::Unsupported => None,
+            _ => None,
         }
     }
 
@@ -29,8 +29,20 @@ impl AstEngine {
 
     /// Extracts all symbols (functions, structs, classes, methods) via AST analysis.
     pub fn extract_symbols(content: &str, lang: AstLanguage) -> Vec<AstSymbol> {
-        if let Some(tree) = Self::parse(content, lang) {
-            walker::extract_symbols(tree.root_node(), content.as_bytes(), lang)
+        if lang.is_tier1() {
+            if let Some(tree) = Self::parse(content, lang) {
+                walker::extract_symbols(tree.root_node(), content.as_bytes(), lang)
+            } else {
+                Vec::new()
+            }
+        } else if lang.is_tier2() {
+            super::polyglot::extract_symbols(content, lang)
+        } else if lang.is_frontend() {
+            super::frontend::extract_symbols(content, lang)
+        } else if lang.is_database() {
+            super::database::extract_symbols(content, lang)
+        } else if lang.is_manifest() {
+            super::manifests::extract_symbols(content, lang)
         } else {
             Vec::new()
         }
@@ -38,8 +50,20 @@ impl AstEngine {
 
     /// Extracts all function calls via AST analysis.
     pub fn extract_calls(content: &str, lang: AstLanguage) -> Vec<AstCall> {
-        if let Some(tree) = Self::parse(content, lang) {
-            walker::extract_calls(tree.root_node(), content.as_bytes(), lang)
+        if lang.is_tier1() {
+            if let Some(tree) = Self::parse(content, lang) {
+                walker::extract_calls(tree.root_node(), content.as_bytes(), lang)
+            } else {
+                Vec::new()
+            }
+        } else if lang.is_tier2() {
+            super::polyglot::extract_calls(content, lang)
+        } else if lang.is_frontend() {
+            super::frontend::extract_calls(content, lang)
+        } else if lang.is_database() {
+            super::database::extract_calls(content, lang)
+        } else if lang.is_manifest() {
+            super::manifests::extract_calls(content, lang)
         } else {
             Vec::new()
         }

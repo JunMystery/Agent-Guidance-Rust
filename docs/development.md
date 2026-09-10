@@ -53,6 +53,29 @@ Run a whitespace check before committing:
 git diff --check
 ```
 
+## Binary Signing & Security Provenance
+
+Release binaries are digitally signed and fingerprinted to prevent false-positive antivirus blocks (Windows Defender / SmartScreen / macOS Gatekeeper).
+
+### Inspect Binary Fingerprint
+```bash
+agent-guidance --fingerprint
+# or: agent-guidance --verify-signature
+```
+Displays executable path, cryptographic SHA-256 digest, Git commit, architecture target, and platform signature status.
+
+### Windows Authenticode Signing
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/sign-binary.ps1 -Target "target/release/agent-guidance.exe"
+```
+Signs the binary with SHA-256 and RFC-3161 timestamping, enrolling the publisher into `Cert:\CurrentUser\TrustedPublisher`.
+
+### Unix & macOS Code Signing
+```bash
+bash scripts/sign-binary.sh target/release/agent-guidance
+```
+Applies hardened runtime (`--options runtime`) codesign on macOS and generates SHA-256/512 and GPG signatures on Linux.
+
 ## Project Structure
 
 ```text

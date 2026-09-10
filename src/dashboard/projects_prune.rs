@@ -56,9 +56,10 @@ pub fn prune_missing_projects(db_path: &Path) -> Result<usize> {
                 );
                 let _ = conn.execute("DELETE FROM tracked_projects WHERE project_path = ?", params![p]);
             } else {
+                let root_name = Path::new(&norm).file_name().and_then(|n| n.to_str()).unwrap_or("project");
                 let _ = conn.execute(
-                    "UPDATE tracked_projects SET project_path = ? WHERE project_path = ?",
-                    params![norm, p],
+                    "UPDATE tracked_projects SET project_path = ?1, project_name = ?2 WHERE project_path = ?3",
+                    params![norm, root_name, p],
                 );
             }
             let _ = conn.execute(
@@ -66,6 +67,23 @@ pub fn prune_missing_projects(db_path: &Path) -> Result<usize> {
                 params![norm, p],
             );
             pruned_count += 1;
+        }
+    }
+
+    // Normalize any legacy un-migrated paths remaining directly in tool_calls
+    if let Ok(mut stmt_tc) = conn.prepare("SELECT DISTINCT project_path FROM tool_calls WHERE project_path IS NOT NULL AND project_path != ''") {
+        if let Ok(tc_paths) = stmt_tc.query_map([], |row| row.get::<_, String>(0)) {
+            let paths: Vec<String> = tc_paths.filter_map(|r| r.ok()).collect();
+            for p in paths {
+                if is_temp_project_path(&p) {
+                    let _ = conn.execute("UPDATE tool_calls SET project_path = NULL WHERE project_path = ?", params![p]);
+                    continue;
+                }
+                let norm = normalize_project_path(&p);
+                if norm != p {
+                    let _ = conn.execute("UPDATE tool_calls SET project_path = ? WHERE project_path = ?", params![norm, p]);
+                }
+            }
         }
     }
 

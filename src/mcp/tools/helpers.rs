@@ -67,8 +67,18 @@ pub fn detect_parent_process_cwd() -> Option<PathBuf> {
 }
 
 pub fn is_generic_home_dir(p: &Path) -> bool {
+    if let Some(home) = dirs::home_dir() {
+        if p == home {
+            return true;
+        }
+    }
     if let Ok(home) = std::env::var("HOME") {
         if p == Path::new(&home) {
+            return true;
+        }
+    }
+    if let Ok(userprofile) = std::env::var("USERPROFILE") {
+        if p == Path::new(&userprofile) {
             return true;
         }
     }
@@ -166,54 +176,40 @@ pub fn detect_project_path(explicit_path: &str, state: &ServerState) -> PathBuf 
     if explicit_path != "." && !explicit_path.trim().is_empty() {
         let p = PathBuf::from(explicit_path);
         if !is_generic_home_dir(&p) {
-            return p;
+            return crate::dashboard::projects_path::find_project_root(&p);
         }
     }
 
     if let Some(ref sp) = state.project_path {
         let p = PathBuf::from(sp);
         if !is_generic_home_dir(&p) {
-            return p;
+            return crate::dashboard::projects_path::find_project_root(&p);
         }
     }
 
     if let Some(first_root) = state.workspace_roots.first() {
         let p = PathBuf::from(first_root);
         if !is_generic_home_dir(&p) {
-            return p;
+            return crate::dashboard::projects_path::find_project_root(&p);
         }
     }
 
     if let Ok(cwd) = std::env::current_dir() {
-        let mut curr = cwd.clone();
-        for _ in 0..10 {
-            if curr.join(".git").exists()
-                || curr.join("Cargo.toml").exists()
-                || curr.join("package.json").exists()
-                || curr.join("go.mod").exists()
-                || curr.join("pyproject.toml").exists()
-            {
-                return curr;
-            }
-            if !curr.pop() {
-                break;
-            }
-        }
         if !is_generic_home_dir(&cwd) {
-            return cwd;
+            return crate::dashboard::projects_path::find_project_root(&cwd);
         }
     }
 
     if let Some(parent_cwd) = detect_parent_process_cwd() {
         if !is_generic_home_dir(&parent_cwd) {
-            return parent_cwd;
+            return crate::dashboard::projects_path::find_project_root(&parent_cwd);
         }
     }
 
     if let Some(gp) = ServerState::read_global_project_path() {
         let p = PathBuf::from(&gp);
         if !is_generic_home_dir(&p) {
-            return p;
+            return crate::dashboard::projects_path::find_project_root(&p);
         }
     }
 

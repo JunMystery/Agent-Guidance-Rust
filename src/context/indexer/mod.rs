@@ -9,12 +9,16 @@ use crate::context::scanner::scan_project;
 
 pub mod chunking;
 pub mod cross_edges;
+pub mod doc_data;
+pub mod edge_parser;
 pub mod embedder;
+pub mod import_resolver;
 pub mod parsers;
 pub mod resolver;
+pub use edge_parser::extract_edges_from_content;
 pub use parsers::{
     CodeChunk, ExtractedEdge, ExtractedSymbol, chunk_code_content,
-    extract_edges_from_content, extract_symbols_from_content,
+    extract_symbols_from_content,
 };
 
 #[derive(Debug, Default, Clone)]
@@ -187,6 +191,11 @@ impl IncrementalIndexer {
 
         // Clear existing data for this file
         let _ = self.db.clear_file_data(rel_path);
+        let prefix = format!("{}::%", rel_path);
+        let _ = self.db.conn.execute(
+            "DELETE FROM symbol_edges WHERE source_id LIKE ?1 OR target_id LIKE ?1",
+            rusqlite::params![prefix],
+        );
 
         let metadata = std::fs::metadata(self.project_path.join(rel_path));
         let size = metadata.as_ref().map(|m| m.len()).unwrap_or(content.len() as u64);
@@ -203,7 +212,7 @@ impl IncrementalIndexer {
         // 2. Extract symbols
         let symbols = extract_symbols_from_content(rel_path, content);
         for s in &symbols {
-            self.db.insert_symbol(
+            self.db.insert_symbol_full(
                 &s.id,
                 &s.name,
                 &s.kind,
@@ -212,6 +221,9 @@ impl IncrementalIndexer {
                 s.start_line,
                 s.end_line,
                 s.signature.as_deref(),
+                s.language.as_deref(),
+                s.namespace.as_deref(),
+                s.receiver.as_deref(),
             )?;
             report.symbols_extracted += 1;
         }
@@ -219,7 +231,15 @@ impl IncrementalIndexer {
         // 3. Extract edges (imports / calls)
         let edges = extract_edges_from_content(rel_path, content, &symbols);
         for e in edges {
-            self.db.insert_edge(&e.source_id, &e.target_id, &e.edge_type, e.weight)?;
+            self.db.insert_edge_full(
+                &e.source_id,
+                &e.target_id,
+                &e.edge_type,
+                e.weight,
+                e.confidence,
+                &e.category,
+                e.call_line,
+            )?;
             report.edges_created += 1;
         }
 

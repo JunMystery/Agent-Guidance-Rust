@@ -1,5 +1,6 @@
 pub mod config;
 pub mod db;
+pub mod fingerprint;
 pub mod impact;
 pub mod learnings;
 pub mod mcp_logger;

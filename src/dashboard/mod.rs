@@ -7,6 +7,7 @@ use tiny_http::Server;
 use tracing::info;
 
 pub mod graph;
+pub(crate) mod graph_query;
 pub mod logs_api;
 pub mod projects;
 pub(crate) mod projects_path;
@@ -105,15 +106,21 @@ pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<(
 mod tests {
     use super::*;
     use std::sync::atomic::Ordering;
+    use std::sync::Mutex;
+
+    static PORT_TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_default_port_is_11997() {
+        let _guard = PORT_TEST_MUTEX.lock().unwrap();
+        DASHBOARD_PORT.store(DEFAULT_DASHBOARD_PORT, Ordering::SeqCst);
         assert_eq!(DEFAULT_DASHBOARD_PORT, 11997);
         assert_eq!(get_dashboard_port(), 11997);
     }
 
     #[test]
     fn test_custom_dashboard_port_mutation() {
+        let _guard = PORT_TEST_MUTEX.lock().unwrap();
         DASHBOARD_PORT.store(12345, Ordering::SeqCst);
         assert_eq!(get_dashboard_port(), 12345);
         DASHBOARD_PORT.store(DEFAULT_DASHBOARD_PORT, Ordering::SeqCst);

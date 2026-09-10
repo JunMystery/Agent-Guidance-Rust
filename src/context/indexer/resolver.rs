@@ -42,6 +42,9 @@ mod tests {
                 start_line: 1,
                 end_line: 100,
                 signature: None,
+                language: None,
+                namespace: None,
+                receiver: None,
             },
             ExtractedSymbol {
                 id: "file.rs::struct::Foo::L10".into(),
@@ -51,6 +54,9 @@ mod tests {
                 start_line: 10,
                 end_line: 50,
                 signature: None,
+                language: None,
+                namespace: None,
+                receiver: None,
             },
             ExtractedSymbol {
                 id: "file.rs::function::bar::L20".into(),
@@ -60,6 +66,9 @@ mod tests {
                 start_line: 20,
                 end_line: 30,
                 signature: None,
+                language: None,
+                namespace: None,
+                receiver: None,
             },
         ];
 

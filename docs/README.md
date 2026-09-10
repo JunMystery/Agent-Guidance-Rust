@@ -11,6 +11,7 @@ Agent Guidance MCP documentation — organized by topic.
 | [Installation](installation.md) | Automatic and manual setup |
 | [Getting Started](getting-started.md) | First-time walkthrough |
 | [Usage Guide](usage.md) | Recommended agent workflows and examples |
+| [Dashboard & GraphRAG](dashboard.md) | Embedded telemetry dashboard, invocation charts, and visual code graph |
 
 ## Client Setup
 

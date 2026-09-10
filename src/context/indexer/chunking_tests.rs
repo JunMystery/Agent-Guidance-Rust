@@ -33,6 +33,9 @@ pub struct Config {
                 start_line: 6,
                 end_line: 12,
                 signature: Some("pub fn calculate_metrics(data: &[i32]) -> i32".to_string()),
+                language: None,
+                namespace: None,
+                receiver: None,
             },
             ExtractedSymbol {
                 id: "test::struct::Config::L14".to_string(),
@@ -42,6 +45,9 @@ pub struct Config {
                 start_line: 14,
                 end_line: 16,
                 signature: Some("pub struct Config".to_string()),
+                language: None,
+                namespace: None,
+                receiver: None,
             },
         ];
 
@@ -83,6 +89,9 @@ pub struct Config {
             start_line: 1,
             end_line: 102,
             signature: Some("pub fn big_processor()".to_string()),
+            language: None,
+            namespace: None,
+            receiver: None,
         }];
 
         let chunks = build_semantic_chunks("test.rs", &code, &symbols, 50, 10);

@@ -10,6 +10,9 @@ pub struct ExtractedSymbol {
     pub start_line: usize,
     pub end_line: usize,
     pub signature: Option<String>,
+    pub language: Option<String>,
+    pub namespace: Option<String>,
+    pub receiver: Option<String>,
 }
 
 pub struct ExtractedEdge {
@@ -17,6 +20,9 @@ pub struct ExtractedEdge {
     pub target_id: String,
     pub edge_type: String,
     pub weight: f64,
+    pub confidence: f64,
+    pub category: String,
+    pub call_line: Option<usize>,
 }
 
 pub struct CodeChunk {
@@ -26,13 +32,17 @@ pub struct CodeChunk {
     pub text: String,
 }
 
-/// Extract symbols across languages (Rust, Python, TS/JS, Go, Kotlin, Java)
+/// Extract symbols across languages (Rust, Python, TS/JS, Go, Kotlin, Java, C#, Shell, etc.)
 pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<ExtractedSymbol> {
     let total_lines = content.lines().count().max(1);
+    if let Some(cat) = super::doc_data::classify_doc_or_data(rel_path) {
+        return vec![super::doc_data::extract_doc_or_data_symbol(rel_path, total_lines, cat)];
+    }
     let file_name = std::path::Path::new(rel_path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| rel_path.to_string());
+    let lang = crate::context::ast::AstLanguage::from_path(rel_path);
     let mod_sym = ExtractedSymbol {
         id: format!("{}::module::{}::L1", rel_path, file_name),
         name: file_name,
@@ -41,12 +51,20 @@ pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<Extrac
         start_line: 1,
         end_line: total_lines,
         signature: Some(format!("mod {}", rel_path)),
+        language: Some(lang.as_str().to_string()),
+        namespace: None,
+        receiver: None,
     };
 
-    let lang = crate::context::ast::AstLanguage::from_path(rel_path);
+    let stem = std::path::Path::new(rel_path)
+        .file_stem()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
     if lang.is_supported() {
         let ast_symbols = crate::context::ast::AstEngine::extract_symbols(content, lang);
         if !ast_symbols.is_empty() {
+            let pkg_name = ast_symbols.iter().find_map(|s| s.package.clone());
             let mut symbols: Vec<ExtractedSymbol> = ast_symbols
                 .into_iter()
                 .map(|s| {
@@ -55,13 +73,47 @@ pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<Extrac
                         id,
                         name: s.name,
                         kind: s.kind,
-                        parent: None,
+                        parent: s.parent_symbol,
                         start_line: s.start_line,
                         end_line: s.end_line,
                         signature: Some(s.signature),
+                        language: Some(s.language),
+                        namespace: s.package,
+                        receiver: None,
                     }
                 })
                 .collect();
+
+            if let Some(pkg) = pkg_name {
+                symbols.push(ExtractedSymbol {
+                    id: format!("{}::package::{}::L1", rel_path, pkg),
+                    name: pkg.clone(),
+                    kind: "package".to_string(),
+                    parent: Some(pkg.clone()),
+                    start_line: 1,
+                    end_line: total_lines,
+                    signature: Some(format!("package {}", rel_path)),
+                    language: Some(lang.as_str().to_string()),
+                    namespace: Some(pkg),
+                    receiver: None,
+                });
+            }
+
+            if lang.is_frontend() && !stem.is_empty() {
+                symbols.push(ExtractedSymbol {
+                    id: format!("{}::component::{}::L1", rel_path, stem),
+                    name: stem,
+                    kind: "component".to_string(),
+                    parent: None,
+                    start_line: 1,
+                    end_line: total_lines,
+                    signature: Some(format!("component {}", rel_path)),
+                    language: Some(lang.as_str().to_string()),
+                    namespace: None,
+                    receiver: None,
+                });
+            }
+
             symbols.push(mod_sym);
             return symbols;
         }
@@ -110,10 +162,28 @@ pub fn extract_symbols_from_content(rel_path: &str, content: &str) -> Vec<Extrac
                 kind: kind.to_string(),
                 parent: None,
                 start_line: line_num,
-                end_line: line_num + 10, // Estimate
+                end_line: line_num + 10,
                 signature: Some(trimmed.to_string()),
+                language: Some(lang.as_str().to_string()),
+                namespace: None,
+                receiver: None,
             });
         }
+    }
+
+    if lang.is_frontend() && !stem.is_empty() {
+        symbols.push(ExtractedSymbol {
+            id: format!("{}::component::{}::L1", rel_path, stem),
+            name: stem,
+            kind: "component".to_string(),
+            parent: None,
+            start_line: 1,
+            end_line: total_lines,
+            signature: Some(format!("component {}", rel_path)),
+            language: Some(lang.as_str().to_string()),
+            namespace: None,
+            receiver: None,
+        });
     }
 
     symbols.push(mod_sym);
@@ -136,79 +206,8 @@ fn extract_name_after(line: &str, prefixes: &[&str], kind: &'static str) -> Opti
     None
 }
 
-/// Extract call edges and import edges for a file
-pub fn extract_edges_from_content(
-    rel_path: &str,
-    content: &str,
-    symbols: &[ExtractedSymbol],
-) -> Vec<ExtractedEdge> {
-    let mut edges = Vec::new();
-    let mod_id = super::resolver::find_module_symbol(symbols)
-        .map(|s| s.id.as_str())
-        .unwrap_or("");
-
-    // 1. Imports extraction
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("use ") || trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            let token = trimmed.split(|c: char| !c.is_alphanumeric() && c != '_')
-                .filter(|s| !s.is_empty() && *s != "use" && *s != "import" && *s != "from" && *s != "crate" && *s != "super")
-                .last();
-            if let Some(target_name) = token {
-                if let Some(target) = super::resolver::resolve_local_callee(symbols, target_name, mod_id) {
-                    if !mod_id.is_empty() && mod_id != target.id {
-                        edges.push(ExtractedEdge {
-                            source_id: mod_id.to_string(),
-                            target_id: target.id.clone(),
-                            edge_type: "imports".to_string(),
-                            weight: 1.0,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. Call edges: AST-native when supported, heuristic fallback otherwise
-    let lang = crate::context::ast::AstLanguage::from_path(rel_path);
-    if lang.is_supported() {
-        let ast_calls = crate::context::ast::AstEngine::extract_calls(content, lang);
-        for call in ast_calls {
-            let caller = super::resolver::find_enclosing_symbol(symbols, call.line);
-            let caller_id = caller.map(|c| c.id.as_str()).unwrap_or(mod_id);
-            if caller_id.is_empty() { continue; }
-
-            if let Some(target) = super::resolver::resolve_local_callee(symbols, &call.callee_name, caller_id) {
-                edges.push(ExtractedEdge {
-                    source_id: caller_id.to_string(),
-                    target_id: target.id.clone(),
-                    edge_type: "calls".to_string(),
-                    weight: 1.0,
-                });
-            }
-        }
-    } else {
-        for (idx, line) in content.lines().enumerate() {
-            let line_num = idx + 1;
-            let caller = super::resolver::find_enclosing_symbol(symbols, line_num);
-            let caller_id = caller.map(|c| c.id.as_str()).unwrap_or(mod_id);
-            if caller_id.is_empty() { continue; }
-
-            for sym in symbols {
-                if sym.kind != "module" && sym.id != caller_id && line.contains(&format!("{}(", sym.name)) {
-                    edges.push(ExtractedEdge {
-                        source_id: caller_id.to_string(),
-                        target_id: sym.id.clone(),
-                        edge_type: "calls".to_string(),
-                        weight: 1.0,
-                    });
-                }
-            }
-        }
-    }
-
-    edges
-}
+// Re-export edge extraction decomposed into edge_parser module
+pub use super::edge_parser::extract_edges_from_content;
 
 /// Chunk content into overlapping sliding windows (e.g. 50 lines with 10 overlap)
 pub fn chunk_code_content(
@@ -220,4 +219,3 @@ pub fn chunk_code_content(
     let symbols = extract_symbols_from_content(rel_path, content);
     super::chunking::build_semantic_chunks(rel_path, content, &symbols, window_size, overlap)
 }
-

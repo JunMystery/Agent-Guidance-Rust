@@ -191,6 +191,23 @@ Generate cross-agent session handoff summary:
 
 ---
 
+## Security Verification & Binary Provenance
+
+Verify binary integrity, publisher identity, and platform digital signatures directly from the CLI:
+
+```bash
+agent-guidance --fingerprint
+# or: agent-guidance --verify-signature
+```
+
+Outputs a structured provenance report:
+- **Publisher**: Verified identity (`Jun Mystery <darkzeuslk@gmail.com>`)
+- **Cryptographic Digest**: Pure-Rust SHA-256 binary hash
+- **Target & Commit**: Build architecture and Git commit hash
+- **Signature Status**: Platform digital signature validity (Windows Authenticode, macOS codesign, Linux GPG)
+
+---
+
 ## Token Guidance & Best Practices
 
 - **Enforce 300 LOC Cap**: All source files must remain strictly under 300 LOC (aim for < 150 LOC per sub-module).

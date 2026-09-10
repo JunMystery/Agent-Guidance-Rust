@@ -153,4 +153,105 @@ class Worker:
         assert!(py_skeleton.contains("def run(self):"));
         assert!(py_skeleton.contains("... /* L4-6: 3 lines */"));
     }
+
+    #[test]
+    fn test_ast_kotlin_symbol_and_call_extraction() {
+        let code = r#"
+package com.example.app
+
+enum class ScreenTransition {
+    SLIDE, FADE
+}
+
+data class User(val id: String)
+
+class HomeViewModel {
+    fun loadData() {
+        fetchUser()
+    }
+
+    private fun fetchUser() {}
+}
+"#;
+        let symbols = AstEngine::extract_symbols(code, AstLanguage::Kotlin);
+        assert!(symbols.iter().any(|s| s.name == "ScreenTransition" && s.kind == "enum"));
+        assert!(!symbols.iter().any(|s| s.name == "class"));
+        assert!(symbols.iter().any(|s| s.name == "User" && s.kind == "class"));
+        assert!(symbols.iter().any(|s| s.name == "loadData" && s.kind == "function"));
+
+        let calls = AstEngine::extract_calls(code, AstLanguage::Kotlin);
+        assert!(calls.iter().any(|c| c.callee_name == "fetchUser"));
+    }
+
+    #[test]
+    fn test_ast_java_and_csharp_and_shell() {
+        let java_code = r#"
+package com.service;
+
+public class OrderProcessor {
+    public void processOrder() {
+        validate();
+    }
+}
+"#;
+        let j_symbols = AstEngine::extract_symbols(java_code, AstLanguage::Java);
+        assert!(j_symbols.iter().any(|s| s.name == "OrderProcessor"));
+        assert!(j_symbols.iter().any(|s| s.name == "processOrder"));
+
+        let cs_code = r#"
+namespace Core.Services {
+    public class Worker {
+        public void DoWork() {
+            Helper.Run();
+        }
+    }
+}
+"#;
+        let cs_symbols = AstEngine::extract_symbols(cs_code, AstLanguage::CSharp);
+        assert!(cs_symbols.iter().any(|s| s.name == "Worker"));
+        assert!(cs_symbols.iter().any(|s| s.name == "DoWork"));
+        let cs_calls = AstEngine::extract_calls(cs_code, AstLanguage::CSharp);
+        assert!(cs_calls.iter().any(|c| c.callee_name == "Run" && c.receiver.as_deref() == Some("Helper")));
+
+        let sh_code = r#"
+source ./common.sh
+
+deploy_service() {
+    echo "deploying"
+}
+"#;
+        let sh_symbols = AstEngine::extract_symbols(sh_code, AstLanguage::Shell);
+        assert!(sh_symbols.iter().any(|s| s.name == "deploy_service"));
+        let sh_calls = AstEngine::extract_calls(sh_code, AstLanguage::Shell);
+        assert!(sh_calls.iter().any(|c| c.receiver.as_deref() == Some("source")));
+    }
+
+    #[test]
+    fn test_ast_ruby_block_and_zig_and_manifests() {
+        let rb = "class Service\n  def first\n    call_a()\n  end\n  def second\n    call_b()\n  end\nend\n";
+        let rb_calls = AstEngine::extract_calls(rb, AstLanguage::Ruby);
+        let first_call = rb_calls.iter().find(|c| c.callee_name == "call_a").unwrap();
+        let second_call = rb_calls.iter().find(|c| c.callee_name == "call_b").unwrap();
+        assert_eq!(first_call.caller_name.as_deref(), Some("first"));
+        assert_eq!(second_call.caller_name.as_deref(), Some("second"));
+
+        let zig = "pub const Point = struct {\n    pub fn add(a: i32, b: i32) i32 {\n        return a + b;\n    }\n};\n";
+        let zig_syms = AstEngine::extract_symbols(zig, AstLanguage::Zig);
+        assert!(zig_syms.iter().any(|s| s.name == "Point" && s.kind == "struct"));
+        assert!(zig_syms.iter().any(|s| s.name == "add" && s.kind == "function"));
+
+        let c_proto = "int calculate_tax(int amount);\nvoid render(void) {}\n";
+        let c_syms = AstEngine::extract_symbols(c_proto, AstLanguage::C);
+        assert!(c_syms.iter().any(|s| s.name == "calculate_tax" && s.kind == "function"));
+        assert!(c_syms.iter().any(|s| s.name == "render" && s.kind == "function"));
+
+        let cargo = "[package]\nname = \"my_pkg\"\n[dependencies]\nserde = \"1.0\"\nrusqlite = \"0.31\"\n";
+        let cargo_calls = AstEngine::extract_calls(cargo, AstLanguage::CargoManifest);
+        assert!(cargo_calls.iter().any(|c| c.callee_name == "serde"));
+        assert!(cargo_calls.iter().any(|c| c.callee_name == "rusqlite"));
+
+        let npm = "{\"name\": \"web\", \"dependencies\": {\"react\": \"^18.0.0\"}}";
+        let npm_calls = AstEngine::extract_calls(npm, AstLanguage::NpmManifest);
+        assert!(npm_calls.iter().any(|c| c.callee_name == "react"));
+    }
 }

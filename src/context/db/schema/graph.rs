@@ -35,18 +35,31 @@ pub fn create_graph_tables(tx: &Transaction) -> Result<()> {
             target_id TEXT NOT NULL,
             edge_type TEXT NOT NULL,
             weight REAL DEFAULT 1.0,
+            confidence REAL DEFAULT 1.0,
+            category TEXT DEFAULT 'symbol',
+            call_line INTEGER,
             FOREIGN KEY (source_id) REFERENCES symbols(id) ON DELETE CASCADE,
             FOREIGN KEY (target_id) REFERENCES symbols(id) ON DELETE CASCADE,
             PRIMARY KEY (source_id, target_id, edge_type)
         );",
         [],
     )?;
+
+    // Safe backward compatibility migrations
+    let _ = tx.execute("ALTER TABLE symbol_edges ADD COLUMN confidence REAL DEFAULT 1.0;", []);
+    let _ = tx.execute("ALTER TABLE symbol_edges ADD COLUMN category TEXT DEFAULT 'symbol';", []);
+    let _ = tx.execute("ALTER TABLE symbol_edges ADD COLUMN call_line INTEGER;", []);
+
     tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_edges_source ON symbol_edges(source_id);",
         [],
     )?;
     tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_edges_target ON symbol_edges(target_id);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_edges_src_tgt ON symbol_edges(source_id, target_id);",
         [],
     )?;
 

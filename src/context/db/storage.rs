@@ -83,39 +83,40 @@ impl CodeGraphDb {
         Ok(pruned)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_symbol(
-        &self,
-        id: &str,
-        name: &str,
-        kind: &str,
-        file_path: &str,
-        parent: Option<&str>,
-        start_line: usize,
-        end_line: usize,
-        signature: Option<&str>,
+        &self, id: &str, name: &str, kind: &str, file_path: &str,
+        parent: Option<&str>, start_line: usize, end_line: usize, signature: Option<&str>,
+    ) -> Result<()> {
+        self.insert_symbol_full(id, name, kind, file_path, parent, start_line, end_line, signature, None, None, None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_symbol_full(
+        &self, id: &str, name: &str, kind: &str, file_path: &str,
+        parent: Option<&str>, start_line: usize, end_line: usize, signature: Option<&str>,
+        language: Option<&str>, namespace: Option<&str>, receiver: Option<&str>,
     ) -> Result<()> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO symbols (id, name, kind, file_path, parent, start_line, end_line, signature)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                id,
-                name,
-                kind,
-                file_path,
-                parent,
-                start_line as i64,
-                end_line as i64,
-                signature
-            ],
+            "INSERT OR REPLACE INTO symbols (id, name, kind, file_path, parent, start_line, end_line, signature, language, namespace, receiver)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![id, name, kind, file_path, parent, start_line as i64, end_line as i64, signature, language.unwrap_or("unknown"), namespace, receiver],
         )?;
         Ok(())
     }
 
     pub fn insert_edge(&self, source_id: &str, target_id: &str, edge_type: &str, weight: f64) -> Result<()> {
+        self.insert_edge_full(source_id, target_id, edge_type, weight, 1.0, "symbol", None)
+    }
+
+    pub fn insert_edge_full(
+        &self, source_id: &str, target_id: &str, edge_type: &str,
+        weight: f64, confidence: f64, category: &str, call_line: Option<usize>,
+    ) -> Result<()> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO symbol_edges (source_id, target_id, edge_type, weight)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![source_id, target_id, edge_type, weight],
+            "INSERT OR REPLACE INTO symbol_edges (source_id, target_id, edge_type, weight, confidence, category, call_line)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![source_id, target_id, edge_type, weight, confidence, category, call_line.map(|l| l as i64)],
         )?;
         Ok(())
     }
