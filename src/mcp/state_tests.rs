@@ -64,6 +64,8 @@
             .can_call_tool("guidance", &serde_json::json!({}))
             .unwrap_err();
         assert!(err.contains("PRIORITY_REQUIRED"));
+        assert!(err.contains("Call task_pipeline first"));
+        assert!(!err.contains("agent-guidance-mcp_task_pipeline"));
 
         // 2. Whitelisted & Not Gated tools succeed without priority gate unlock
         assert!(

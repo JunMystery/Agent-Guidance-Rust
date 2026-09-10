@@ -296,6 +296,6 @@ Resources provide direct read-only access to system status, embedded reference g
 1. `agent-guidance://system/edit-allowed` — Read-only JSON resource returning whether file editing is authorized based on active workflow stage and plan approval.
 2. `standards://version` — JSON object containing server version and engine metadata.
 3. `standards://manifest` — JSON index of embedded standards and skill catalog metadata.
-4. `agent-guidance-mcp://system/priority` — Priority gate instructions returned when `PRIORITY_REQUIRED` occurs.
-5. `agent-guidance-mcp://system/gate` — JSON status of the priority gate and sentinel file presence.
+4. `agent-guidance://system/priority` — Priority gate instructions returned when `PRIORITY_REQUIRED` occurs (also supports legacy alias `agent-guidance-mcp://system/priority`).
+5. `agent-guidance://system/gate` — JSON status of the priority gate and sentinel file presence (also supports legacy alias `agent-guidance-mcp://system/gate`).
 6. `standards://skill/{name}` (Dynamic) — Direct read access to full uncompressed markdown body of any embedded skill (e.g. `standards://skill/rust-patterns`).

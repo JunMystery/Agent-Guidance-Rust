@@ -23,13 +23,13 @@ pub(crate) fn handle_list() -> Value {
                     "mimeType": "application/json"
                 },
                 {
-                    "uri": "agent-guidance-mcp://system/priority",
+                    "uri": "agent-guidance://system/priority",
                     "name": "Priority Gate Instructions",
                     "description": "Priority gate instructions returned when PRIORITY_REQUIRED occurs.",
                     "mimeType": "text/markdown"
                 },
                 {
-                    "uri": "agent-guidance-mcp://system/gate",
+                    "uri": "agent-guidance://system/gate",
                     "name": "Priority Gate Status",
                     "description": "JSON status of the priority gate and sentinel file presence.",
                     "mimeType": "application/json"
@@ -96,7 +96,8 @@ pub(crate) fn handle_read(params: Option<Value>, state: &ServerState) -> Result<
                         ]
                     }))
                 }
-                "agent-guidance-mcp://system/priority" => {
+                "agent-guidance://system/priority"
+                | "agent-guidance-mcp://system/priority" => {
                     let text = "# Priority Gate Instructions\n\nCall `task_pipeline` first before invoking gated tools. This unlocks the gate for your active session.";
                     Ok(json!({
                         "contents": [
@@ -108,7 +109,8 @@ pub(crate) fn handle_read(params: Option<Value>, state: &ServerState) -> Result<
                         ]
                     }))
                 }
-                "agent-guidance-mcp://system/gate" => {
+                "agent-guidance://system/gate"
+                | "agent-guidance-mcp://system/gate" => {
                     let sentinel_exists = ServerState::priority_gate_path().exists();
                     let payload = json!({
                         "priority_gate_passed": state.priority_gate_passed,

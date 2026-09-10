@@ -26,8 +26,8 @@
                 .contains("Agent Guidance MCP Rust")
         );
 
-        // 3. Test resources/read for agent-guidance-mcp://system/priority
-        let read_params = json!({"uri": "agent-guidance-mcp://system/priority"});
+        // 3. Test resources/read for agent-guidance://system/priority and legacy alias
+        let read_params = json!({"uri": "agent-guidance://system/priority"});
         let read_res = handle_request("resources/read", Some(read_params), &mut state);
         assert!(read_res.is_ok());
         let read_val = read_res.unwrap();
@@ -39,6 +39,20 @@
                 .unwrap()
                 .contains("Priority Gate Instructions")
         );
+
+        let legacy_res = handle_request(
+            "resources/read",
+            Some(json!({"uri": "agent-guidance-mcp://system/priority"})),
+            &mut state,
+        );
+        assert!(legacy_res.is_ok());
+
+        let gate_res = handle_request(
+            "resources/read",
+            Some(json!({"uri": "agent-guidance://system/gate"})),
+            &mut state,
+        );
+        assert!(gate_res.is_ok());
     }
 
     #[test]

@@ -66,7 +66,7 @@ impl ServerState {
             return Ok(());
         }
 
-        Err("PRIORITY_REQUIRED: Priority gate locked. Call agent-guidance-mcp_task_pipeline first to unlock gated tools.".to_string())
+        Err("PRIORITY_REQUIRED: Priority gate locked. Call task_pipeline first to unlock gated tools.".to_string())
     }
 
     pub fn session_freshness_note(&self) -> Option<String> {
