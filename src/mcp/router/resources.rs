@@ -97,7 +97,7 @@ pub(crate) fn handle_read(params: Option<Value>, state: &ServerState) -> Result<
                     }))
                 }
                 "agent-guidance-mcp://system/priority" => {
-                    let text = "# Priority Gate Instructions\n\nCall `agent-guidance-mcp_task_pipeline` first before invoking gated tools. This unlocks the gate for your active session.";
+                    let text = "# Priority Gate Instructions\n\nCall `task_pipeline` first before invoking gated tools. This unlocks the gate for your active session.";
                     Ok(json!({
                         "contents": [
                             {

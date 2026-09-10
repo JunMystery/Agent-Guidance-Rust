@@ -2,6 +2,7 @@ import { setText, setDisplay, setLoading, activeView, pollSpanFor } from './dom.
 import { renderDashboard } from './render/statsView.js';
 import { renderHealthPanel } from './render/health.js';
 import { pollBackoff, setBackoff, resetBackoff } from './state.js';
+import { showAlert } from './dialog.js';
 import { t } from './i18n/index.js';
 
 let selectedProject = 'all';
@@ -96,26 +97,53 @@ export async function fetchData() {
   }
   try {
     const hdata = await fetchHealth();
-    renderHealthPanel(hdata, data?.totals?.embed_queries);
+    renderHealthPanel(hdata);
     if (hdata.db_size_bytes !== undefined) {
       const mb = (hdata.db_size_bytes / (1024 * 1024)).toFixed(2);
       setText('sidebar-db-size', t('sidebar.db_size_val', { size: mb }));
     }
   } catch (e) {
-    renderHealthPanel({ status: 'unknown' }, data?.totals?.embed_queries);
+    renderHealthPanel({ status: 'unknown' });
   }
   setLoading(false);
 }
 
+export async function refreshEmbedEngine() {
+  try {
+    const resp = await fetch('/api/engine/refresh', { method: 'POST' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function refreshEmbedStatus() {
   const btn = document.getElementById('btn-embed-refresh');
-  if (btn) { btn.disabled = true; btn.textContent = t('deck.refreshing'); }
+  const txt = document.getElementById('btn-embed-refresh-text');
+  if (btn) btn.disabled = true;
+  if (txt) {
+    txt.textContent = t('deck.refreshing');
+  } else if (btn) {
+    btn.textContent = t('deck.refreshing');
+  }
   try {
+    const res = await refreshEmbedEngine();
     const [stats, health] = await Promise.all([fetchStats().catch(() => null), fetchHealth().catch(() => null)]);
     if (stats) renderDashboard(stats);
-    if (health) renderHealthPanel(health, stats?.totals?.embed_queries);
+    if (health) renderHealthPanel(health);
+    await showAlert({
+      title: t('deck.engine_control'),
+      message: res.message || (res.success ? 'Engine refreshed' : (res.error || 'Refresh failed')),
+      variant: res.success ? 'success' : 'danger',
+    });
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = t('deck.refresh_model'); }
+    if (btn) btn.disabled = false;
+    if (txt) {
+      txt.textContent = t('deck.refresh_model');
+    } else if (btn) {
+      btn.textContent = t('deck.refresh_model');
+    }
   }
 }
 

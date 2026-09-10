@@ -8,7 +8,7 @@ pub(crate) fn handle_read(
     arguments: &Value,
     proj_path: &Path,
     rel_path: &str,
-    _state: &mut ServerState,
+    state: &mut ServerState,
 ) -> String {
     if rel_path.is_empty() {
         return "Error: relative_path is required for read operation. Example: project_context(operation=\"read\", project_path=\"...\", relative_path=\"src/main.rs\", target_symbol=\"my_fn\")".to_string();
@@ -47,6 +47,8 @@ pub(crate) fn handle_read(
 
     match std::fs::read_to_string(&full_path) {
         Ok(content) => {
+            let full_file_tokens = crate::optimizer::compressor::estimate_tokens(&content, false) as u64;
+            state.last_raw_baseline_tokens = Some(full_file_tokens);
             let lines: Vec<&str> = content.lines().collect();
             let total_lines = lines.len();
             let is_exempt = crate::mcp::tools::gate_edit::is_exempt_from_loc_limit(&resolved_subpath);

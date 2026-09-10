@@ -4,41 +4,56 @@
 
 ## Overview
 
-Agent Guidance MCP is a **100% Native Rust 2024 Edition** MCP server that gives AI coding agents standards guidance, skill references, workflow prompts, and bounded project code context. It runs as a **ref-counted daemon** with 30s idle auto-shutdown — models are loaded once and shared across all IDE/CLI connections.
+Agent Guidance MCP is a **100% Native Rust 2024 Edition** MCP server that gives AI coding agents standards guidance, skill references, workflow prompts, and bounded project code context. It runs as a **ref-counted singleton daemon** with a 60s idle cooldown timer. To prevent dropping models prematurely, an **IDE Process Detector** continuously monitors the OS process table for 26 IDE binaries (VS Code, Cursor, Antigravity, Windsurf, Claude, etc.) — keeping models warm in memory as long as any developer IDE remains open.
 
 ---
 
 ## Rust Module Map
 
+The codebase strictly enforces Clean Architecture and a mandatory **< 300 LOC hard cap per file**:
+
 ```
 src/
-├── main.rs            # Binary entrypoint — auto-detects daemon/proxy mode
-├── daemon.rs          # Unix socket daemon, connection tracking, 30s idle timeout
-├── catalog/           # Skills catalog management
-│   ├── store.rs       # Embedded rust_embed skills + workspace-local scanning
-│   ├── updater.rs     # Async auto-updater for 3rd-party skill repositories
+├── main.rs            # Binary entrypoint — CLI flags, auto-detects daemon/proxy mode
+├── daemon/            # Singleton Daemon & IPC Subsystem (< 300 LOC each)
+│   ├── lifecycle.rs   # Ref-counted client connection tracking, 60s cooldown timer
+│   ├── ide_detector.rs# Process scanner for 26 IDEs (prevents premature teardown)
+│   ├── server.rs      # Named pipe (Windows) / Unix socket server dispatch
+│   ├── handler.rs     # Worker thread pool (32 concurrent permits, zero-alloc bypass)
+│   ├── spawn.rs       # Detached spawn (Windows WMI breakaway + Unix nohup)
+│   ├── tray.rs        # Windows taskbar system notification tray icon
+│   └── lock.rs        # File-lock singleton mutex guard
+├── catalog/           # Skills Catalog & Architecture Blueprints
+│   ├── store.rs       # 279 embedded skills (rust_embed) + workspace .agents/skills scanning
+│   ├── blueprint.rs   # Upfront dynamic decomposition blueprints for 6 architecture patterns
+│   ├── rules.rs       # Tech stack & language-specific micro-rulesets
 │   └── mod.rs
-├── context/           # Project context & indexing
-│   ├── scanner.rs     # Bounded workspace scanner & ignore filter
-│   ├── db.rs          # SQLite FTS5 code symbol indexing & usage database
+├── context/           # Project Context, AST Analysis & GraphRAG Engine
+│   ├── scanner.rs     # Bounded workspace scanner (max_depth=3 default, .gitignore filters)
+│   ├── db.rs          # SQLite code_graph.db (FTS5 symbols, call edges, AST metadata)
+│   ├── graph_rag/     # Hierarchical Leiden community clustering & RAG summarization
+│   └── hnsw/          # High-performance in-memory vector index for symbol retrieval
+├── dashboard/         # Embedded Web Dashboard Server & REST API (< 300 LOC each)
+│   ├── stats.rs       # GET /api/stats with 2s TTL in-memory cache
+│   ├── stats_query.rs # SQLite queries for 24h summaries, tool breakdown, phase cadence
+│   ├── graph.rs       # GET /api/graph code graph serializer & Mermaid DAG exporter
+│   ├── projects.rs    # GET /api/projects multi-repository registry with active/missing disk checks
+│   ├── logs_api.rs    # GET /api/logs paginated diagnostic log query & clear endpoint
+│   └── mod.rs         # tiny_http worker pool, asset router, port allocator (11997)
+├── dashboard_src/     # Dashboard Frontend SPA (HTML5, Vanilla ES Modules, CSS, SVG)
+├── mcp/               # Model Context Protocol Engine (< 300 LOC each)
+│   ├── router/        # MCP JSON-RPC protocol router & tool schema definitions
+│   ├── state/         # ServerState, stage state machine, 31-keyword multi-lingual approval
+│   ├── tools/         # 6 core tool dispatchers (pipeline, skills, guidance, context, gate, continuity)
+│   ├── db.rs          # SQLite usage.db telemetry logging & daily aggregations
 │   └── mod.rs
-├── dashboard/         # Native HTTP usage dashboard server & embedded HTML frontend
+├── ml/                # Machine Learning & Vector Search Engine
+│   ├── embeddings/    # Candle BERT (multilingual-e5-small) + cached passage vectors
+│   ├── cross_encoder.rs# MiniLM cross-encoder reranker
 │   └── mod.rs
-├── mcp/               # Model Context Protocol engine
-│   ├── db.rs          # SQLite usage metrics persistence, 24h pruning & daily aggregations
-│   ├── protocol.rs    # JSON-RPC request & response structs
-│   ├── router.rs      # Tool dispatcher & resource router
-│   ├── state.rs       # ServerState priority gate, stage matrix & circuit breaker
-│   ├── tools.rs       # Tool handlers (task_pipeline, guidance, project_context, etc.)
-│   ├── config.rs      # IDE client auto-registration & tagged block section deployment
-│   ├── templates.rs   # Embedded AGENTS.md rules & templates
-│   └── mod.rs
-├── ml/                # Machine learning & vector search
-│   ├── embeddings.rs  # Candle BERT (intfloat/multilingual-e5-small) — cached model + passage embeddings
-│   ├── llm_selector.rs# Cross-encoder (cross-encoder/ms-marco-MiniLM-L-6-v2) reranker
-│   └── mod.rs
-└── optimizer/         # Token optimization engine
-    ├── compressor.rs  # Language-aware token compressor & comment stripper
+└── optimizer/         # Token Optimization Engine
+    ├── compressor.rs  # Language-aware token compressor & whitespace stripper
+    ├── skeleton.rs    # AST code skeletonizer (folds function bodies to line ranges)
     └── mod.rs
 ```
 
@@ -46,9 +61,8 @@ src/
 
 ## Transport Architecture
 
-## Transport Architecture
-
 ### Cross-Platform Detached Singleton Daemon & Thin Proxy
+
 
 On launch from any IDE/CLI (VS Code, Cursor, Claude Code, Codex, Antigravity), `agent-guidance` auto-negotiates its runtime role:
 
@@ -225,15 +239,13 @@ task_pipeline call
 
 | Tool | Gate | Notes |
 |---|---|---|
-| `task_pipeline` | ✅ Unlocks | Sets `priority_gate_passed = true` |
-| `guidance` | 🔒 Gated | Blocked before `task_pipeline` |
-| `project_context` | 🔒 Gated | Blocked before `task_pipeline` |
-| `ui_ux` | 🔒 Gated | Blocked before `task_pipeline` |
-| `session_continuity` | 🔒 Gated | Blocked before `task_pipeline` |
-| `workflow_gate` | 🔒 Gated | Blocked before `task_pipeline` |
-| `require_edit_approval` | ✅ Open | Delegates to workflow stage check |
-| `usage_report` | ✅ Open | — |
-| `health_check`, `diagnose`, `token_stats` | ✅ Open | Whitelisted |
+| `task_pipeline` | ✅ Unlocks | Unlocks priority gate and transitions stage Context → Plan |
+| `select_skills` | ✅ Ungated | Whitelisted; confirm and inject skills into context |
+| `workflow_gate` | ✅ Ungated | Whitelisted governance & state machine tool |
+| `session_continuity` | ✅ Ungated | Whitelisted session persistence & learnings |
+| `guidance` | 🔒 Gated | Blocked before `task_pipeline` (`PRIORITY_REQUIRED`) |
+| `project_context` | 🔒 Gated | Blocked before `task_pipeline` (`PRIORITY_REQUIRED`) |
+| `ui_ux` | 🔒 Gated | Blocked before `task_pipeline` (`PRIORITY_REQUIRED`) |
 
 ---
 
@@ -260,22 +272,25 @@ AI calls tool
 ```
 task_pipeline(task, project_path, phase)
   ├─ detect_project_path() → resolve workspace root
-  ├─ detect_project_architecture() → Clean_Arch / Layered / Feature / CLI
+  ├─ detect_project_architecture() → Clean_Architecture / Layered_Architecture / Package_By_Feature / Orchestrator / CLI_Pipeline / Flat_Library
   ├─ query SQLite code_graph.db → fast-path file count (<1ms)
-  ├─ generate_dynamic_blueprint() → upfront modularity blueprint (<300 LOC)
+  ├─ generate_dynamic_blueprint() → upfront modularity blueprint (<300 LOC target)
   ├─ get_semantic_relevant_learnings() → inject past session learnings
   ├─ get_phase_rules() → phase-targeted execution mandates
+  ├─ evaluate approval keywords → auto-transition Plan -> Build if approved
   └─ unlock priority gate (PASSED)
 ```
 
-### 3-Tier Search Fallback
+### 6-Phase Instant Cascade Search (< 100ms)
 
 ```
 project_context(search, query)
-  ├─ FTS5 (SQLite full-text index)
-  ├─ Documentation + manifests
-  ├─ Structural + config files
-  └─ General code files (capped)
+  ├─ Phase 1: Alias Cache (<1ms, instant symbol/path hit)
+  ├─ Phase 2: Symbol FTS5 (<5ms, SQLite trigram & exact symbol index)
+  ├─ Phase 3: Symbol Vector Search (<50ms, in-memory HNSW cosine similarity)
+  ├─ Phase 4: Content Chunk FTS5 (<5ms, full-text snippet matches)
+  ├─ Phase 5: RAG Content Vectors (<100ms, chunk embeddings)
+  └─ Phase 6: Linked Sibling Projects (cross-workspace dependencies)
 ```
 
 ---

@@ -8,13 +8,15 @@ pub(crate) fn validate_new_file_modularity(rel_path: &str, justification: &str) 
     let file_stem = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
     let clean_stem = file_stem.replace('-', "_");
 
-    // 1. Language-agnostic plural compound container suffixes
+    // 1. Language-agnostic plural compound container suffixes (40 patterns)
     let compound_suffixes = [
         "modals", "dialogs", "drawers", "forms", "tables", "cards", "panels", "widgets",
         "components", "views", "screens", "pages",
         "services", "handlers", "controllers", "managers", "repositories", "endpoints",
         "routes", "actions", "mutations", "queries", "reducers",
-        "helpers", "utils", "models", "entities", "adapters", "transformers", "listeners",
+        "helpers", "utils", "utilities", "models", "entities", "adapters", "transformers", "listeners",
+        "providers", "subscribers", "factories", "builders", "validators", "converters",
+        "processors", "resolvers", "types",
     ];
 
     for suffix in compound_suffixes {
@@ -89,6 +91,8 @@ mod tests {
 
         // Python
         assert!(validate_new_file_modularity("app/api/item_endpoints.py", "Endpoints").is_err());
+        assert!(validate_new_file_modularity("app/core/user_validators.py", "Validators").is_err());
+        assert!(validate_new_file_modularity("app/common/data_types.py", "Types").is_err());
     }
 
     #[test]

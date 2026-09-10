@@ -48,7 +48,7 @@ pub fn handle_request(
                         "properties": {
                             "task": { "type": "string", "description": "The task description or goal" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository (e.g. 'E:/Github/Device-Ping')" },
-                            "phase": { "type": "string", "enum": ["plan", "implement", "test", "debug", "review", "refactor"], "description": "Active development phase for per-phase context reset" }
+                            "phase": { "type": "string", "enum": ["plan", "build", "implement", "test", "debug", "review", "refactor"], "description": "Active development phase for per-phase context reset" }
                         },
                         "required": ["task", "project_path", "phase"]
                     }
@@ -71,6 +71,14 @@ pub fn handle_request(
                             "project_path": {
                                 "type": "string",
                                 "description": "Absolute path of active repository workspace"
+                            },
+                            "user_confirmed": {
+                                "type": "boolean",
+                                "description": "Whether user explicitly confirmed/selected the skills"
+                            },
+                            "user_message": {
+                                "type": "string",
+                                "description": "Optional message or feedback from the user regarding skill selection"
                             }
                         },
                         "required": ["skills"]
@@ -78,7 +86,7 @@ pub fn handle_request(
                 },
                 {
                     "name": "guidance",
-                    "description": "Standards catalog, 2-stage vector search, 168 embedded skills, pre-code architecture blueprints, and empirical verification contracts.",
+                    "description": "Standards catalog, 2-stage vector search, 279 embedded skills (440 vector passages), pre-code architecture blueprints, and empirical verification contracts.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -104,8 +112,8 @@ pub fn handle_request(
                         "properties": {
                             "operation": {
                                 "type": "string",
-                                "enum": ["search", "navigate", "graph_rag", "reusable", "detect_duplicates", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex", "enrich_graph", "semantic_query"],
-                                "description": "Operation: 'reusable'/'detect_duplicates' (GraphRAG & ML shared function and semantic clone analysis), 'graph_rag' (hierarchical Leiden community RAG), 'search' (5-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (structure), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh), 'enrich_graph' (push Agent semantic edges & domain summaries), 'semantic_query' (query Agent semantic knowledge)"
+                                "enum": ["search", "navigate", "graph_rag", "reusable", "detect_duplicates", "read", "symbols", "structure", "references", "architecture", "tree", "learn_alias", "reindex", "enrich_graph", "semantic_query", "callers", "callees", "blast_radius", "definition", "type_definition"],
+                                "description": "Operation: 'reusable'/'detect_duplicates' (GraphRAG & ML shared function analysis), 'graph_rag' (hierarchical Leiden community RAG), 'search' (6-phase instant cascade), 'navigate' (semantic vector graph traversal), 'read' (read 300 LOC cap / target symbol), 'symbols'/'structure' (file symbol outline), 'references' (symbol usage graph), 'architecture' (pattern detection), 'tree' (directory tree structure), 'callers' (functions calling target), 'callees' (dependencies called by target), 'blast_radius' (Mermaid impact graph & risk score), 'definition' (LSP goto definition), 'type_definition' (LSP type definition), 'learn_alias' (store grep mapping), 'reindex' (full graph refresh), 'enrich_graph' (push semantic edges & domain summaries), 'semantic_query' (query semantic knowledge)"
                             },
                             "mode": { "type": "string", "enum": ["global", "local", "drift", "basic"], "description": "Query mode for 'graph_rag' operation: 'global' (community summaries), 'local' (entity fan-out), 'drift' (dual-route), or 'basic'" },
                             "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
@@ -113,13 +121,16 @@ pub fn handle_request(
                             "relative_path": { "type": "string", "description": "Relative file path within project (e.g. 'src/main.rs')" },
                             "target_symbol": { "type": "string", "description": "Specific function/class/struct/enum symbol to extract precisely" },
                             "layer": { "type": "string", "enum": ["ui", "domain", "data", "infrastructure"], "description": "Architecture domain layer of the target file" },
+                            "max_depth": { "type": "integer", "description": "Maximum directory depth to scan for 'tree' operation (default: 3, max: 5)" },
+                            "start_line": { "type": "integer", "description": "Start line number for 'read' operation (1-indexed)" },
+                            "end_line": { "type": "integer", "description": "End line number for 'read' operation (1-indexed)" },
                             "alias_term": { "type": "string", "description": "The natural language term to learn as alias (for learn_alias)" },
                             "resolved_symbol": { "type": "string", "description": "The symbol name resolved from grep (for learn_alias)" },
                             "resolved_line": { "type": "integer", "description": "Line number of resolved symbol (for learn_alias)" },
                             "edges": { "type": "array", "items": { "type": "object" }, "description": "Array of semantic edges for enrich_graph: [{source, target, relation, description, confidence}]" },
                             "summaries": { "type": "array", "items": { "type": "object" }, "description": "Array of domain summaries for enrich_graph: [{module_path, title, summary, tags}]" },
                             "scope": { "type": "string", "enum": ["symbols", "files", "edges", "content"], "description": "Scope filter for navigate operation" },
-                            "view_mode": { "type": "string", "enum": ["full", "skeleton"], "description": "View mode for 'read' operation: 'full' (capped 300 LOC) or 'skeleton' (AST structural outline with function bodies collapsed to line ranges)" }
+                            "view_mode": { "type": "string", "enum": ["full", "skeleton", "zoom", "slice"], "description": "View mode for 'read' operation: 'full' (capped 300 LOC), 'skeleton' (AST structural outline), 'zoom'/'slice' (focused implementation with folded siblings)" }
                         },
                         "required": ["operation", "project_path"]
                     }

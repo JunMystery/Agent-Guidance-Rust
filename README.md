@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.5.6-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.5.7-blue.svg)](Cargo.toml)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
 [![Role](https://img.shields.io/badge/Role-Autonomous%20Orchestrator-indigo.svg)](#-key-capabilities)
 [![Smart Skills](https://img.shields.io/badge/Smart%20Skills-279%2B%20ML%20Search-cyan.svg)](#-smart-skills-system)
@@ -51,8 +51,8 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 | **`task_pipeline`** | **Entrypoint Orchestrator** | `task`, `project_path`, `phase` | CALL FIRST. Scans project, unlocks priority gate, proposes skills, synthesizes **Dynamic Split Blueprints** (detects $\ge 200$ LOC files) and **Skill Recipes**, and injects **Memorized Learnings**. |
 | **`select_skills`** | **Semantic Skill Loader** | `skills` | Loads skill instructions into context with **Semantic Slicing** (Top-3 sections via Multilingual-E5 saving ~70% tokens) and injects language safety micro-guidance. |
 | **`workflow_gate`** | **Stage & Impact Guard** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`, `rollback`). Features **Zero-Turn Advance**, **Code Graph Impact Risk Gating**, and **Pre-edit Snapshot Rollback**. |
-| **`project_context`** | **Code Graph, GraphRAG & AST Skeleton** | `operation` (`graph_rag` / `search` / `navigate` / `read` / `symbols` / `references` / `architecture` / `tree` / `learn_alias` / `reindex`) | **Hierarchical Leiden GraphRAG** (`global`, `local`, `drift`, `basic`), 5-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, alias learning with 30/90d decay, realtime file watcher, and **AST Structural Skeletonization** (`view_mode="skeleton"`, saving 90-95% tokens on files >300 LOC). |
-| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify`) | 2-stage vector search, language-specific precode safety rules (Kotlin, Go, Rust, TS, Python), and empirical verification contracts. |
+| **`project_context`** | **Code Graph, GraphRAG & AST Skeleton** | `operation` (`graph_rag` / `search` / `navigate` / `read` / `symbols` / `references` / `callers` / `callees` / `blast_radius` / `definition` / `type_definition` / `architecture` / `tree` / `learn_alias` / `reindex` / `enrich_graph` / `semantic_query`) | **Hierarchical Leiden GraphRAG** (`global`, `local`, `drift`, `basic`), 6-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, call-graph fanout (`callers`/`callees`/`blast_radius`), LSP definitions, configurable tree depth (`max_depth: 3`), and **AST Structural Skeletonization** (`view_mode="skeleton"`, saving 90-95% tokens on files >300 LOC). |
+| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify`) | 2-stage vector search over 279 embedded skills (440 vectors), language-specific precode safety rules (Kotlin, Go, Rust, TS, Python), and empirical verification contracts. |
 | **`session_continuity`** | **Memory & Handoff** | `operation` (`save` / `load` / `clear` / `learn` / `handoff`) | Persists active task states, records **Categorized Project Learnings** in `.agent-context/learnings.md` (30-item FIFO cap), and generates **Cross-Agent Handoff** summaries in `.agent-context/handoff.md`. |
 
 ---
@@ -72,13 +72,14 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 - Governs the complete AI agent lifecycle through `task_pipeline`. The MCP server inspects the workspace, unlocks priority gates, selects skills, and dynamically directs next steps.
 - Enforces enterprise architecture styles (**Clean Architecture**, **Layered Architecture**, **Package-by-Feature**, **CLI Pipeline**, **Flat Library**, **Orchestrator**) with cross-session persistence in `.agent-context/architecture.json`.
 
-### 3. High-Speed 5-Phase Search Cascade (<100ms)
+### 3. High-Speed 6-Phase Search Cascade (<100ms)
 - Replaces slow raw disk scans with an instant multi-tier cascade stored in `<project_root>/.agent-context/code_graph.db`:
   1. **Phase 1: Alias Cache (<1ms)**: Instant lookup for learned natural language queries.
   2. **Phase 2: Symbol FTS5 (<5ms)**: SQLite FTS5 index on all functions, structs, enums, classes, and traits.
   3. **Phase 3: Symbol Vectors (<50ms)**: BERT semantic similarity on symbol signatures.
   4. **Phase 4: Content FTS5 (<5ms)**: Full-text search across 50-line code chunks.
   5. **Phase 5: RAG Content Vectors (<100ms)**: Multilingual-E5 semantic search on actual code chunks.
+  6. **Phase 6: Linked Projects (<120ms)**: Cross-workspace semantic and symbol search across linked repositories.
 - **Adaptive Alias Learning**: Automatically learns successful queries, increasing confidence with reuse and decaying inactive mappings (50% reduction after 30 days, purged after 90 days).
 - **Proactive Background File Watcher**: Uses OS-level file monitoring (`notify`) with a 5s debounce to incrementally update AST symbols, DAG edges, and RAG chunks before the agent even issues a query.
 
@@ -123,7 +124,7 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 
 The built-in ML catalog engine leverages local Rust bindings for Hugging Face `candle` to perform sub-millisecond semantic skill discovery:
 
-- **Stage 1 (Cosine Similarity)**: Scans 279+ skills using Candle BERT vector embeddings with precomputed binary vector acceleration ($<5\text{ ms}$).
+- **Stage 1 (Cosine Similarity)**: Scans 279 embedded skills (440 precomputed vector embeddings) using Candle BERT vector embeddings with precomputed binary vector acceleration ($<5\text{ ms}$).
 - **Stage 2 (Intent Reranking)**: Cross-encoder (`ms-marco-MiniLM-L-6-v2`) reranks top candidates with language profile boosting.
 - **On-Demand Loading**: Skills are injected dynamically into context via `select_skills(skills=[...])` only when confirmed.
 
@@ -179,8 +180,10 @@ Options:
   --verify-setup           Verify MCP configuration paths in all IDE clients
   --upgrade                Download and install latest release package, update IDE configs
   --self-update            Alias for --upgrade
+  --daemon, -d             Force start in background singleton daemon mode
+  --proxy                  Force connect as client proxy to daemon; exit if no daemon
   --dashboard              Start real-time web usage dashboard at http://127.0.0.1:11997
-  --port <PORT>            Custom dashboard port (default: 11997)
+  --port, -p <PORT>        Custom dashboard port (default: 11997, alias: --dashboard-port)
   --project <PATH>         Filter dashboard to a specific project path or name
   --prune-missing          Prune non-existent projects from usage tracking registry
   --cleanup                Auto-clean expired logs, prune dead projects, and vacuum SQLite DB
@@ -216,7 +219,7 @@ Agent-Guidance-Rust/
 │   │   └── db/                   # SQLite database operations, automatic cleanup, and vacuuming
 │   ├── ml/                       # Candle BERT neural embeddings, vector similarity, ONNX inference
 │   └── optimizer/                # Universal token compression engine, AST code skeletonizer
-├── skills/                       # Pre-packaged domain skills catalog (270+ skills)
+├── skills/                       # Pre-packaged domain skills catalog (279 embedded skills, 440 vectors)
 ├── docs/                         # Architectural diagrams, specifications, setup guides
 │   └── images/                   # Dashboard screenshots, hero banners, and flowcharts
 └── scripts/                      # Automated installation and maintenance scripts (PowerShell, Bash)
@@ -232,6 +235,7 @@ Comprehensive guides, architecture deep-dives, and client setup instructions are
 | :--- | :--- | :--- |
 | **Architecture** | System Design & Lifecycles | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | **Getting Started** | Quickstart & Overview | [`docs/getting-started.md`](docs/getting-started.md) |
+| **Web Dashboard** | Real-Time Telemetry & Visual GraphRAG | [`docs/dashboard.md`](docs/dashboard.md) |
 | **Installation** | Platform Setup & Upgrades | [`docs/installation.md`](docs/installation.md) |
 | **Usage Guide** | Orchestrator & Workflow Usage | [`docs/usage.md`](docs/usage.md) |
 | **Development** | Contributing & Testing | [`docs/development.md`](docs/development.md) |

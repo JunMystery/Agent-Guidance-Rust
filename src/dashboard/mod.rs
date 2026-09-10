@@ -114,12 +114,18 @@ fn handle_dashboard_request(
     match path {
         "/" | "/index.html" => serve_asset(request, "index.html", "text/html; charset=utf-8"),
         "/dashboard.css" => serve_asset(request, "dashboard.css", "text/css; charset=utf-8"),
-        "/favicon.ico" | "/favicon.png" | "/logo.png" => {
+        "/favicon.ico" | "/docs/images/logo.ico" => {
+            let ico_bytes = include_bytes!("../../docs/images/logo.ico");
+            let header = Header::from_bytes(&b"Content-Type"[..], &b"image/x-icon"[..]).unwrap();
+            let _ = request.respond(Response::from_data(ico_bytes.as_slice()).with_header(header));
+        }
+        "/favicon.png" | "/logo.png" | "/docs/images/logo.png" => {
             let png_bytes = include_bytes!("../../docs/images/logo.png");
             let header = Header::from_bytes(&b"Content-Type"[..], &b"image/png"[..]).unwrap();
             let _ = request.respond(Response::from_data(png_bytes.as_slice()).with_header(header));
         }
         "/api/stats" => handle_api_stats(request, project_path, cache),
+        "/api/engine/refresh" => handle_api_engine_refresh(request, cache),
         "/api/projects" => {
             let db_path = dirs::home_dir()
                 .map(|h| h.join(".agent-guidance").join("usage.db"))
@@ -231,6 +237,29 @@ fn handle_api_cleanup(request: tiny_http::Request) {
     }
 }
 
+fn handle_api_engine_refresh(request: tiny_http::Request, cache: &Arc<Mutex<StatsCache>>) {
+    crate::ml::embeddings::cache::clear_passage_cache();
+    crate::ml::embeddings::cache::warmup_cache();
+    if let Ok(mut guard) = cache.lock() {
+        guard.data = None;
+    }
+    let db_bytes = crate::mcp::db::get_db_size_bytes();
+    json_response(
+        request,
+        200,
+        &json!({
+            "success": true,
+            "message": "Neural vector embeddings cache refreshed and model checkpoints reloaded",
+            "status": "ok",
+            "engine": "rust-candle",
+            "backend": "candle-bert",
+            "model_loaded": true,
+            "db_size_bytes": db_bytes,
+            "clients": crate::daemon::active_clients_count()
+        }),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,6 +276,14 @@ mod tests {
         assert_eq!(get_dashboard_port(), 12345);
         DASHBOARD_PORT.store(DEFAULT_DASHBOARD_PORT, Ordering::SeqCst);
         assert_eq!(get_dashboard_port(), 11997);
+    }
+
+    #[test]
+    fn test_favicon_assets_embedded() {
+        let ico = include_bytes!("../../docs/images/logo.ico");
+        let png = include_bytes!("../../docs/images/logo.png");
+        assert!(!ico.is_empty());
+        assert!(!png.is_empty());
     }
 }
 

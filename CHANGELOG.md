@@ -2,6 +2,22 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.7] - 2026-09-10
+
+### Configurable Tree Depth & Codebase Hardening
+- **Configurable `project_context(operation="tree")`**:
+  - Added `max_depth` parameter (default: 3, clamped range: 1..=5) to directory tree scanning in `context.rs`.
+  - Added comprehensive unit tests in `src/mcp/tools_tests.rs` verifying default depth, custom depth, and boundary clamping.
+- **Router & MCP Surface Alignment**:
+  - Added `user_confirmed` (boolean) and `user_message` (string) to `select_skills` JSON-RPC tool input schema in `src/mcp/router/mod.rs`.
+  - Fixed residual `agent-guidance-mcp` string in `src/main.rs` and `agent-guidance-mcp_task_pipeline` in `src/mcp/router/resources.rs`.
+  - Synchronized `session_continuity` parameter names in documentation (`learning`, `category`, `pinned`, `next_action`).
+  - Replaced phantom `guidance://` resources in documentation with the real 5 static URIs + `standards://skill/{name}`.
+  - Updated Tool Gate Status table in `docs/ARCHITECTURE.md` and project context documentation (removed prefixes, updated 6-phase search cascade, fixed `view_mode` enum).
+- **Modularity Gate & Standards Synchronization**:
+  - Expanded `gate_edit_modularity.rs` to enforce all 40 compound plural container suffixes across programming languages.
+  - Fixed duplicate header in `PROJECT-STANDARDS.md` and synchronized 40 suffix patterns across `PROJECT-STANDARDS.md`, `AGENTS.md`, and `GEMINI.md`.
+
 ## [1.5.6] - 2026-09-09
 
 ### Real-Time MCP Crash/Diagnostics Engine & Architecture Graph Visual Overhaul

@@ -53,6 +53,8 @@ pub struct ServerState {
     #[serde(default)]
     pub tokens_optimized: u64,
     #[serde(default)]
+    pub last_raw_baseline_tokens: Option<u64>,
+    #[serde(default)]
     pub project_path: Option<String>,
     #[serde(default)]
     pub agent_client_name: Option<String>,
@@ -108,6 +110,7 @@ impl Default for ServerState {
             tool_calls: 0,
             tokens_original: 0,
             tokens_optimized: 0,
+            last_raw_baseline_tokens: None,
             project_path: None,
             agent_client_name: None,
             workspace_roots: Vec::new(),

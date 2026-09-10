@@ -11,6 +11,8 @@ export const coreEn = {
   'nav.logs': '⚠️ Diagnostics',
 
   // Sidebar & Footer
+  'sidebar.collapse': 'Collapse sidebar (Ctrl+B)',
+  'sidebar.expand': 'Expand sidebar (Ctrl+B)',
   'sidebar.tracked_project': 'Tracked Project:',
   'sidebar.all_projects': '🌐 All Projects (Global)',
   'sidebar.all_projects_analytics': '🌐 All Projects (Global Analytics)',

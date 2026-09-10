@@ -206,6 +206,7 @@ pub(crate) fn handle(
 
         let opt_tokens = estimate_tokens(&resp, false);
         let orig_tokens = raw_token_acc.max(opt_tokens);
+        state.last_raw_baseline_tokens = Some(orig_tokens as u64);
         state.record_call(orig_tokens as u64, opt_tokens as u64);
 
         resp

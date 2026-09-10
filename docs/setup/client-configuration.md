@@ -106,41 +106,39 @@ If `agent-guidance` is not in your `PATH`, use the absolute path:
 
 ## Auto-Detection Behavior
 
-When launched, the binary checks for an existing daemon socket at `~/.cache/agent-guidance/mcp.sock`:
+When launched, the binary checks for an existing daemon socket or named pipe:
+- Windows: `\\.\pipe\agent-guidance-mcp`
+- Unix: `~/.cache/agent-guidance/mcp.sock`
 
-- **No socket** → becomes the daemon (loads models, binds socket, handles this client)
-- **Socket exists** → becomes a proxy (forwards stdin/stdout to the daemon)
+- **No socket** → starts as the daemon (loads neural models into memory, binds socket/pipe, serves MCP requests, runs web dashboard)
+- **Socket exists** → starts as lightweight client proxy (forwards stdin/stdout to daemon in < 5ms)
 
 No configuration flags needed for normal use. For testing:
 
 | Flag | Effect |
 |---|---|
-| `--force-daemon` | Start as daemon even if socket exists |
-| `--force-client` | Connect as proxy; exit if no daemon |
+| `--force-daemon`, `--daemon` | Force start as daemon |
+| `--force-client`, `--proxy` | Force connect as proxy; exit if no daemon |
+| `--dashboard` | Open embedded web dashboard in browser |
+| `--port <PORT>`, `--dashboard-port <PORT>` | Set web dashboard port (default: 11997) |
 
-## Token Optimization & Compression
+## Environment Variables
 
-Configure these environment variables in your MCP client's `"env"` settings:
+Configure these environment variables in your client configuration `"env"` block or shell:
 
 | Variable | Default | Description |
 |---|---|---|
-| `AGENT_GUIDANCE_TOKEN_OPT` | `1` | `0` = disable all optimization & compression |
-| `AGENT_GUIDANCE_FILTER_LEVEL` | `minimal` | `none` / `minimal` / `aggressive` — comment stripping depth |
-| `AGENT_GUIDANCE_DOC_MAX_TOKENS` | `8000` | Max token cap for standard documents |
-| `AGENT_GUIDANCE_SKILL_MAX_TOKENS` | `8000` | Max token cap for skill guides |
-| `AGENT_GUIDANCE_TRACK_SAVINGS` | `1` | `0` = disable token analytics |
-| `AGENT_GUIDANCE_ROOT` | auto | Override path to standards corpus |
-
-### Filter Levels
-
-| Value | Effect |
-|---|---|
-| `none` | No compression |
-| `minimal` (default) | Strips block headers and whitespace, preserves inline comments |
-| `aggressive` | Strips all docstrings and comments for maximum compression |
+| `AGENT_GUIDANCE_DEVICE` | `auto` | ML compute provider: `auto`, `cpu`, `cuda` (NVIDIA), `directml` / `dml` (Windows AMD/Intel/NVIDIA), `metal` (macOS Apple Silicon) |
+| `AGENT_GUIDANCE_IDLE_TIMEOUT` | `60` | Daemon idle shutdown countdown in seconds after all IDE clients disconnect (note: daemon stays alive if an IDE process like VS Code, Cursor, or Antigravity is running) |
+| `AGENT_GUIDANCE_DASHBOARD_PORT`| `11997` | Port for the embedded telemetry dashboard and REST API |
+| `AGENT_GUIDANCE_TOKEN_OPT` | `1` | `0` = disable markdown token compression and whitespace reduction |
+| `AGENT_GUIDANCE_ONNX_PATH` | auto (`~/.agent-guidance/models`) | Custom directory containing ONNX quantized embedding models |
+| `AGENT_GUIDANCE_DISABLE_ML` | `0` | `1` = bypass background VRAM auto-warmup |
 
 ## Related Docs
 
 - [Installation](../installation.md)
 - [Usage Guide](../usage.md)
 - [MCP Surface](../reference/mcp-surface.md)
+- [Dashboard Guide](../dashboard.md)
+

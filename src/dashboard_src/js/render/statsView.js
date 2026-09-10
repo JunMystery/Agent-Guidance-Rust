@@ -30,6 +30,7 @@ export function renderDashboard(data) {
   setText('sys-db-status', data.db_status || '--');
 
   bindTimeframeTabs();
+  syncTimeframeTabs(activeTimeframe);
   updateTimeframeSummary(activeTimeframe);
 
   renderSkillsTable(data.top_skills);
@@ -37,6 +38,20 @@ export function renderDashboard(data) {
   renderActionsView(data);
   renderHourlyChart(data, data.totals || {});
   renderRecentCalls(data.recent_actions);
+  renderGovernanceMatrix(data.phase_stats, data.governance_stats);
+}
+
+export function getActiveTimeframe() {
+  return activeTimeframe;
+}
+
+function syncTimeframeTabs(tf) {
+  const container = el('timeframe-selector');
+  if (!container) return;
+  const tabs = container.querySelectorAll('.timeframe-tab');
+  tabs.forEach(t => {
+    t.classList.toggle('active', t.dataset.timeframe === tf);
+  });
 }
 
 function bindTimeframeTabs() {
@@ -47,9 +62,8 @@ function bindTimeframeTabs() {
   const tabs = container.querySelectorAll('.timeframe-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
       activeTimeframe = tab.dataset.timeframe;
+      syncTimeframeTabs(activeTimeframe);
       updateTimeframeSummary(activeTimeframe);
     });
   });
@@ -142,3 +156,42 @@ function drawRecentSkillCalls() {
   }
   renderPagination('recent-skills-pagination', 'recent-skills-body', paged, drawRecentSkillCalls);
 }
+
+function renderGovernanceMatrix(phaseStats, govStats) {
+  const p = phaseStats || {};
+  const g = govStats || {};
+
+  setText('gov-val-edits', g.edits_authorized || 0);
+  setText('gov-val-plans', g.plans_approved || 0);
+  setText('gov-val-verifications', g.verifications_passed || 0);
+  setText('gov-val-transitions', g.stages_transitioned || 0);
+
+  const plan = p.plan || 0;
+  const build = p.build || 0;
+  const test = p.test || 0;
+  const fix = p.fix || 0;
+  const review = (p.review || 0) + (p.refactor || 0);
+  const total = plan + build + test + fix + review;
+
+  setText('lbl-plan', plan);
+  setText('lbl-build', build);
+  setText('lbl-test', test);
+  setText('lbl-fix', fix);
+  setText('lbl-review', review);
+  setText('gov-phase-total', total + ' ' + (total === 1 ? 'call' : 'calls'));
+
+  const setWidth = (id, count) => {
+    const elNode = el(id);
+    if (!elNode) return;
+    const pct = total > 0 ? (count / total * 100).toFixed(1) : '0';
+    elNode.style.width = pct + '%';
+    elNode.title = pct + '% (' + count + ')';
+  };
+
+  setWidth('seg-plan', plan);
+  setWidth('seg-build', build);
+  setWidth('seg-test', test);
+  setWidth('seg-fix', fix);
+  setWidth('seg-review', review);
+}
+

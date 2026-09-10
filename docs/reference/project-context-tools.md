@@ -2,13 +2,13 @@
 
 [Back to README](../README.md)
 
-The `agent-guidance-mcp_project_context` tool provides a token-budgeted, persistent, and intelligent code exploration engine. It replaces slow raw-disk traversals with a local **SQLite + Tree-sitter + BERT Vector Search** cascade (<100ms) isolated per-project at `<project_root>/.agent-context/code_graph.db`.
+The `project_context` tool provides a token-budgeted, persistent, and intelligent code exploration engine. It replaces slow raw-disk traversals with a local **SQLite + Tree-sitter + BERT Vector Search** cascade (<100ms) isolated per-project at `<project_root>/.agent-context/code_graph.db`.
 
 ---
 
-## 5-Phase Instant Search Cascade (<100ms)
+## 6-Phase Instant Search Cascade (<100ms)
 
-When `operation="search"` is invoked, the engine processes queries through a 5-tier cascade:
+When `operation="search"` is invoked, the engine processes queries through a 6-tier cascade:
 
 ```
 Query: "xử lý timeout khi gọi API bên thứ 3"
@@ -17,7 +17,8 @@ Query: "xử lý timeout khi gọi API bên thứ 3"
   ├── Phase 2: SYMBOL FTS5 (<5ms) ─────────── Full-text match on function, class, struct names
   ├── Phase 3: SYMBOL VECTORS (<50ms) ─────── Multilingual-E5 semantic similarity on signatures
   ├── Phase 4: CONTENT FTS5 (<5ms) ────────── Full-text search across 50-line code chunks
-  └── Phase 5: RAG CONTENT VECTORS (<100ms) ─ Semantic similarity on actual chunk logic
+  ├── Phase 5: RAG CONTENT VECTORS (<100ms) ─ Semantic similarity on actual chunk logic
+  └── Phase 6: LINKED SIBLING PROJECTS ────── Cross-workspace sibling dependencies
 ```
 
 ### Adaptive Alias Learning & Decay
@@ -90,7 +91,7 @@ Reads a bounded file range (enforcing the hard 300 LOC cap). Outputs lines with 
 - `start_line` (optional): 1-indexed starting line number.
 - `end_line` (optional): 1-indexed ending line number (range cannot exceed 300 LOC).
 - `target_symbol` (optional): Precise symbol name to extract via Tree-sitter.
-- `view_mode` (optional): `"auto"` (default), `"full"`, or `"skeleton"` (folds sibling function bodies if file > 300 LOC).
+- `view_mode` (optional): `"full"` (default), `"skeleton"`, `"zoom"`, or `"slice"` (folds sibling function bodies if file > 300 LOC).
 
 *Indentation & Formatting Integrity*:
 - Outputs lines formatted as `L{line_no}: <line>`, preserving exact leading spaces and tabs.
@@ -117,11 +118,12 @@ Finds all occurrences and usages of a target symbol across the repository.
 ```
 
 ### 8. `operation="tree"`
-Returns a top-level directory and file overview (capped at depth 2).
+Returns a top-level directory and file overview. Supports `max_depth` (default: 3, range: 1..=5).
 ```json
 {
   "operation": "tree",
-  "project_path": "/path/to/project"
+  "project_path": "/path/to/project",
+  "max_depth": 3
 }
 ```
 

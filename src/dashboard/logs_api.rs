@@ -41,7 +41,7 @@ pub fn handle_api_logs(request: Request) {
             .get("limit")
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(50)
-            .clamp(1, 200);
+            .clamp(1, 1000);
         let offset = params
             .get("offset")
             .and_then(|s| s.parse::<usize>().ok())

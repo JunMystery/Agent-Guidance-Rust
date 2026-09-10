@@ -1,51 +1,41 @@
-# Usage Guide
+# Agent Guidance MCP Usage Guide
 
 [Back to README](../README.md)
 
-Use this MCP server to give AI agents standards guidance, skill references, workflow prompts, and bounded access to project code context.
+Common usage patterns and workflows for AI agents using the Agent Guidance MCP server.
 
-## Verify With MCP Inspector
+---
 
-After installation, launch the MCP Inspector:
+## Session Lifecycle: The 6-Step Pattern
 
-```bash
-npx @modelcontextprotocol/inspector agent-guidance
-```
+Every coding task follows a strict 6-step execution lifecycle:
 
-Open the printed URL, usually `http://localhost:5173`, and inspect the registered tools, prompts, and resources.
+1. **Initialize Context**: Call `task_pipeline(task="...", project_path="...", phase="plan")` to initialize project boundaries, detect architecture, and unlock the priority gate.
+2. **Inject Skills (Optional)**: Select and load on-demand skill guides with `select_skills(skills=[...])`.
+3. **Inspect Code Graph**: Search and read symbols using token-bounded operations via `project_context(operation="search"|"read"|"symbols"|"callers"|"blast_radius", ...)` (< 300 LOC cap).
+4. **Plan & Get User Approval**: Create/update `implementation_plan.md` and obtain explicit user consensus.
+5. **Authorize Edit**: Before creating or modifying any file, call `workflow_gate(action="authorize_edit", project_path="...", relative_path="...", risk_level="LOW", justification="...")`.
+6. **Empirical Verification**: Run tests and register proof via `guidance(operation="verify", verification_command="...", expected_output_keyword="...")`.
 
-## Recommended Agent Workflow
+---
 
-At the start of a coding session:
-
-1. Call `task_pipeline(task, project_path, phase="plan")` to unlock the priority gate, initialize language/architecture detection, and propose relevant skills.
-2. If skills are proposed, ask the user via IDE/CLI `ask_question` tool to select which skills to load, then invoke `select_skills(skills=[...], user_confirmed=true)`. If no skills are needed, call `select_skills(skills=[])`.
-3. For large refactors, upgrades, audits, or unfamiliar code, use `project_context(operation="search", project_path=..., query=...)`, `project_context(operation="symbols", ...)`, and `project_context(operation="tree", project_path=...)`.
-4. Use `guidance(operation="precode", query=task)` to get a structured upfront sub-module decomposition blueprint tailored to the project's architecture.
-5. Before editing any file, verify the workflow stage allows edits: `workflow_gate(action="check")` → present implementation plan to user.
-6. Authorize the edit using composite `workflow_gate(action="authorize_edit", architecture_pattern="Clean_Architecture"|"Layered_Architecture"|"Package_By_Feature"|"CLI_Pipeline"|"Flat_Library"|"Orchestrator"|"Auto")` once approved.
-7. Inspect target files with `project_context(operation="read", relative_path=..., target_symbol=...)` (bounded at 300 LOC max).
-8. Run empirical verification tests after changes (`cargo test`, `npm test`).
-9. Register verification results using `guidance(operation="verify", verification_command=..., expected_output_keyword=...)`.
-10. Use `session_continuity(operation="save", ...)` to persist task state across interruptions.
-
-Avoid repeated broad scans during the same session unless the project changed significantly.
-
-## Example: Standards Context
+## Example 1: Turn 1 Initialization (`task_pipeline`)
 
 ```json
 {
-  "task": "Build a secure API endpoint with tests",
+  "task": "Add JWT authentication to Express API with unit tests",
   "project_path": "/absolute/path/to/project",
   "phase": "plan"
 }
 ```
 
-Use `agent-guidance-mcp_task_pipeline` for the normal first call to unlock gates and initialize architectural context. Use `agent-guidance-mcp_guidance(operation="search", query=...)` when you need catalog standards.
+Returns project file counts, detected architecture pattern (e.g. `Clean_Architecture`), dynamic split blueprint, memorized project learnings, and unlocks subsequent gated tools.
 
-## Example: Project Code Context
+---
 
-Inspect project structure:
+## Example 2: Project Code Context & GraphRAG (`project_context`)
+
+### Directory Tree Scan (Default max_depth = 3)
 
 ```json
 {
@@ -55,18 +45,17 @@ Inspect project structure:
 }
 ```
 
-Search for a feature or symbol:
+### 6-Phase Search Cascade
 
 ```json
 {
   "operation": "search",
   "project_path": "/absolute/path/to/project",
-  "query": "refresh token auth",
-  "limit": 10
+  "query": "jwt auth middleware"
 }
 ```
 
-Read the current source file before editing:
+### Token-Bounded File Read (< 300 LOC)
 
 ```json
 {
@@ -74,19 +63,57 @@ Read the current source file before editing:
   "project_path": "/absolute/path/to/project",
   "relative_path": "src/auth/token_service.rs",
   "start_line": 1,
-  "max_lines": 160
+  "end_line": 80
 }
 ```
 
-## Example: Workflow
+### Precise Symbol Extraction
 
-Use `agent-guidance-mcp_guidance(operation="workflow", identifier="<mode>", query="<subject>")` to load a workflow by mode.
+```json
+{
+  "operation": "read",
+  "project_path": "/absolute/path/to/project",
+  "relative_path": "src/auth/token_service.rs",
+  "target_symbol": "verify_token"
+}
+```
 
-For example, `agent-guidance-mcp_guidance(operation="workflow", identifier="plan", query="Build billing export")` loads the planning workflow capsule and appends the subject.
+### Call Graph & Blast Radius Analysis
 
-## Example: Stage Management
+Find all functions calling `verify_token`:
+```json
+{
+  "operation": "callers",
+  "project_path": "/absolute/path/to/project",
+  "query": "verify_token"
+}
+```
 
-Check the current workflow stage:
+Calculate blast radius and generate Mermaid DAG:
+```json
+{
+  "operation": "blast_radius",
+  "project_path": "/absolute/path/to/project",
+  "query": "TokenService"
+}
+```
+
+### LSP Goto Definition
+
+```json
+{
+  "operation": "definition",
+  "project_path": "/absolute/path/to/project",
+  "relative_path": "src/main.rs",
+  "query": "AuthMiddleware"
+}
+```
+
+---
+
+## Example 3: Workflow Governance & Stage Management (`workflow_gate`)
+
+### Check Stage Status
 
 ```json
 {
@@ -95,65 +122,85 @@ Check the current workflow stage:
 }
 ```
 
-Parse user approval and transition to Build:
+### Approve Plan (Requires User Consent)
 
 ```json
 {
-  "action": "check",
+  "action": "approve_plan",
   "project_path": "/absolute/path/to/project",
-  "user_message": "Proceed with the implementation"
+  "user_confirmed": true
 }
 ```
 
-Then:
+### Authorize File Edit (Individual File Gate)
+
+```json
+{
+  "action": "authorize_edit",
+  "project_path": "/absolute/path/to/project",
+  "relative_path": "src/auth/token_service.rs",
+  "risk_level": "LOW",
+  "justification": "Add token expiry check in auth middleware"
+}
+```
+
+### Transition Workflow Stage
 
 ```json
 {
   "action": "set_stage",
   "project_path": "/absolute/path/to/project",
-  "target_stage": "Build"
+  "target_stage": "Test"
 }
 ```
 
-## Example: Edit Gate Check
+---
 
-Verify edits are allowed before writing code:
+## Example 4: Session Memory & Continuity (`session_continuity`)
 
-```json
-{
-  "project_path": "/absolute/path/to/project"
-}
-```
-
-## Example: Session Continuity
-
-Save task progress:
+Save session progress across restarts:
 
 ```json
 {
   "operation": "save",
-  "project_path": "/absolute/path/to/project",
-  "task": "Implement billing export",
-  "checklist": [
-    {"title": "Design schema", "status": "done"},
-    {"title": "Write migration", "status": "in_progress"}
-  ]
+  "project_path": "/absolute/path/to/project"
 }
 ```
 
-## Token Guidance
+Record persistent architectural instinct or project rule:
 
-Prefer narrow calls:
+```json
+{
+  "operation": "learn",
+  "project_path": "/absolute/path/to/project",
+  "learning": "Database migrations must execute inside an explicit SQL transaction.",
+  "category": "domain_rule",
+  "pinned": true
+}
+```
 
-- Use `max_depth=3` or `max_depth=4` for initial tree scans.
-- Use `limit=10` or `limit=20` for search.
-- Use `max_lines=120` to `200` for file reads unless a broader range is necessary.
-- Avoid exporting full snapshots for small one-file tasks.
+Generate cross-agent session handoff summary:
 
-See [Project Context Tools](reference/project-context-tools.md) for details on snapshot freshness and token cost.
+```json
+{
+  "operation": "handoff",
+  "project_path": "/absolute/path/to/project",
+  "next_action": "Run integration tests and update API documentation."
+}
+```
+
+---
+
+## Token Guidance & Best Practices
+
+- **Enforce 300 LOC Cap**: All source files must remain strictly under 300 LOC (aim for < 150 LOC per sub-module).
+- **Targeted Reads**: Prefer `target_symbol` or `start_line`/`end_line` ranges over whole-file dumps.
+- **Tree Scans**: Use `max_depth=3` (default) for balanced project overview.
+- **Avoid Duplication**: Search for existing utilities with `project_context(operation="reusable")` before adding new helper logic.
 
 ## Related Docs
 
-- [MCP Surface](reference/mcp-surface.md)
-- [Project Context Tools](reference/project-context-tools.md)
-- [Development Guide](development.md)
+- [MCP Surface Reference](reference/mcp-surface.md)
+- [Dashboard Guide](dashboard.md)
+- [Client Configuration](setup/client-configuration.md)
+- [Architecture](ARCHITECTURE.md)

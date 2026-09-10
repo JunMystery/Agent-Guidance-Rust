@@ -16,7 +16,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agent-guidance"
-version = "1.5.6"
+version = "1.5.7"
 dependencies = [
  "anyhow",
  "candle-core",
@@ -26,6 +26,7 @@ dependencies = [
  "fs2",
  "hf-hub",
  "ignore",
+ "libdbus-sys",
  "ndarray 0.15.6",
  "ort",
  "rayon",
@@ -1569,6 +1570,7 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "328c4789d42200f1eeec05bd86c9c13c7f091d2ba9a6ea35acdf51f31bc0f043"
 dependencies = [
+ "cc",
  "pkg-config",
 ]
 

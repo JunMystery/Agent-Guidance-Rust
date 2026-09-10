@@ -125,6 +125,7 @@ pub fn handle_tool_call(
                 }
             }
 
+            let orig_tokens = state.last_raw_baseline_tokens.take().unwrap_or(orig_tokens);
             state.record_call(orig_tokens, opt_tokens);
             let proj_path = state.project_path.as_deref().or_else(|| state.workspace_roots.first().map(|s| s.as_str()));
             crate::mcp::db::log_tool_call(name, op.as_deref(), target.as_deref(), orig_tokens, opt_tokens, duration, None, proj_path);

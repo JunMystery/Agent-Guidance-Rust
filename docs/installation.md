@@ -46,23 +46,21 @@ Or start the native web usage dashboard server:
 ./target/release/agent-guidance --dashboard
 ```
 
-## Standards Corpus Root
+## Embedded Skills & Local Workspace Extension
 
-By default, the package discovers the bundled standards corpus. To point the server to a different standards folder, set:
+Agent Guidance compiles all 279 official skills and passage vectors directly into the native binary via `rust_embed`. No external corpus download is required.
+
+To add custom skills for a specific project, create markdown skill capsules in:
 
 ```bash
-AGENT_GUIDANCE_ROOT=/path/to/Agent-Guidance
+<project_root>/.agents/skills/<skill-name>/SKILL.md
 ```
 
-
-The target folder must contain:
-
-- `karpathy/principles.md`
-- `SKILL-REFERENCE.md`
-- `agent-guidance/INDEX.md`
+The server automatically indexes local workspace skills on startup alongside the embedded catalog.
 
 ## Related Docs
 
 - [Client Setup](setup/client-configuration.md)
 - [Usage Guide](usage.md)
+- [Dashboard Guide](dashboard.md)
 - [Development Guide](development.md)

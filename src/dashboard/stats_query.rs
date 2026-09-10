@@ -116,6 +116,7 @@ pub fn query_usage_stats(db_path: &PathBuf, proj_filter: Option<&str>) -> Result
     })?.filter_map(|r| r.ok()).collect();
 
     let past_24h = summaries["past_24h"].clone();
+    let (phase_stats, governance_stats) = query_phase_and_gov(&conn, cutoff_24h, is_proj, &p1, &p2);
     Ok(json!({
         "db_status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
@@ -128,6 +129,8 @@ pub fn query_usage_stats(db_path: &PathBuf, proj_filter: Option<&str>) -> Result
         "recent_skill_calls": recent_skill_calls,
         "recent_actions": recent_actions,
         "hourly_savings": hourly_savings,
+        "phase_stats": phase_stats,
+        "governance_stats": governance_stats,
         "embed_recent": embed_recent
     }))
 }
@@ -190,6 +193,37 @@ fn query_hourly_savings(conn: &Connection, now: i64, is_proj: bool, p1: &str, p2
     hourly_savings
 }
 
+fn query_phase_and_gov(conn: &Connection, cutoff: i64, is_proj: bool, p1: &str, p2: &str) -> (Value, Value) {
+    let sql = if is_proj {
+        "SELECT tool_name, LOWER(COALESCE(operation, '')), COUNT(*) FROM tool_calls WHERE started_at >= ?1 AND (tool_name = 'task_pipeline' OR tool_name = 'workflow_gate' OR (tool_name = 'guidance' AND operation = 'verify')) AND (project_path = ?2 COLLATE NOCASE OR project_path = ?3 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?2 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?3 COLLATE NOCASE) GROUP BY tool_name, LOWER(COALESCE(operation, ''))"
+    } else {
+        "SELECT tool_name, LOWER(COALESCE(operation, '')), COUNT(*) FROM tool_calls WHERE started_at >= ?1 AND (tool_name = 'task_pipeline' OR tool_name = 'workflow_gate' OR (tool_name = 'guidance' AND operation = 'verify')) GROUP BY tool_name, LOWER(COALESCE(operation, ''))"
+    };
+    let mut phases = json!({ "plan": 0, "build": 0, "test": 0, "fix": 0, "review": 0, "refactor": 0 });
+    let mut gov = json!({ "edits_authorized": 0, "plans_approved": 0, "verifications_passed": 0, "stages_transitioned": 0 });
+    if let Ok(mut stmt) = conn.prepare(sql) {
+        let mapper = |r: &rusqlite::Row| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?));
+        let rows = if is_proj { stmt.query_map(params![cutoff, p1, p2], mapper) }
+                   else { stmt.query_map([cutoff], mapper) };
+        if let Ok(iter) = rows {
+            for (t, op, cnt) in iter.flatten() {
+                if t == "task_pipeline" {
+                    if let Some(v) = phases.get_mut(&op) { *v = json!(v.as_i64().unwrap_or(0) + cnt); }
+                } else if op == "authorize_edit" {
+                    gov["edits_authorized"] = json!(gov["edits_authorized"].as_i64().unwrap_or(0) + cnt);
+                } else if op == "approve_plan" || op == "approve" {
+                    gov["plans_approved"] = json!(gov["plans_approved"].as_i64().unwrap_or(0) + cnt);
+                } else if op == "verify" || op == "pass_verification" {
+                    gov["verifications_passed"] = json!(gov["verifications_passed"].as_i64().unwrap_or(0) + cnt);
+                } else if op == "set_stage" || op == "advance" {
+                    gov["stages_transitioned"] = json!(gov["stages_transitioned"].as_i64().unwrap_or(0) + cnt);
+                }
+            }
+        }
+    }
+    (phases, gov)
+}
+
 fn query_timeframe_summary(conn: &Connection, cutoff: i64, is_proj: bool, p1: &str, p2: &str) -> Value {
     let (calls, orig, opt): (i64, i64, i64) = if is_proj {
         conn.query_row(
@@ -207,53 +241,29 @@ fn query_timeframe_summary(conn: &Connection, cutoff: i64, is_proj: bool, p1: &s
         ).unwrap_or((0, 0, 0))
     };
 
-    let skills: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?1",
-        params![cutoff],
-        |r| r.get(0),
-    ).unwrap_or(0);
-
-    let embeds: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?1",
-        params![cutoff],
-        |r| r.get(0),
-    ).unwrap_or(0);
-
+    let skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?1", [cutoff], |r| r.get(0)).unwrap_or(0);
+    let embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?1", [cutoff], |r| r.get(0)).unwrap_or(0);
     let saved = orig - opt;
     let pct = if orig > 0 { ((saved as f64 / orig as f64) * 1000.0).round() / 10.0 } else { 0.0 };
 
     json!({
-        "tool_calls": calls,
-        "skills_loaded": skills,
-        "embed_queries": embeds,
-        "llm_queries": 0,
-        "tokens_original": orig,
-        "tokens_optimized": opt,
-        "token_savings": saved,
-        "savings_pct": pct
+        "tool_calls": calls, "skills_loaded": skills, "embed_queries": embeds, "llm_queries": 0,
+        "tokens_original": orig, "tokens_optimized": opt, "token_savings": saved, "savings_pct": pct
     })
 }
 
 fn query_summaries(conn: &Connection, now: i64, cutoff_24h: i64, is_proj: bool, p1: &str, p2: &str) -> Value {
-    let cutoff_7d = now.saturating_sub(7 * 86400);
-    let cutoff_30d = now.saturating_sub(30 * 86400);
     json!({
         "past_24h": query_timeframe_summary(conn, cutoff_24h, is_proj, p1, p2),
-        "last_7d": query_timeframe_summary(conn, cutoff_7d, is_proj, p1, p2),
-        "last_30d": query_timeframe_summary(conn, cutoff_30d, is_proj, p1, p2),
+        "last_7d": query_timeframe_summary(conn, now.saturating_sub(7 * 86400), is_proj, p1, p2),
+        "last_30d": query_timeframe_summary(conn, now.saturating_sub(30 * 86400), is_proj, p1, p2),
         "lifetime": query_timeframe_summary(conn, 0, is_proj, p1, p2),
     })
 }
 
 fn normalize_skill_name(raw: &str) -> Option<String> {
-    let mut s = raw.trim();
-    if let Some(idx) = s.find(" (") {
-        s = &s[..idx];
-    }
-    let s = s.trim_matches('`').trim_matches('*').trim_matches('\'').trim_matches('"').trim();
-    if s.is_empty() {
-        return None;
-    }
+    let s = raw.trim().split(" (").next().unwrap_or("").trim_matches(&['`', '*', '\'', '"'][..]).trim();
+    if s.is_empty() { return None; }
     if s.contains('/') || s.contains('\\') {
         let p = std::path::Path::new(s);
         if let Some(name) = p.file_name().and_then(|f| f.to_str()) {

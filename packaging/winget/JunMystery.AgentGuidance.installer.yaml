@@ -1,5 +1,5 @@
 PackageIdentifier: JunMystery.AgentGuidance
-PackageVersion: 1.5.6
+PackageVersion: 1.5.7
 MinimumOSVersion: 10.0.0.0
 InstallModes:
   - silent
@@ -11,7 +11,7 @@ Installers:
     NestedInstallerFiles:
       - RelativeFilePath: agent-guidance.exe
         PortableCommandAlias: agent-guidance
-    InstallerUrl: https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.5.6/agent-guidance-windows-x86_64.zip
+    InstallerUrl: https://github.com/JunMystery/Agent-Guidance-Rust/releases/download/v1.5.7/agent-guidance-windows-x86_64.zip
     InstallerSha256: 77775990209928b33001c9c80949cbd6eab1c500c1136d84bd2168b22930fa4a
 ManifestType: installer
 ManifestVersion: 1.6.0

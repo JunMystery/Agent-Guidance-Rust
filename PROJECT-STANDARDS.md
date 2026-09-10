@@ -29,7 +29,7 @@ This file contains standards, conventions, and rules specific to this project. A
 ## 📋 Project Standards List (Customize below)
 
 > [!IMPORTANT]
-> **GLOBAL ENFORCEMENT**: All 8 rules herein MUST be evaluated and followed for every single coding action, repository lookup, refactoring, or planning phase without exception.
+> **GLOBAL ENFORCEMENT**: All rules herein MUST be evaluated and followed for every single coding action, repository lookup, refactoring, or planning phase without exception.
 
 ### ♻️ Reusable & Unified Shared Code (DRY Mandate)
 - **Rule (Required):** Always check for existing shared utilities, formatters, models, and UI helpers in common/shared directories before writing new code. Never create duplicate implementations of logic that already exists in the project.
@@ -39,6 +39,26 @@ This file contains standards, conventions, and rules specific to this project. A
 - **Scope (Optional):** All frontend and backend code across the repository.
 - **How to Test (Optional):** Run symbol/AST duplicate check and codebase linting.
 
-<!-- ADD YOUR STANDARDS BELOW -->
+### 📏 300 LOC Hard Cap & Refactoring Exemption
+- **Rule (Required):** All source code files must remain strictly < 300 LOC (target < 150 LOC per sub-module). If a file exceeds 300 LOC, edits are blocked with error code `300_LOC_CAP_EXCEEDED` unless justification explicitly targets modular decomposition.
+- **Reason (Required):** Keeps cognitive complexity low, enhances testability, and prevents monolith accumulation.
+- **Bypass Keywords:** Justification must contain one of: `refactor`, `refactoring`, `decompose`, `decomposing`, `extract`, `extracting`, `split`, `splitting`, `tách`, `tách file`.
+- **Exemptions:** Markdown (`.md`), documentation, configs (`.toml`, `.json`, `.yaml`, `.yml`), lockfiles (`Cargo.lock`, `package-lock.json`), static assets (`.svg`, `.png`, `.ico`), and test fixtures.
+- **How to Test (Optional):** Evaluated automatically via `workflow_gate(action="authorize_edit")`.
 
-*(Add your custom project-specific standards using the template structure above)*
+### 🧱 Modularity Gate & Single-Responsibility Naming
+- **Rule (Required):** New source files must adhere to Single Responsibility Principle (SRP). Compound plural naming and multi-component justifications are strictly prohibited.
+- **Compound Plural Prohibition (`COMPOUND_FILE_NAME_PROHIBITED`):** Disallowed compound plural suffix patterns (40 suffixes):
+  `modals`, `dialogs`, `drawers`, `forms`, `tables`, `cards`, `panels`, `widgets`, `components`, `views`, `screens`, `pages`, `services`, `handlers`, `controllers`, `managers`, `repositories`, `endpoints`, `routes`, `actions`, `mutations`, `queries`, `reducers`, `helpers`, `utils`, `utilities`, `models`, `entities`, `adapters`, `transformers`, `listeners`, `providers`, `subscribers`, `factories`, `builders`, `validators`, `converters`, `processors`, `resolvers`, `types`.
+  Example prohibited: `user_services.rs`, `order_controllers.rs`. Permitted: `user_service.rs` or focused directory `user/service.rs`.
+- **Multi-Component Prohibition (`MULTI_COMPONENT_NEW_FILE_PROHIBITED`):** File creation justifications describing multiple disparate responsibilities or containing connector conjunctions (`and`, `both`, `multiple`) will be rejected. Split into discrete sub-modules.
+- **How to Test (Optional):** Enforced automatically during `workflow_gate(action="authorize_edit")`.
+
+### ✅ Multi-Lingual & GUI User Approval Detection
+- **Rule (Required):** Moving from `Plan` to `Build` stage requires user approval. Approval is detected automatically via chat intent analysis or GUI interaction.
+- **Supported Triggers:**
+  - English keywords: `approve`, `approved`, `proceed`, `accept`, `accepted`, `looks good`, `lgtm`, `go ahead`.
+  - Vietnamese keywords: `đồng ý`, `chấp nhận`, `tiến hành`, `duyệt`.
+  - Antigravity / Gemini GUI Artifact: Clicking "Proceed" or "Accept Plan" button on `implementation_plan.md`.
+- **Reason (Required):** Guarantees human-in-the-loop governance before destructive or major architectural changes occur.
+- **How to Test (Optional):** Call `workflow_gate(action="set_stage", target_stage="Build")`. Reject if approval missing (`STAGE_TRANSITION_BLOCKED`).

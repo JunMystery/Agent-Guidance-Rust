@@ -202,7 +202,7 @@ async fn main() -> Result<()> {
         state.priority_gate_pass();
         let freshness = state.session_freshness_note();
         let mut msg =
-            "agent-guidance-mcp session started. Priority gate passed and sentinel file created."
+            "agent-guidance session started. Priority gate passed and sentinel file created."
                 .to_string();
         if let Some(note) = freshness {
             msg.push_str(&format!(" {}", note));

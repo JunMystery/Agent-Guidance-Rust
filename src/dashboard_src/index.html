@@ -4,19 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MCP Usage Dashboard</title>
-<link rel="icon" type="image/png" href="/favicon.ico">
+<link rel="icon" type="image/png" href="/docs/images/logo.png">
+<link rel="icon" type="image/x-icon" href="/docs/images/logo.ico">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/docs/images/logo.png">
 <!-- fetch: /api/stats -->
 <link rel="stylesheet" href="/dashboard.css?v={{css_hash}}">
 </head>
 <body>
 <a class="skip-link" href="#main-content" data-i18n="nav.skip_link">Skip to content</a>
 
-<button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle sidebar" aria-expanded="false" aria-controls="sidebar">☰</button>
+<button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Expand sidebar (Ctrl+B)" data-i18n-title="sidebar.expand" aria-label="Toggle sidebar" aria-expanded="false" aria-controls="sidebar">☰</button>
 
 <aside class="sidebar" id="sidebar">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-    <img src="/logo.png" alt="Agent Guidance Logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain">
-    <h2 style="margin:0" data-i18n="nav.title">MCP Stats</h2>
+  <div class="sidebar-header">
+    <div class="sidebar-brand">
+      <img src="/logo.png" alt="Agent Guidance Logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain">
+      <h2 style="margin:0" data-i18n="nav.title">MCP Stats</h2>
+    </div>
+    <button id="btn-collapse-sidebar" class="sidebar-collapse-btn" title="Collapse sidebar (Ctrl+B)" data-i18n-title="sidebar.collapse" aria-label="Collapse sidebar">◀</button>
   </div>
   <nav role="tablist" aria-label="Dashboard views">
     <a class="active" role="tab" aria-selected="true" aria-controls="view-dashboard" id="tab-dashboard" data-view="dashboard"><span data-i18n="nav.dashboard">Dashboard</span></a>
@@ -199,7 +205,7 @@
                   <h3 data-i18n="deck.title">Subsystems &amp; Neural Engine Matrix</h3>
                 </div>
                 <div class="hud-deck-meta">
-                  <span class="hud-meta-pill">VERSION <span id="sys-version">v1.5.6</span></span>
+                  <span class="hud-meta-pill">VERSION <span id="sys-version">v1.5.7</span></span>
                   <span class="hud-meta-pill">PORT <span id="sidebar-port-badge">11997</span></span>
                 </div>
               </div>
@@ -250,9 +256,9 @@
               </div>
               <div class="hud-side-body">
                 <p class="hud-side-desc" data-i18n="deck.engine_desc">Hot-refresh candle-bert neural vector embeddings cache and reload active inference checkpoints.</p>
-                <button id="btn-embed-refresh" onclick="refreshEmbedStatus()" class="hud-btn-refresh">
+                <button id="btn-embed-refresh" class="hud-btn-refresh">
                   <span class="hud-refresh-icon">🔄</span>
-                  <span data-i18n="deck.refresh_model">Refresh Model Status</span>
+                  <span id="btn-embed-refresh-text" data-i18n="deck.refresh_model">Refresh Model Status</span>
                 </button>
               </div>
             </div>
@@ -263,6 +269,72 @@
     </div>
 
     <div class="terminal-window" style="margin-top:20px">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="terminal-dot dot-red"></div>
+          <div class="terminal-dot dot-yellow"></div>
+          <div class="terminal-dot dot-green"></div>
+        </div>
+        <div class="terminal-title" data-i18n="governance.title">Agent Workflow Cadence &amp; Governance Matrix</div>
+      </div>
+      <div class="terminal-body-raw">
+        <div class="gov-container">
+          <div class="gov-section">
+            <div class="gov-section-header">
+              <span class="hud-pulse-dot pulse-violet"></span>
+              <span class="gov-section-title" data-i18n="governance.phase_cadence">Phase Cadence (task_pipeline)</span>
+              <span id="gov-phase-total" class="gov-meta-count">0 calls</span>
+            </div>
+            <div class="gov-cadence-bar" id="gov-cadence-bar">
+              <div class="gov-bar-segment seg-plan" id="seg-plan" style="width:0%" title="Plan: 0"></div>
+              <div class="gov-bar-segment seg-build" id="seg-build" style="width:0%" title="Build: 0"></div>
+              <div class="gov-bar-segment seg-test" id="seg-test" style="width:0%" title="Test: 0"></div>
+              <div class="gov-bar-segment seg-fix" id="seg-fix" style="width:0%" title="Fix: 0"></div>
+              <div class="gov-bar-segment seg-review" id="seg-review" style="width:0%" title="Review: 0"></div>
+            </div>
+            <div class="gov-cadence-legend">
+              <span class="gov-legend-item"><span class="legend-dot dot-plan"></span><span data-i18n="governance.phase_plan">Plan</span>: <strong id="lbl-plan">0</strong></span>
+              <span class="gov-legend-item"><span class="legend-dot dot-build"></span><span data-i18n="governance.phase_build">Build</span>: <strong id="lbl-build">0</strong></span>
+              <span class="gov-legend-item"><span class="legend-dot dot-test"></span><span data-i18n="governance.phase_test">Test</span>: <strong id="lbl-test">0</strong></span>
+              <span class="gov-legend-item"><span class="legend-dot dot-fix"></span><span data-i18n="governance.phase_fix">Fix</span>: <strong id="lbl-fix">0</strong></span>
+              <span class="gov-legend-item"><span class="legend-dot dot-review"></span><span data-i18n="governance.phase_review">Review</span>: <strong id="lbl-review">0</strong></span>
+            </div>
+          </div>
+
+          <div class="gov-section" style="margin-top:16px">
+            <div class="gov-section-header">
+              <span class="hud-pulse-dot pulse-cyan"></span>
+              <span class="gov-section-title" data-i18n="governance.gate_controls">Governance &amp; Guard Controls (workflow_gate)</span>
+            </div>
+            <div class="gov-cards-grid">
+              <div class="gov-card">
+                <div class="gov-card-label" data-i18n="governance.edits_authorized">Edits Authorized</div>
+                <div class="gov-card-val text-emerald" id="gov-val-edits">0</div>
+                <div class="gov-card-sub">&lt; 300 LOC Gate</div>
+              </div>
+              <div class="gov-card">
+                <div class="gov-card-label" data-i18n="governance.plans_approved">Plans Approved</div>
+                <div class="gov-card-val text-cyan" id="gov-val-plans">0</div>
+                <div class="gov-card-sub">User Consensus</div>
+              </div>
+              <div class="gov-card">
+                <div class="gov-card-label" data-i18n="governance.verifications_passed">Verifications Passed</div>
+                <div class="gov-card-val text-violet" id="gov-val-verifications">0</div>
+                <div class="gov-card-sub">Empirical Checks</div>
+              </div>
+              <div class="gov-card">
+                <div class="gov-card-label" data-i18n="governance.stages_transitioned">Stages Transitioned</div>
+                <div class="gov-card-val text-amber" id="gov-val-transitions">0</div>
+                <div class="gov-card-sub">Lifecycle Progress</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="terminal-window" style="margin-top:20px">
+
       <div class="terminal-header">
         <div class="terminal-dots">
           <div class="terminal-dot dot-red"></div>

@@ -11,6 +11,8 @@ export const coreVi = {
   'nav.logs': '⚠️ Nhật Ký & Chẩn Đoán',
 
   // Sidebar & Footer
+  'sidebar.collapse': 'Thu gọn thanh bên (Ctrl+B)',
+  'sidebar.expand': 'Mở rộng thanh bên (Ctrl+B)',
   'sidebar.tracked_project': 'Dự án theo dõi:',
   'sidebar.all_projects': '🌐 Tất cả dự án (Toàn cục)',
   'sidebar.all_projects_analytics': '🌐 Tất cả dự án (Phân tích toàn cục)',

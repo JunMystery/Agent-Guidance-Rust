@@ -55,13 +55,19 @@ pub(crate) fn handle(
 
     let resp = match op {
         "tree" => {
-            let files = scan_project(&proj_path, 2);
+            let depth = arguments
+                .get("max_depth")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3)
+                .clamp(1, 5) as usize;
+            let files = scan_project(&proj_path, depth);
             let file_list: Vec<String> = files
                 .into_iter()
                 .map(|f| format!("- {} ({})", f.path, f.file_type))
                 .collect();
             format!(
-                "# Project Tree (Depth Capped at 2)\n\n{}",
+                "# Project Tree (Depth Capped at {})\n\n{}",
+                depth,
                 file_list.join("\n")
             )
         }

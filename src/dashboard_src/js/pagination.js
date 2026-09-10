@@ -4,9 +4,9 @@ import { t } from './i18n/index.js';
 
 const paginationStates = {};
 
-export function getPaginationState(tableId) {
+export function getPaginationState(tableId, defaultPageSize = 10) {
   if (!paginationStates[tableId]) {
-    paginationStates[tableId] = { page: 1, pageSize: 10 };
+    paginationStates[tableId] = { page: 1, pageSize: defaultPageSize };
   }
   return paginationStates[tableId];
 }
@@ -16,8 +16,8 @@ export function resetPage(tableId) {
   state.page = 1;
 }
 
-export function paginate(tableId, allRows) {
-  const state = getPaginationState(tableId);
+export function paginate(tableId, allRows, defaultPageSize = 10) {
+  const state = getPaginationState(tableId, defaultPageSize);
   const totalItems = allRows.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / state.pageSize));
 
@@ -56,7 +56,7 @@ export function renderPagination(containerId, tableId, paged, onPageChange) {
           <label for="pagesize-${tableId}">${t('pagination.show')}</label>
           <select id="pagesize-${tableId}" class="pagination-select" aria-label="${t('pagination.rows_per_page')}">
             <option value="10" ${state.pageSize === 10 ? 'selected' : ''}>10</option>
-            <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
+            <option value="20" ${state.pageSize === 20 ? 'selected' : ''}>20</option>
             <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
             <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
           </select>

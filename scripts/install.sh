@@ -75,6 +75,10 @@ ensure_cargo() {
         export PATH="$HOME/.cargo/bin:$PATH"
         echo -e "  ${GREEN}✓${NC} Found Cargo in PATH"
     fi
+    if [ "$(uname -s)" = "Linux" ] && command -v apt-get &>/dev/null && ! pkg-config --exists dbus-1 2>/dev/null; then
+        echo -e "  ${YELLOW}⚡${NC} Installing Linux D-Bus build dependencies..."
+        sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev pkg-config 2>/dev/null || true
+    fi
 }
 
 # ── Detect build source (local dev or remote clone) ───────────────────────────
@@ -137,7 +141,7 @@ elif command -v wget &>/dev/null; then
     VERSION="$(wget -qO- "https://api.github.com/repos/JunMystery/Agent-Guidance-Rust/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
 fi
 if [ -z "$VERSION" ]; then
-    VERSION="v1.5.6"
+    VERSION="v1.5.7"
     echo -e "  ${YELLOW}⚠️  Could not fetch latest release tag, defaulting to ${VERSION}${NC}"
 else
     echo -e "  ${GRAY}Latest release: ${VERSION}${NC}"

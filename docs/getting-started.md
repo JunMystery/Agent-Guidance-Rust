@@ -30,7 +30,7 @@ DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector target/release/ag
 
 Every session starts with a single call:
 
-```
+```python
 task_pipeline(task="Describe what you're building", project_path=".", phase="plan")
 ```
 
@@ -40,28 +40,31 @@ Then use the other tools as needed:
 
 | Tool | When to call | Mandatory Parameters |
 |---|---|---|
-| `guidance(operation="search", query=...)` | Find relevant skills and standards | `operation`, `query` |
-| `project_context(operation="read", ...)` | Read exact symbols before editing | `operation`, `relative_path` |
-| `workflow_gate(action="set_stage", ...)` | Manage 7-stage workflow lifecycle | `action`, `target_stage` |
-| `require_edit_approval(...)` | Mandatory gate authorization before code edits | `project_path`, `risk_level`, `justification`, `architecture_pattern` |
+| `select_skills(skills=[...])` | Inject selected skills into conversation context | `skills` |
+| `guidance(operation="search", query=...)` | Find relevant skills, blueprints, and standards | `operation`, `query` |
+| `project_context(operation="read", ...)` | Read exact symbols and inspect code graphs (< 300 LOC) | `operation`, `project_path`, `relative_path` |
+| `workflow_gate(action="authorize_edit", ...)` | Authorize individual file edits under < 300 LOC cap | `action`, `project_path`, `relative_path` |
+| `workflow_gate(action="set_stage", ...)` | Transition workflow stages (`Context → Plan → Build...`) | `action`, `target_stage` |
+| `session_continuity(operation="save", ...)` | Save session memory across restarts | `operation`, `project_path` |
 
 ## Key Concepts
 
 ### Priority Gate
-`agent-guidance-mcp_task_pipeline` must be called before most tools. This ensures the agent always has project context before acting.
+`task_pipeline` must be called before code inspection or edit tools. This ensures the agent always has project context before acting.
 
-### Workflow Stages
-The server enforces a 7-stage lifecycle: `Context → Plan → Ask_Revise → Build → Test_Recheck → Fix → Proposal`. Use `agent-guidance-mcp_workflow_gate` to manage transitions. Edits are only allowed in `Build` stage with `plan_approved=true`.
+### Workflow Stages & Edit Governance
+The server enforces a 7-stage lifecycle: `Context → Plan → Ask_Revise → Build → Test_Recheck → Fix → Proposal / Review`. Use `workflow_gate` to manage transitions. Edits are only allowed in `Build` stage with `plan_approved=true`, authorized per-file via `workflow_gate(action="authorize_edit")`.
 
-### Token Optimization
-Every MCP response is filtered through an 8-stage pipeline that strips comments, collapses whitespace, and deduplicates output — saving 40-80% of tokens per call.
+### Token Optimization & Context Shield
+Every MCP response is filtered through a language-aware compressor that strips redundant comments, collapses whitespace, and enforces hard 300 LOC token budgets — shielding your prompt context from token bloat.
 
 ### Skill Catalog
-185 on-demand skills covering backend, frontend, testing, security, DevOps, data, research, and 12+ language ecosystems. Loaded via `agent-guidance-mcp_guidance(operation="get", identifier="<name>")` — no context wasted on unused skills.
+279 embedded skills (440 vector passages) covering backend, frontend, testing, security, DevOps, data, research, and 12+ language ecosystems. Loaded via `select_skills` or `guidance(operation="get", identifier="<name>")` — no context wasted on unused skills.
 
 ## Next Steps
 
 - [Usage Guide](usage.md) — detailed workflow examples
-- [MCP Surface](reference/mcp-surface.md) — all tools, resources, and prompts
+- [MCP Surface](reference/mcp-surface.md) — all 6 tools, resources, and error codes
+- [Dashboard Guide](dashboard.md) — real-time web telemetry and architecture graph
 - [Installation](installation.md) — manual setup and configuration
 - [Architecture](ARCHITECTURE.md) — how the server works internally
