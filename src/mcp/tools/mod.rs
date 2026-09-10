@@ -10,7 +10,9 @@ mod helpers;
 pub use helpers::*;
 
 mod pipeline;
-mod skills;
+pub(crate) mod skills;
+pub(crate) mod skills_gate;
+pub(crate) mod skills_resolver;
 mod guidance;
 mod guidance_docs;
 mod guidance_precode;
@@ -55,6 +57,20 @@ fn extract_target(args: &Value) -> Option<String> {
         }
         return Some(trimmed.to_string());
     }
+    if let Some(s) = args.get("skills").or_else(|| args.get("skill")).or_else(|| args.get("name")).or_else(|| args.get("skill_name")).or_else(|| args.get("identifier")) {
+        if let Some(arr) = s.as_array() {
+            let names: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(skills::clean_skill_identifier)).filter(|c| !c.is_empty()).collect();
+            if !names.is_empty() {
+                let joined = names.join(", ");
+                return Some(if joined.len() > 60 { format!("{}...", &joined[..57]) } else { joined });
+            }
+        } else if let Some(st) = s.as_str() {
+            let clean = skills::clean_skill_identifier(st);
+            if !clean.is_empty() {
+                return Some(if clean.len() > 60 { format!("{}...", &clean[..57]) } else { clean });
+            }
+        }
+    }
     None
 }
 
@@ -76,16 +92,30 @@ pub fn handle_tool_call(
         .map(|s| s.to_string())
         .or_else(|| {
             if name == "select_skills" || name == "select_skill" {
-                let skills_val = arguments.get("skills").or_else(|| arguments.get("skill"));
+                let skills_val = arguments
+                    .get("skills")
+                    .or_else(|| arguments.get("skill"))
+                    .or_else(|| arguments.get("name"))
+                    .or_else(|| arguments.get("skill_name"))
+                    .or_else(|| arguments.get("identifier"));
                 if let Some(arr) = skills_val.and_then(|v| v.as_array()) {
-                    let names: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+                    let names: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(skills::clean_skill_identifier))
+                        .filter(|c| !c.is_empty())
+                        .collect();
                     if !names.is_empty() {
                         Some(names.join(", "))
                     } else {
                         Some("none".to_string())
                     }
                 } else if let Some(s) = skills_val.and_then(|v| v.as_str()) {
-                    Some(s.to_string())
+                    let clean = skills::clean_skill_identifier(s);
+                    if !clean.is_empty() {
+                        Some(clean)
+                    } else {
+                        Some("none".to_string())
+                    }
                 } else {
                     None
                 }

@@ -104,7 +104,7 @@ pub(crate) fn handle(
     };
 
     let next_step_prompt = if phase == "plan" {
-        "-> NEXT STEP: Relevant skills can be discovered via `guidance(operation=\"search\", task=\"...\")`. When skills are proposed, ask user via `ask_question` before invoking `select_skills(skills=[...], user_confirmed=true)`. If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning."
+        "-> NEXT STEP: Call `guidance(operation=\"search\", task=\"...\")` FIRST to discover and propose required domain skills. When skills are proposed, ask user via `ask_question` before invoking `select_skills(skills=[...], user_confirmed=true)`. DO NOT proceed to code inspection (`project_context`) or task planning before completing skill discovery."
     } else {
         "-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning."
     };

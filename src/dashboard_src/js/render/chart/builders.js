@@ -102,6 +102,14 @@ export function buildHeatRibbon(hours, box) {
   return '<g class="chart-heat-ribbon">' + mainBar + notches + '</g>';
 }
 
+function formatHour(h, i) {
+  if (h && typeof h.timestamp === 'number') {
+    const d = new Date(h.timestamp * 1000);
+    return String(d.getHours()).padStart(2, '0') + ':00';
+  }
+  return h?.hour || `${i}:00`;
+}
+
 export function buildXLabels(hours, box) {
   const n = hours.length;
   let labels = '';
@@ -110,8 +118,9 @@ export function buildXLabels(hours, box) {
     if (i % step === 0 || i === n - 1) {
       const x = slotCenter(i, n, box);
       const isLast = i === n - 1;
-      const text = isLast && h.is_current ? (t('chart.now') || 'NOW') : (h.hour || `${i}:00`);
-      const cls = isLast ? 'chart-xlabel font-bold is-now' : 'chart-xlabel';
+      const hourStr = formatHour(h, i);
+      const text = (isLast && h.is_current) ? (t('chart.now') || 'NOW') : hourStr;
+      const cls = (isLast && h.is_current) ? 'chart-xlabel font-bold is-now' : 'chart-xlabel';
       labels += '<text x="' + x.toFixed(1) + '" y="' + (box.yMax + 28) + '" class="' + cls + '">' + text + '</text>';
     }
   });
@@ -136,7 +145,7 @@ export function buildHoverOverlay(hours, box, yVal) {
     const opt = h.optimized || 0;
     const pct = orig > 0 ? (saved / orig) * 100 : 0;
     const tipJson = JSON.stringify({
-      hour: h.hour || `${i}:00`,
+      hour: formatHour(h, i),
       orig, opt, saved, pct: fmtPct(pct),
       is_current: h.is_current,
     }).replace(/"/g, '&quot;');

@@ -1,7 +1,10 @@
 pub mod setup;
+pub(crate) mod setup_targets;
+pub(crate) mod setup_cli;
 pub mod verify;
 pub mod clients;
 pub mod rules;
+pub(crate) mod rules_cleaner;
 pub mod uninstall;
 pub mod upgrade;
 

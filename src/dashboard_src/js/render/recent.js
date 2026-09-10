@@ -33,7 +33,7 @@ function drawRecentCalls() {
       const statusClass = r.error_message ? 'badge red' : 'badge green';
       const statusText = r.error_message ? t('status.error') : t('status.ok');
       const statusTitle = r.error_message ? ' title="' + r.error_message.replace(/"/g, '&quot;') + '"' : '';
-      const opText = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
+      const opText = r.operation || ((r.tool_name === 'select_skills' || r.tool_name === 'select_skill') ? 'load' : 'default');
       const targetText = r.target
         ? '<code class="target-badge" title="' + r.target.replace(/"/g, '&quot;') + '">' + r.target.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code>'
         : '<span class="text-muted">—</span>';

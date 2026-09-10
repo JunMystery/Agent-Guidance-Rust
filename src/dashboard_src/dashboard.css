@@ -54,10 +54,34 @@
     }
 }
 
-* {
+:root, html, body, * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 148, 158, 0.4) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: rgba(139, 148, 158, 0.4);
+    border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 html, body {
@@ -1678,6 +1702,7 @@ th[data-sort].sorted[aria-sort="ascending"]::after {
     width: 100%;
     border-collapse: collapse;
     font-size: 12.5px;
+    table-layout: fixed;
 }
 
 .actions-table th {
@@ -1690,12 +1715,55 @@ th[data-sort].sorted[aria-sort="ascending"]::after {
     padding: 10px 12px;
     border-bottom: 1px solid var(--border-color);
     text-align: left;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.actions-table th.num-cell,
+.actions-table td.num-cell {
+    text-align: right;
+}
+
+.actions-table th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+}
+
+.actions-table th[data-sort]:hover {
+    color: var(--text-primary);
 }
 
 .actions-table td {
     padding: 10px 12px;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.target-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.target-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    max-width: 100%;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    white-space: nowrap;
 }
 
 .action-row {

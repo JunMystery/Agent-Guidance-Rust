@@ -5,9 +5,21 @@ use std::process::Command;
 pub fn open_browser(url: &str) {
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn();
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let op: Vec<u16> = "open\0".encode_utf16().collect();
+        let url_wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            ShellExecuteW(
+                0,
+                op.as_ptr(),
+                url_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]

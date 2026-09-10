@@ -2,6 +2,33 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.5.8] - 2026-09-10
+
+### Strict Modularity (< 300 LOC), Silent Tray Launch & Dashboard Polish
+- **Strict `< 300 LOC` Modularity Standard & Repository Decomposition**:
+  - Audited and decomposed all files in the 200–300 LOC range across the codebase; zero production source files exceed 250 LOC.
+  - Refactored 12 monolithic targets into modular single-responsibility submodules:
+    - `src/catalog/indexer/` (`document.rs`, `passage.rs`, `inference.rs`, `extractor.rs`, `tests.rs`, `mod.rs`)
+    - `src/context/db/schema/` (`core.rs`, `graph.rs`, `content.rs`, `mod.rs`)
+    - `src/mcp/router/` (`tools.rs`, `mod.rs`)
+    - `src/mcp/tools/` (`skills_gate.rs`, `skills_resolver.rs`, `skills.rs`)
+    - `src/mcp/config/` (`setup_cli.rs`, `setup_targets.rs`, `rules_cleaner.rs`, `setup.rs`, `rules.rs`)
+    - `src/dashboard/` (`router.rs`, `stats_query_aggregates.rs`, `projects_path.rs`, `projects_prune.rs`, `projects.rs`, `stats_query.rs`, `mod.rs`)
+    - `src/optimizer/` (`skeleton_slice.rs`, `skeleton.rs`)
+    - Dashboard Frontend (`sidebar.js`, `projectSelect.js`, `actionsStream.js`, `actionsView.js`, `main.js`)
+  - Preserved 100% public APIs, re-exports (`pub use`), and test coverage (192 unit tests passing).
+- **Tray Platform Silent Dashboard Launch**:
+  - Fixed Windows tray menu "Open Dashboard" to launch default web browser directly without opening a flashing CMD / command prompt window.
+- **Universal Dashboard Scrollbar & UI Polish**:
+  - Implemented custom modern universal scrollbars (`::-webkit-scrollbar` and `scrollbar-width: thin`) across all dashboard views, modals, and tables.
+  - Removed outdated "Latency" column from Actions & Recent Calls live stream table and justified column widths.
+  - Justified table layouts across live stream and breakdown views.
+  - Corrected timestamps on Agent Context Ingestion Velocity & Payload Wave chart.
+- **Skill Proposal Formatting & Tracking**:
+  - Standardized skill proposals for `ask_question` tool to format options as `"{name} - {short_desc}"` with short descriptions (<= 38 chars) and `is_multi_select: true`.
+  - Enhanced Top Skills analytics to record skills invoked via both `select_skills` and `select_skill`.
+  - Synchronized execution lifecycle across `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `PROJECT-STANDARDS.md`, and IDE rules.
+
 ## [1.5.7] - 2026-09-10
 
 ### Configurable Tree Depth & Codebase Hardening

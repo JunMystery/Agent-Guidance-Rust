@@ -1,36 +1,45 @@
-// Rebuilt Actions Telemetry presentation coordinator with universal pagination.
 import { el, qsa, setText, emptyState } from '../dom.js';
-import { fmtTokens, fmtPct, timeAgo, fmtDurationMs, savingsBadge } from '../format.js';
-import { filterRows, makeSortable, bindFilter } from '../interactions.js';
+import { fmtTokens, savingsBadge } from '../format.js';
+import { filterRows, bindFilter, makeSortable } from '../interactions.js';
 import { paginate, renderPagination, resetPage } from '../pagination.js';
-import { store } from '../state.js';
 import { t } from '../i18n/index.js';
+import { drawStreamTable } from './actionsStream.js';
 
-let activeCategory = 'all';
-let activeEff = 'all';
-let viewMode = 'aggregated';
-let expandedKey = null;
-
-function getToolMeta(name) {
+export function getToolMeta(name) {
   const TOOL_META = {
     project_context: { cat: 'context', label: t('actions.domain_context'), cls: 'badge-context' },
     task_pipeline: { cat: 'lifecycle', label: t('actions.domain_lifecycle'), cls: 'badge-lifecycle' },
     workflow_gate: { cat: 'governance', label: t('actions.domain_governance'), cls: 'badge-governance' },
     guidance: { cat: 'standards', label: t('actions.domain_standards'), cls: 'badge-standards' },
     select_skills: { cat: 'skills', label: t('actions.domain_skills'), cls: 'badge-skills' },
+    session_continuity: { cat: 'lifecycle', label: t('actions.domain_lifecycle'), cls: 'badge-lifecycle' },
   };
   return TOOL_META[name] || { cat: 'other', label: t('actions.domain_custom'), cls: 'badge-other' };
 }
 
+let activeCategory = 'all';
+let activeEff = 'all';
+let viewMode = 'aggregated';
+let expandedKey = null;
+
+let store = {
+  tool_breakdown: [],
+  recent_actions: [],
+};
+
 export function renderActionsView(data) {
   store.tool_breakdown = (data.tool_breakdown || []).map(r => ({
     ...r,
-    savings: (r.tok_orig || 0) - (r.tok_opt || 0),
+    savings: (r.tokens_original || 0) - (r.tokens_optimized || 0),
+    cnt: r.count || 0,
+    tok_orig: r.tokens_original || 0,
+    tok_opt: r.tokens_optimized || 0,
     meta: getToolMeta(r.tool_name),
   }));
+
   store.recent_actions = (data.recent_actions || []).map(r => ({
     ...r,
-    savings: (r.tokens_original || r.tok_orig || 0) - (r.tokens_optimized || r.tok_opt || 0),
+    savings: (r.tokens_original ?? r.tok_orig ?? 0) - (r.tokens_optimized ?? r.tok_opt ?? 0),
     tokens_original: r.tokens_original ?? r.tok_orig ?? 0,
     tokens_optimized: r.tokens_optimized ?? r.tok_opt ?? 0,
     meta: getToolMeta(r.tool_name),
@@ -61,7 +70,7 @@ function refreshCurrentView() {
   el('actions-table-wrap')?.classList.toggle('hidden', isStream);
   el('actions-stream-wrap')?.classList.toggle('hidden', !isStream);
   if (isStream) {
-    drawStreamTable();
+    drawStreamTable(store, activeCategory, activeEff);
   } else {
     drawBreakdownTable();
   }
@@ -94,7 +103,7 @@ function drawBreakdownTable() {
     const rowKey = `${r.tool_name}::${r.operation || ''}`;
     const isExp = expandedKey === rowKey;
     const { pct, badgeClass } = savingsBadge(r.savings, r.tok_orig);
-    const op = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
+    const op = r.operation || ((r.tool_name === 'select_skills' || r.tool_name === 'select_skill') ? 'load' : 'default');
     const pctNum = Math.min(100, Math.max(0, parseFloat(pct) || 0));
 
     const tr = document.createElement('tr');
@@ -128,92 +137,49 @@ function drawBreakdownTable() {
       expandedKey = isExp ? null : rowKey;
       drawBreakdownTable();
     };
+
+    tr.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        expandedKey = isExp ? null : rowKey;
+        drawBreakdownTable();
+      }
+    };
+
     body.appendChild(tr);
 
     if (isExp) {
+      const traceMatches = store.recent_actions.filter(a =>
+        a.tool_name === r.tool_name && (a.operation || '') === (r.operation || '')
+      ).slice(0, 10);
+
       const expTr = document.createElement('tr');
-      expTr.className = 'drilldown-row';
-      expTr.innerHTML = `<td colspan="6">${buildDrilldown(r)}</td>`;
+      expTr.className = 'action-expanded-row';
+      const tracesHtml = traceMatches.length
+        ? traceMatches.map(tItem => `
+            <div class="trace-chip">
+              <span class="font-mono">${fmtTokens(tItem.tokens_original)} &rarr; ${fmtTokens(tItem.tokens_optimized)}</span>
+              ${tItem.target ? `<span class="target-inline" title="${tItem.target.replace(/"/g, '&quot;')}">${tItem.target.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : ''}
+              <span class="badge ${tItem.error_message ? 'red' : 'green'}">${tItem.error_message ? t('status.failed') : t('status.success')}</span>
+            </div>
+          `).join('')
+        : `<span class="text-muted">${t('actions.no_live_samples')}</span>`;
+
+      expTr.innerHTML = `
+        <td colspan="6">
+          <div class="expanded-panel">
+            <div class="panel-header">
+              <strong>${t('actions.traces_breakdown', { tool: r.tool_name, op })}</strong>
+            </div>
+            <div class="traces-list">${tracesHtml}</div>
+          </div>
+        </td>
+      `;
       body.appendChild(expTr);
     }
   });
 
   renderPagination('actions-pagination', 'actions-body', paged, drawBreakdownTable);
-}
-
-function buildDrilldown(r) {
-  const matches = store.recent_actions.filter(a => a.tool_name === r.tool_name && (a.operation || '') === (r.operation || ''));
-  const recent = matches.slice(0, 5);
-  const avgSaved = r.cnt ? Math.round(r.savings / r.cnt) : 0;
-
-  let items = recent.map(m => `
-    <div class="drilldown-item">
-      <span class="time-col">${timeAgo(m.started_at)}</span>
-      <span class="font-mono">${fmtDurationMs(m.duration_ms)}</span>
-      <span class="tok-stat">${t('actions.tok_stat', { orig: fmtTokens(m.tokens_original), opt: fmtTokens(m.tokens_optimized) })}</span>
-      <span class="badge ${m.error_message ? 'red' : 'green'}">${m.error_message ? t('status.error') : t('status.ok')}</span>
-    </div>
-  `).join('');
-
-  if (!items) items = `<div class="drilldown-empty">${t('actions.drilldown_empty')}</div>`;
-
-  return `
-    <div class="drilldown-panel">
-      <div class="drilldown-header">
-        <strong>${t('actions.drilldown_inspector', { tool: r.tool_name, op: r.operation || 'default' })}</strong>
-        <span>${t('actions.drilldown_avg_saved', { saved: fmtTokens(avgSaved) })}</span>
-      </div>
-      <div class="drilldown-list">${items}</div>
-    </div>
-  `;
-}
-
-function drawStreamTable() {
-  const body = el('actions-stream-body');
-  if (!body) return;
-  const query = el('actions-filter')?.value || '';
-  let rows = filterRows(store.recent_actions, query, ['tool_name', 'operation', 'status']);
-
-  if (activeCategory !== 'all') {
-    rows = rows.filter(r => r.meta?.cat === activeCategory);
-  }
-  if (activeEff === 'high') {
-    rows = rows.filter(r => (r.tokens_original || 0) > 0 && ((r.savings / r.tokens_original) * 100) >= 50);
-  } else if (activeEff === 'low') {
-    rows = rows.filter(r => (r.tokens_original || 0) > 0 && ((r.savings / r.tokens_original) * 100) < 50);
-  }
-
-  const paged = paginate('actions-stream-body', rows);
-  body.innerHTML = '';
-
-  if (!paged.pagedRows.length) {
-    emptyState('actions-stream-body', 6, t('actions.empty_stream'));
-    renderPagination('actions-stream-pagination', 'actions-stream-body', paged, drawStreamTable);
-    return;
-  }
-
-  paged.pagedRows.forEach(r => {
-    const { pct, badgeClass } = savingsBadge(r.savings, r.tokens_original);
-    const op = r.operation || (r.tool_name === 'select_skills' ? 'load' : 'default');
-    const isErr = !!r.error_message;
-    body.innerHTML += `
-      <tr>
-        <td class="time-col">${timeAgo(r.started_at)}</td>
-        <td>
-          <div class="tool-cell">
-            <span class="tool-tag ${r.meta.cls}">${r.meta.label}</span>
-            <span class="tool-name">${r.tool_name}</span>
-          </div>
-        </td>
-        <td><span class="badge op-badge">${op}</span></td>
-        <td class="font-mono">${fmtDurationMs(r.duration_ms)}</td>
-        <td><span class="${badgeClass}">${pct}%</span></td>
-        <td><span class="badge ${isErr ? 'red' : 'green'}" title="${(r.error_message || '').replace(/"/g, '&quot;')}">${isErr ? t('status.failed') : t('status.success')}</span></td>
-      </tr>
-    `;
-  });
-
-  renderPagination('actions-stream-pagination', 'actions-stream-body', paged, drawStreamTable);
 }
 
 function bindActionsControls() {
@@ -229,7 +195,7 @@ function bindActionsControls() {
   });
 
   makeSortable('actions-body', store.tool_breakdown, drawBreakdownTable);
-  makeSortable('actions-stream-body', store.recent_actions, drawStreamTable);
+  makeSortable('actions-stream-body', store.recent_actions, () => drawStreamTable(store, activeCategory, activeEff));
 
   qsa('.actions-chip').forEach(btn => {
     btn.onclick = () => {

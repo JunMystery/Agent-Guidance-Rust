@@ -114,13 +114,25 @@ pub(crate) fn handle_search(
         .collect();
 
 fn extract_description(content: &str) -> Option<String> {
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("description:") {
-            let val = trimmed.trim_start_matches("description:").trim();
-            let cleaned = val.trim_matches('"').trim_matches('\'').trim();
-            if !cleaned.is_empty() {
-                return Some(cleaned.to_string());
+    let mut lines = content.lines();
+    while let Some(line) = lines.next() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("description:") {
+            let mut val = rest.trim();
+            if val == ">" || val == "|" || val.is_empty() {
+                if let Some(next) = lines.next() {
+                    val = next.trim();
+                }
+            }
+            let cleaned = val.trim_matches(|c| matches!(c, '"' | '\'' | '`')).trim();
+            if !cleaned.is_empty() && cleaned != ">" && cleaned != "|" {
+                let first = cleaned.split(". ").next().unwrap_or(cleaned).trim();
+                let short = if first.len() > 38 {
+                    format!("{}...", &first[..35].trim_end())
+                } else {
+                    first.to_string()
+                };
+                return Some(short);
             }
         }
     }
@@ -129,15 +141,14 @@ fn extract_description(content: &str) -> Option<String> {
 
     let options: Vec<String> = deduped_results
         .iter()
-        .map(|(score, item)| {
-            let desc = extract_description(&item.content)
-                .unwrap_or_else(|| item.relative_path.clone());
-            let short_desc = if desc.len() > 75 {
-                format!("{}...", &desc[..72])
+        .map(|(_score, item)| {
+            let short_desc = extract_description(&item.content)
+                .unwrap_or_else(|| "Skill guidance".to_string());
+            if short_desc.is_empty() {
+                item.name.clone()
             } else {
-                desc
-            };
-            format!("{}: {} (Score: {:.2})", item.name, short_desc, score)
+                format!("{} - {}", item.name, short_desc)
+            }
         })
         .collect();
 

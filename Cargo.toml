@@ -1,6 +1,6 @@
 [package]
 name = "agent-guidance"
-version = "1.5.7"
+version = "1.5.8"
 edition = "2024"
 authors = ["Jun Mystery <contact@junmystery.com>"]
 
