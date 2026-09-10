@@ -103,7 +103,11 @@ pub(crate) fn handle(
         format!("\n\n## Dynamic Split Blueprint\n{}", dynamic_blueprint)
     };
 
-    let next_step_prompt = "-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning.";
+    let next_step_prompt = if phase == "plan" {
+        "-> NEXT STEP: Relevant skills can be discovered via `guidance(operation=\"search\", task=\"...\")`. When skills are proposed, ask user via `ask_question` before invoking `select_skills(skills=[...], user_confirmed=true)`. If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning."
+    } else {
+        "-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning."
+    };
 
     state.record_call(800, 300);
     Ok(format!(

@@ -13,6 +13,9 @@ pub fn handle_request(
         "initialize" => {
             if let Some(ref p) = params {
                 state.set_roots_from_initialize(p);
+                if let Some(name) = p.get("clientInfo").and_then(|c| c.get("name")).and_then(|n| n.as_str()) {
+                    state.agent_client_name = Some(name.to_string());
+                }
             }
             Ok(json!({
                 "protocolVersion": "2024-11-05",
@@ -76,6 +79,10 @@ pub fn handle_request(
                                 "type": "boolean",
                                 "description": "Whether user explicitly confirmed/selected the skills"
                             },
+                            "autonomous": {
+                                "type": "boolean",
+                                "description": "Bypass interactive user confirmation for autonomous/headless subagents"
+                            },
                             "user_message": {
                                 "type": "string",
                                 "description": "Optional message or feedback from the user regarding skill selection"
@@ -96,6 +103,10 @@ pub fn handle_request(
                                 "description": "Operation to perform: 'search' (2-stage BERT + Cross-Encoder vector search over skills), 'get' (retrieve skill content by identifier), 'list' (list registered skills catalog), 'precode' (generate upfront 300 LOC architecture blueprint), 'verify' (register empirical verification contract), 'workflow' (retrieve stage workflow guidelines), 'ui_ux' (modern UI/UX design standards), 'docs' (technical documentation search), 'reindex_skills' (force refresh semantic vector index for skills)"
                             },
                             "query": { "type": "string", "description": "Search query or keyword for 'search', 'docs', 'ui_ux', or 'precode'" },
+                            "task": { "type": "string", "description": "Active task goal to guide semantic skill discovery and slicing" },
+                            "workflow": { "type": "string", "description": "Workflow or development context for smart skill discovery" },
+                            "tech_stack": { "type": "string", "description": "Target programming language or tech stack (e.g. 'rust', 'android', 'react')" },
+                            "files": { "type": "array", "items": { "type": "string" }, "description": "Related file paths to infer relevant workflow skills" },
                             "identifier": { "type": "string", "description": "Skill name/path for 'get' / 'docs', or workflow stage name for 'workflow'" },
                             "project_path": { "type": "string", "description": "Absolute path of active repository workspace" },
                             "verification_command": { "type": "string", "description": "Required for 'verify' operation: Actual shell test command to run (e.g. 'cargo test')" },

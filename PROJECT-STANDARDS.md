@@ -62,3 +62,8 @@ This file contains standards, conventions, and rules specific to this project. A
   - Antigravity / Gemini GUI Artifact: Clicking "Proceed" or "Accept Plan" button on `implementation_plan.md`.
 - **Reason (Required):** Guarantees human-in-the-loop governance before destructive or major architectural changes occur.
 - **How to Test (Optional):** Call `workflow_gate(action="set_stage", target_stage="Build")`. Reject if approval missing (`STAGE_TRANSITION_BLOCKED`).
+
+### 🎯 Strict Gate on Skill Selection (Option B)
+- **Rule (Required):** When skills are proposed or queried via `guidance(operation="search")`, the agent MUST NEVER auto-select skills on behalf of the user. The agent must trigger the IDE tool `ask_question(questions=[{question: "...", options: [...], is_multi_select: true}])` to present the proposed skill options to the user. Only after user confirmation can `select_skills(skills=[...], user_confirmed=true)` (or `autonomous=true` for headless subagents) be called.
+- **Reason (Required):** Prevents unwanted skill injection, enforces user agency in tailoring specialized workflow guidelines, and avoids token bloat from unneeded skill sets.
+- **How to Test (Optional):** Calling `select_skills` with skills but without `user_confirmed=true` returns `USER_CONFIRMATION_REQUIRED` error.

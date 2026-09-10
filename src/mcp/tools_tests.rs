@@ -578,10 +578,25 @@
         // proposals is empty
         assert!(state.pending_skill_proposals.is_empty());
 
-        let res = handle_tool_call(
+        // 1. Unconfirmed selection even when proposals is empty is strictly BLOCKED
+        let blocked_res = handle_tool_call(
             "select_skills",
             json!({
                 "skills": ["android-clean-architecture"]
+            }),
+            &mut state,
+        );
+        assert!(blocked_res.is_ok());
+        let blocked_text = blocked_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(blocked_text.contains("USER_CONFIRMATION_REQUIRED"));
+        assert!(blocked_text.contains("ask_question"));
+
+        // 2. Confirmed selection succeeds
+        let res = handle_tool_call(
+            "select_skills",
+            json!({
+                "skills": ["android-clean-architecture"],
+                "user_confirmed": true
             }),
             &mut state,
         );
@@ -589,6 +604,33 @@
         let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
         assert!(text.contains("Skill Selection Confirmed"));
         assert!(text.contains("android-clean-architecture [Embedded Catalog]"));
+
+        // 3. Autonomous subagent execution succeeds
+        let auto_res = handle_tool_call(
+            "select_skills",
+            json!({
+                "skills": ["android-clean-architecture"],
+                "autonomous": true
+            }),
+            &mut state,
+        );
+        assert!(auto_res.is_ok());
+        let auto_text = auto_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(auto_text.contains("Skill Selection Confirmed"));
+
+        // 4. Formatted proposal string with description and score succeeds
+        let fmt_res = handle_tool_call(
+            "select_skills",
+            json!({
+                "skills": ["android-clean-architecture: Modern Clean Architecture (Score: 0.95)"],
+                "user_confirmed": true
+            }),
+            &mut state,
+        );
+        assert!(fmt_res.is_ok());
+        let fmt_text = fmt_res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(fmt_text.contains("Skill Selection Confirmed"));
+        assert!(fmt_text.contains("android-clean-architecture [Embedded Catalog]"));
     }
 
 
@@ -1029,6 +1071,27 @@
         assert!(text.contains("reindexed with rich semantic passages"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_guidance_search_ask_question_proposal_and_context_discovery() {
+        let mut state = ServerState::new();
+        let res = handle_tool_call(
+            "guidance",
+            json!({
+                "operation": "search",
+                "workflow": "android compose app architecture",
+                "files": ["ui/screens/HomeScreen.kt"]
+            }),
+            &mut state,
+        );
+        assert!(res.is_ok());
+        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("SKILL_PROPOSAL: MANDATORY USER INTERACTION REQUIRED"));
+        assert!(text.contains("ask_question"));
+        assert!(text.contains("is_multi_select"));
+        assert!(text.contains("user_confirmed=true"));
+        assert!(!state.pending_skill_proposals.is_empty());
     }
 
     #[test]

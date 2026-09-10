@@ -3,7 +3,7 @@
 CRITICAL OVERRIDE: This repository is managed by the `agent-guidance` MCP Server. Route all code search and context inspection through `agent-guidance` MCP tools (Token-Bounded Reads & GraphRAG) to prevent token bloat.
 
 ## Execution Lifecycle & Strict Rules
-1. **Turn 1 Initialization**: Call `task_pipeline(task="<user request>", project_path="<abs_path>", phase="plan")` FIRST to initialize context, detect architecture pattern, and establish workspace boundaries. Skills can be queried via `guidance(operation="search", query="...")` and injected with `select_skills(...)`.
+1. **Turn 1 Initialization**: Call `task_pipeline(task="<user request>", project_path="<abs_path>", phase="plan")` FIRST to initialize context, detect architecture pattern, and establish workspace boundaries. Skills can be queried via `guidance(operation="search", query="...")`. When skills are proposed, the agent MUST ask the user via `ask_question(questions=[{question: "...", options: [...], is_multi_select: true}])` before calling `select_skills(skills=[...], user_confirmed=true)`.
 2. **Token-Bounded Context & GraphRAG (Strict File Reading Protocol)**:
    - [PROHIBITION]: NEVER use native IDE tools (`view_file`, `grep_search`, `find_by_name`, `list_dir`) OR shell read commands (`run_command` with `Get-Content`, `cat`, `type`, `head`, `tail`, `sed`, `awk`, or Python/script file reading) to inspect or search codebase files.
    - [MANDATORY]: Inspect, search, and read code EXCLUSIVELY via `project_context(operation="search" | "graph_rag" | "read" | "symbols", ...)` (300 LOC cap). Native file dumps and shell-based content reads are strictly forbidden. Shell execution (`run_command`) is strictly reserved for builds, tests, running tools, and git commands.

@@ -37,16 +37,62 @@ pub(crate) fn handle_search(
     let proj_path = detect_project_path(proj_path_arg, state);
 
     ensure_not_cancelled(state)?;
-    let profile = detect_language_fast(&proj_path, query);
+
+    let task_arg = arguments.get("task").and_then(|v| v.as_str()).unwrap_or("");
+    let workflow_arg = arguments.get("workflow").and_then(|v| v.as_str()).unwrap_or("");
+    let tech_stack_arg = arguments.get("tech_stack").and_then(|v| v.as_str()).unwrap_or("");
+    let files_arg = arguments.get("files").or_else(|| arguments.get("related_files"));
+
+    let mut query_parts = Vec::new();
+    if !query.trim().is_empty() {
+        query_parts.push(query.trim().to_string());
+    }
+    if !task_arg.trim().is_empty() && !query.contains(task_arg) {
+        query_parts.push(task_arg.trim().to_string());
+    }
+    if !workflow_arg.trim().is_empty() && !query.contains(workflow_arg) {
+        query_parts.push(workflow_arg.trim().to_string());
+    }
+    if !tech_stack_arg.trim().is_empty() && !query.contains(tech_stack_arg) {
+        query_parts.push(tech_stack_arg.trim().to_string());
+    }
+    if let Some(files) = files_arg {
+        let f_str = if let Some(arr) = files.as_array() {
+            arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(" ")
+        } else if let Some(s) = files.as_str() {
+            s.to_string()
+        } else {
+            String::new()
+        };
+        if !f_str.is_empty() {
+            query_parts.push(f_str);
+        }
+    }
+    if query_parts.is_empty() {
+        if let Some(intent) = &state.user_intent_summary {
+            query_parts.push(intent.clone());
+        }
+    }
+    if query_parts.is_empty() && !state.modified_files.is_empty() {
+        query_parts.push(state.modified_files.join(" "));
+    }
+
+    let search_query = if query_parts.is_empty() {
+        "general programming guidance".to_string()
+    } else {
+        query_parts.join(" ")
+    };
+
+    let profile = detect_language_fast(&proj_path, &search_query);
     let all_skills = load_all_skills(&proj_path);
 
     // Stage 1: 1st Stage Candidate Selection
-    let stage1_results = hybrid_vector_search(query, &all_skills, 20);
+    let stage1_results = hybrid_vector_search(&search_query, &all_skills, 20);
     ensure_not_cancelled(state)?;
 
     // Stage 2: 2nd Stage Context & Intent Re-ranking
     let selector = LLMSelector::new();
-    let final_results = selector.rerank(query, stage1_results, &profile, 20);
+    let final_results = selector.rerank(&search_query, stage1_results, &profile, 20);
     ensure_not_cancelled(state)?;
 
     let mut seen_names = std::collections::HashSet::new();
@@ -67,6 +113,44 @@ pub(crate) fn handle_search(
         })
         .collect();
 
+fn extract_description(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("description:") {
+            let val = trimmed.trim_start_matches("description:").trim();
+            let cleaned = val.trim_matches('"').trim_matches('\'').trim();
+            if !cleaned.is_empty() {
+                return Some(cleaned.to_string());
+            }
+        }
+    }
+    None
+}
+
+    let options: Vec<String> = deduped_results
+        .iter()
+        .map(|(score, item)| {
+            let desc = extract_description(&item.content)
+                .unwrap_or_else(|| item.relative_path.clone());
+            let short_desc = if desc.len() > 75 {
+                format!("{}...", &desc[..72])
+            } else {
+                desc
+            };
+            format!("{}: {} (Score: {:.2})", item.name, short_desc, score)
+        })
+        .collect();
+
+    let ask_question_example = serde_json::json!({
+        "questions": [
+            {
+                "question": "Which skills would you like to inject for this task?",
+                "options": options,
+                "is_multi_select": true
+            }
+        ]
+    });
+
     let formatted_results: Vec<String> = deduped_results
         .into_iter()
         .map(|(score, item)| {
@@ -84,14 +168,17 @@ pub(crate) fn handle_search(
         .collect();
 
     let next_step_prompt = if formatted_results.is_empty() {
-        "-> No matching skills found."
+        "-> No matching skills found.".to_string()
     } else {
-        "-> SKILL_PROPOSAL: MANDATORY USER INTERACTION REQUIRED. Do NOT call `select_skills` automatically. You MUST trigger the IDE/CLI `ask_question` tool with the proposed skills so the user chooses which to activate, then call `select_skills(skills=[...])` with their choices (or `select_skills(skills=[])` if skipped)."
+        format!(
+            "-> SKILL_PROPOSAL: MANDATORY USER INTERACTION REQUIRED. Do NOT call `select_skills` automatically.\nYou MUST trigger the IDE tool `ask_question` with `is_multi_select: true` so the user selects which skills to inject:\n```json\nask_question({})\n```\nAfter the user responds, call `select_skills(skills=[...], user_confirmed=true)` (or `select_skills(skills=[])` if none selected).",
+            serde_json::to_string_pretty(&ask_question_example).unwrap_or_default()
+        )
     };
 
     Ok(format!(
         "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n{}",
-        query,
+        search_query,
         formatted_results.len(),
         if formatted_results.is_empty() {
             "No matching skills found.".to_string()

@@ -8,10 +8,8 @@ use crate::optimizer::compressor::{compress_markdown, estimate_tokens};
 use super::{detect_project_path, ensure_not_cancelled, validate_path};
 
 fn clean_skill_identifier(raw: &str) -> String {
-    let mut s = raw.trim();
-    s = s.trim_matches('`').trim_matches('*').trim_matches('\'').trim_matches('"').trim();
-
-    while s.starts_with('-') || s.starts_with('*') || s.starts_with('•') {
+    let mut s = raw.trim().trim_matches(|c| matches!(c, '`' | '*' | '\'' | '"')).trim();
+    while s.starts_with(['-', '*', '•']) {
         s = s[1..].trim();
     }
     if let Some(pos) = s.find(". ") {
@@ -19,33 +17,22 @@ fn clean_skill_identifier(raw: &str) -> String {
             s = s[pos + 2..].trim();
         }
     }
-
-    if let Some(idx) = s.find(" (") {
-        s = &s[..idx];
-    } else if let Some(idx) = s.find(": ") {
-        s = &s[..idx];
+    let cut = [s.find(": "), s.find(" ("), s.find(" [")]
+        .into_iter()
+        .flatten()
+        .min();
+    if let Some(idx) = cut {
+        s = s[..idx].trim();
     }
-    let s = s.trim();
-
-    let s = if let Some(idx) = s.find(" [") {
-        s[..idx].trim()
-    } else {
-        s
-    };
-
+    s = s.trim_matches(|c| matches!(c, '`' | '*' | '\'' | '"')).trim();
     let decoded = crate::mcp::state::types::parse_file_uri(s);
-    let s = decoded.trim();
-
-    let path = Path::new(s);
-    if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
-        if file_name.eq_ignore_ascii_case("skill.md") {
-            if let Some(parent) = path.parent().and_then(|p| p.file_name()).and_then(|f| f.to_str()) {
-                return parent.to_string();
-            }
+    let path = Path::new(decoded.trim());
+    if path.file_name().is_some_and(|f| f.eq_ignore_ascii_case("skill.md")) {
+        if let Some(parent) = path.parent().and_then(|p| p.file_name()).and_then(|f| f.to_str()) {
+            return parent.to_string();
         }
     }
-
-    s.to_string()
+    decoded.trim().to_string()
 }
 
 pub(crate) fn handle(
@@ -64,24 +51,59 @@ pub(crate) fn handle(
         }
     };
 
-    let user_confirmed = arguments
-        .get("user_confirmed")
-        .or_else(|| arguments.get("confirmed"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let parse_bool = |val: Option<&Value>| -> bool {
+        val.and_then(|v| {
+            v.as_bool().or_else(|| {
+                v.as_str().map(|s| {
+                    let l = s.trim().to_lowercase();
+                    matches!(l.as_str(), "true" | "1" | "yes" | "confirmed" | "approved")
+                })
+            })
+        }).unwrap_or(false)
+    };
+
+    let user_confirmed = parse_bool(arguments.get("user_confirmed").or_else(|| arguments.get("confirmed")));
+    let autonomous = parse_bool(arguments.get("autonomous"));
 
     let user_msg = arguments.get("user_message").and_then(|u| u.as_str());
-    if let Some(msg) = user_msg {
-        state.process_user_message(msg);
-    }
+    let user_msg_approved = if let Some(msg) = user_msg {
+        state.process_user_message(msg)
+    } else {
+        false
+    };
 
+    let is_confirmed = user_confirmed || autonomous || user_msg_approved;
     let proposals = std::mem::take(&mut state.pending_skill_proposals);
 
-    // Hardened Guard: If skills are requested while proposals were pending, require explicit user confirmation
-    if !requested_skills.is_empty() && !proposals.is_empty() && !user_confirmed && user_msg.is_none() {
-        // Restore pending proposals so user choice can still be applied
-        state.pending_skill_proposals = proposals;
-        return Ok("# Skill Selection Gate: [select_skills]\n\nStatus: BLOCKED | Error: USER_CONFIRMATION_REQUIRED: You must NEVER auto-select skills on behalf of the user. Trigger the IDE/CLI `ask_question` tool so the user selects which skills to inject. Once the user submits their choice, re-invoke `select_skills(skills=[...], user_confirmed=true)`.".to_string());
+    let is_skip = |s: &str| -> bool {
+        let l = s.trim().to_lowercase();
+        matches!(l.as_str(), "none" | "skip" | "no skills" | "none of the above" | "n/a" | "cancel" | "no" | "[]")
+    };
+    let active_skills: Vec<String> = requested_skills.into_iter().filter(|s| !is_skip(s)).collect();
+
+    // Strict Gate: Calling select_skills without confirmation must be blocked with USER_CONFIRMATION_REQUIRED
+    if !active_skills.is_empty() && !is_confirmed {
+        let options: Vec<String> = if !proposals.is_empty() {
+            proposals.iter().map(|(n, rel, _)| format!("{} ({})", n, rel)).collect()
+        } else {
+            active_skills.clone()
+        };
+        if !proposals.is_empty() {
+            state.pending_skill_proposals = proposals;
+        }
+        let question_json = json!({
+            "questions": [
+                {
+                    "question": "Which skills would you like to inject for this task?",
+                    "options": options,
+                    "is_multi_select": true
+                }
+            ]
+        });
+        return Ok(format!(
+            "# Skill Selection Gate: [select_skills]\n\nStatus: BLOCKED | Error: USER_CONFIRMATION_REQUIRED: You must NEVER auto-select skills on behalf of the user.\n\nTrigger the IDE tool `ask_question` with `is_multi_select: true`:\n```json\nask_question({})\n```\nOnce the user submits their choice, call `select_skills(skills=[...], user_confirmed=true)`.",
+            serde_json::to_string_pretty(&question_json).unwrap_or_default()
+        ));
     }
 
     let proj_path_arg = arguments
@@ -95,7 +117,7 @@ pub(crate) fn handle(
         .and_then(|t| t.as_str())
         .unwrap_or("");
 
-    let resp = if requested_skills.is_empty() {
+    let resp = if active_skills.is_empty() {
         let text = "# Skill Selection\n\nNo skills selected. Proceeding directly to task execution.\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.".to_string();
         let tokens = estimate_tokens(&text, false) as u64;
         state.record_call(tokens, tokens);
@@ -106,7 +128,7 @@ pub(crate) fn handle(
         let mut not_found = Vec::new();
         let mut raw_token_acc: usize = 0;
 
-        for raw_req in &requested_skills {
+        for raw_req in &active_skills {
             let clean_name = clean_skill_identifier(raw_req);
             let mut resolved: Option<(String, String, &'static str)> = None;
 
@@ -119,9 +141,15 @@ pub(crate) fn handle(
                 let content = get_embedded_skill(prop_name)
                     .or_else(|| get_embedded_skill(rel_path))
                     .or_else(|| validate_path(&proj_path, rel_path).ok().and_then(|p| std::fs::read_to_string(p).ok()))
-                    .or_else(|| validate_path(&proj_path, prop_name).ok().and_then(|p| std::fs::read_to_string(p).ok()))
-                    .unwrap_or_default();
-                resolved = Some((prop_name.clone(), content, ""));
+                    .or_else(|| validate_path(&proj_path, prop_name).ok().and_then(|p| std::fs::read_to_string(p).ok()));
+                if let Some(c) = content {
+                    let tag = if get_embedded_skill(prop_name).is_some() || get_embedded_skill(rel_path).is_some() {
+                        " [Embedded Catalog]"
+                    } else {
+                        " [Local Workspace]"
+                    };
+                    resolved = Some((prop_name.clone(), c, tag));
+                }
             }
 
             // 2. Check all catalog & workspace skills
@@ -215,77 +243,5 @@ pub(crate) fn handle(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::mcp::tools::handle_tool_call;
-
-    #[test]
-    fn test_clean_skill_identifier() {
-        assert_eq!(clean_skill_identifier("agent-guidance"), "agent-guidance");
-        assert_eq!(
-            clean_skill_identifier("agent-guidance (e:\\Github\\skills\\agent-guidance\\SKILL.md)"),
-            "agent-guidance"
-        );
-        assert_eq!(
-            clean_skill_identifier("`android-clean-architecture`"),
-            "android-clean-architecture"
-        );
-        assert_eq!(
-            clean_skill_identifier(".agents/skills/agent-guidance/SKILL.md"),
-            "agent-guidance"
-        );
-        assert_eq!(
-            clean_skill_identifier("- agent-guidance [Local Workspace] (Score: 0.95)"),
-            "agent-guidance"
-        );
-        assert_eq!(
-            clean_skill_identifier("1. android-clean-architecture [Embedded] (Score: 0.88)"),
-            "android-clean-architecture"
-        );
-        assert_eq!(
-            clean_skill_identifier("file:///repo/.agents/skills/security-audit/SKILL.md"),
-            "security-audit"
-        );
-    }
-
-    #[test]
-    fn test_select_skill_singular_alias_and_logging() {
-        let temp_dir = std::env::temp_dir().join(format!("select_skill_test_{}", std::process::id()));
-        let skill_dir = temp_dir.join(".agents").join("skills").join("custom-audit");
-        let _ = std::fs::create_dir_all(&skill_dir);
-        let skill_file = skill_dir.join("SKILL.md");
-        std::fs::write(
-            &skill_file,
-            "---\nname: custom-audit\ndescription: Custom audit rules\n---\n# Custom Audit\nFollow security policies.",
-        ).unwrap();
-
-        let mut state = ServerState::new();
-        state.update_project_path(&temp_dir);
-
-        let res = handle_tool_call(
-            "select_skill",
-            json!({
-                "skill": "custom-audit",
-                "project_path": temp_dir.to_str().unwrap()
-            }),
-            &mut state,
-        );
-        assert!(res.is_ok(), "select_skill failed: {:?}", res);
-        let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text.contains("### Skill: custom-audit"));
-
-        let res2 = handle_tool_call(
-            "select_skills",
-            json!({
-                "skills": [format!("custom-audit ({})", skill_file.display())],
-                "project_path": temp_dir.to_str().unwrap()
-            }),
-            &mut state,
-        );
-        assert!(res2.is_ok(), "select_skills with formatted path failed: {:?}", res2);
-        let text2 = res2.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
-        assert!(text2.contains("### Skill: custom-audit"));
-
-        let _ = std::fs::remove_dir_all(&temp_dir);
-    }
-}
+#[path = "skills_tests.rs"]
+mod tests;
