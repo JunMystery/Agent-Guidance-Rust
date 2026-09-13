@@ -137,3 +137,43 @@ fn test_select_skills_unconfirmed_proposal_structure() {
     assert!(!text.contains("Score:"));
     assert!(!text.contains("agent-guidance ("));
 }
+
+#[test]
+fn test_unicode_char_boundary_safety() {
+    use crate::mcp::tools::helpers::{truncate_bytes_safe, truncate_chars};
+
+    // 1. Em-dash ('—') is 3 bytes (0xE2 0x80 0x94)
+    let s_dash = "Readiness checklist for homelab—VLAN and network";
+    let trunc_chars = truncate_chars(s_dash, 35);
+    assert!(trunc_chars.len() <= s_dash.len());
+    // Safe byte truncation exactly inside em-dash
+    let em_dash_pos = s_dash.find('—').unwrap();
+    let safe_byte = truncate_bytes_safe(s_dash, em_dash_pos + 1);
+    assert_eq!(safe_byte.len(), em_dash_pos); // Snaps to char boundary before em-dash
+
+    // 2. Vietnamese sentence from crash log: 'ệ' at byte 59..62
+    let vn_task = "Thiết kế game Android 2D Roguelike Landscape, lập docs 4 level";
+    let mut state = ServerState::new();
+    let res = handle_tool_call(
+        "task_pipeline",
+        json!({
+            "task": vn_task,
+            "phase": "plan"
+        }),
+        &mut state,
+    );
+    assert!(res.is_ok(), "task_pipeline with Vietnamese unicode failed: {:?}", res);
+
+    // 3. Guidance skill search proposal with unicode descriptions
+    let res2 = handle_tool_call(
+        "guidance",
+        json!({
+            "operation": "search",
+            "query": "godot game design roguelite"
+        }),
+        &mut state,
+    );
+    assert!(res2.is_ok(), "guidance search with unicode failed: {:?}", res2);
+    let text = res2.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("ask_question"));
+}

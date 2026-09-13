@@ -51,7 +51,7 @@ pub fn extract_symbols(content: &str, lang: AstLanguage) -> Vec<AstSymbol> {
         };
         let name = m.as_str().to_string();
         let byte_idx = m.start();
-        let start_line = content[..byte_idx].lines().count().max(1);
+        let start_line = line_number(content, byte_idx);
         let end_line = estimate_block_end(&lines, start_line, is_end_delimited);
         let sig = lines.get(start_line - 1).unwrap_or(&"").trim().to_string();
         let kind = if full_cap.contains("interface") || full_cap.contains("protocol") {
@@ -92,7 +92,7 @@ pub fn extract_symbols(content: &str, lang: AstLanguage) -> Vec<AstSymbol> {
             if let Some(m) = m {
                 let name = m.as_str().to_string();
                 let byte_idx = m.start();
-                let start_line = content[..byte_idx].lines().count().max(1);
+                let start_line = line_number(content, byte_idx);
                 let end_line = estimate_block_end(&lines, start_line, false);
                 let sig = lines.get(start_line - 1).unwrap_or(&"").trim().to_string();
 
@@ -119,7 +119,7 @@ pub fn extract_symbols(content: &str, lang: AstLanguage) -> Vec<AstSymbol> {
             if let Some(m) = cap.get(2) {
                 let name = m.as_str().to_string();
                 let byte_idx = m.start();
-                let start_line = content[..byte_idx].lines().count().max(1);
+                let start_line = line_number(content, byte_idx);
                 let end_line = estimate_block_end(&lines, start_line, is_end_delimited);
                 let sig = lines.get(start_line - 1).unwrap_or(&"").trim().to_string();
 
@@ -149,7 +149,7 @@ pub fn extract_symbols(content: &str, lang: AstLanguage) -> Vec<AstSymbol> {
                         continue;
                     }
                     let byte_idx = m.start();
-                    let start_line = content[..byte_idx].lines().count().max(1);
+                    let start_line = line_number(content, byte_idx);
                     if symbols.iter().any(|s| s.start_line == start_line) {
                         continue;
                     }
@@ -277,4 +277,9 @@ fn estimate_block_end(lines: &[&str], start_line: usize, is_end_delimited: bool)
         }
     }
     lines.len().min(start_line + 10)
+}
+
+fn line_number(content: &str, byte_idx: usize) -> usize {
+    let limit = byte_idx.min(content.len());
+    content.as_bytes()[..limit].iter().filter(|&&b| b == b'\n').count() + 1
 }

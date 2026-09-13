@@ -1,6 +1,6 @@
 {
   "name": "agent-guidance-dashboard",
-  "version": "1.5.9",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "scripts": {

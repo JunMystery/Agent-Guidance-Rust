@@ -83,7 +83,11 @@ pub(crate) fn handle_references(
         if let Ok(hits) = db.search_content_fts(search_term, 30) {
             for (path, start_line, _end_line, snippet) in hits {
                 let bounded_snip = snippet.lines().next().unwrap_or(&snippet).trim();
-                let bounded = if bounded_snip.len() > 100 { &bounded_snip[..100] } else { bounded_snip };
+                let bounded = if bounded_snip.chars().count() > 100 {
+                    crate::mcp::tools::helpers::truncate_chars(bounded_snip, 100)
+                } else {
+                    bounded_snip
+                };
                 refs.push(format!("{}:L{} -> {}", path, start_line, bounded));
                 if refs.len() >= 30 {
                     break;
@@ -102,7 +106,11 @@ pub(crate) fn handle_references(
                     for (line_num, line) in content.lines().enumerate() {
                         if line.to_lowercase().contains(&query_lower) {
                             let trimmed = line.trim();
-                            let bounded_line = if trimmed.len() > 100 { &trimmed[..100] } else { trimmed };
+                            let bounded_line = if trimmed.chars().count() > 100 {
+                                crate::mcp::tools::helpers::truncate_chars(trimmed, 100)
+                            } else {
+                                trimmed
+                            };
                             refs.push(format!("{}:L{} -> {}", file.path, line_num + 1, bounded_line));
                             if refs.len() >= 30 {
                                 break;

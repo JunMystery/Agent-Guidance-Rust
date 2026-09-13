@@ -45,15 +45,15 @@ fn extract_target(args: &Value) -> Option<String> {
     }
     if let Some(q) = args.get("query").or_else(|| args.get("alias_term")).or_else(|| args.get("key")).and_then(|v| v.as_str()) {
         let trimmed = q.trim();
-        if trimmed.len() > 60 {
-            return Some(format!("{}...", &trimmed[..60]));
+        if trimmed.chars().count() > 60 {
+            return Some(format!("{}...", helpers::truncate_chars(trimmed, 57)));
         }
         return Some(trimmed.to_string());
     }
     if let Some(t) = args.get("task").and_then(|v| v.as_str()) {
         let trimmed = t.trim();
-        if trimmed.len() > 60 {
-            return Some(format!("{}...", &trimmed[..60]));
+        if trimmed.chars().count() > 60 {
+            return Some(format!("{}...", helpers::truncate_chars(trimmed, 57)));
         }
         return Some(trimmed.to_string());
     }
@@ -62,12 +62,12 @@ fn extract_target(args: &Value) -> Option<String> {
             let names: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(skills::clean_skill_identifier)).filter(|c| !c.is_empty()).collect();
             if !names.is_empty() {
                 let joined = names.join(", ");
-                return Some(if joined.len() > 60 { format!("{}...", &joined[..57]) } else { joined });
+                return Some(if joined.chars().count() > 60 { format!("{}...", helpers::truncate_chars(&joined, 57)) } else { joined });
             }
         } else if let Some(st) = s.as_str() {
             let clean = skills::clean_skill_identifier(st);
             if !clean.is_empty() {
-                return Some(if clean.len() > 60 { format!("{}...", &clean[..57]) } else { clean });
+                return Some(if clean.chars().count() > 60 { format!("{}...", helpers::truncate_chars(&clean, 57)) } else { clean });
             }
         }
     }

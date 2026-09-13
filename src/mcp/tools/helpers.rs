@@ -241,3 +241,23 @@ pub fn embed_query(query: &str) -> Option<Vec<f32>> {
         model.embed_text(query, Some("query")).ok()
     })
 }
+
+/// Truncate string to at most `max_chars` UTF-8 characters safely without splitting multibyte characters.
+pub fn truncate_chars(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
+/// Truncate string to at most `max_bytes` without splitting UTF-8 char boundaries.
+pub fn truncate_bytes_safe(s: &str, max_bytes: usize) -> &str {
+    if max_bytes >= s.len() {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}

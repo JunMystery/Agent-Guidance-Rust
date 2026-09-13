@@ -61,9 +61,11 @@ pub(crate) fn extract_short_usage(name: &str, rel_path: &str, proj_path: &Path) 
                 }
                 let cleaned = val.trim_matches(|c| matches!(c, '"' | '\'' | '`')).trim();
                 if !cleaned.is_empty() && cleaned != ">" && cleaned != "|" {
-                    let first = cleaned.split(". ").next().unwrap_or(cleaned).trim();
-                    return if first.len() > 38 {
-                        format!("{}...", &first[..35].trim_end())
+                    let normalized = cleaned.replace(['\u{2014}', '\u{2013}'], "-");
+                    let first = normalized.split(". ").next().unwrap_or(&normalized).trim();
+                    return if first.chars().count() > 38 {
+                        let truncated = crate::mcp::tools::helpers::truncate_chars(first, 35).trim_end();
+                        format!("{}...", truncated)
                     } else {
                         first.to_string()
                     };

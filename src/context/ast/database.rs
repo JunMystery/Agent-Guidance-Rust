@@ -175,7 +175,8 @@ fn clean_ident(s: &str) -> String {
 }
 
 fn line_number(content: &str, byte_idx: usize) -> usize {
-    content[..byte_idx].chars().filter(|&c| c == '\n').count() + 1
+    let limit = byte_idx.min(content.len());
+    content.as_bytes()[..limit].iter().filter(|&&b| b == b'\n').count() + 1
 }
 
 fn is_prisma_scalar(name: &str) -> bool {

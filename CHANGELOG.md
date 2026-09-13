@@ -2,6 +2,18 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.6.0] - 2026-09-13
+
+### UTF-8 Character Boundary Safety & Robust Multi-Byte String Truncation
+- **Universal UTF-8 Safe Truncation Engine**:
+  - Implemented `helpers::truncate_chars` and `helpers::truncate_bytes_safe` in `src/mcp/tools/helpers.rs` to guarantee that string truncation operations never slice in the middle of multi-byte UTF-8 character boundaries (e.g. em-dash `—`, Vietnamese diacritics, CJK characters, emojis).
+  - Replaced all raw byte index string slicing (`[..35]`, `[..60]`, `[..100]`) across `src/mcp/tools/` (`guidance_search.rs`, `skills_gate.rs`, `mod.rs`, `context_symbols.rs`) with character-boundary safe helpers.
+  - Normalized unicode dashes (`—`, `–`) to standard ASCII `-` in skill descriptions and proposal generation.
+- **AST Parser Line Counting Hardening**:
+  - Refactored `line_number` calculations in `src/context/ast/polyglot.rs`, `src/context/ast/manifests.rs`, and `src/context/ast/database.rs` to count `b'\n'` on raw byte slices (`as_bytes()[..limit]`), eliminating char boundary panic risks on non-ASCII codebases.
+- **Automated Verification**:
+  - Added unit test `test_unicode_char_boundary_safety` in `skills_tests.rs` verifying resilience against multi-byte em-dashes, accented Vietnamese sentences, and unicode skill proposals.
+
 ## [1.5.9] - 2026-09-10
 
 ### Polyglot AST, HUD Radial Spacing, Binary Signing & Provenance Fingerprinting

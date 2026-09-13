@@ -200,7 +200,8 @@ pub fn extract_calls(content: &str, lang: AstLanguage) -> Vec<AstCall> {
 }
 
 fn line_number(content: &str, byte_idx: usize) -> usize {
-    content[..byte_idx.min(content.len())].lines().count().max(1)
+    let limit = byte_idx.min(content.len());
+    content.as_bytes()[..limit].iter().filter(|&&b| b == b'\n').count() + 1
 }
 
 fn build_sym(

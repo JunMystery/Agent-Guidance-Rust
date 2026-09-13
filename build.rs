@@ -34,7 +34,7 @@ fn main() {
 
         const WINDOWS_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="JunMystery.AgentGuidance" version="1.5.9.0" processorArchitecture="*"/>
+  <assemblyIdentity type="win32" name="JunMystery.AgentGuidance" version="1.6.0.0" processorArchitecture="*"/>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
