@@ -90,9 +90,18 @@ pub(crate) fn handle_search(
     let stage1_results = hybrid_vector_search(&search_query, &all_skills, 20);
     ensure_not_cancelled(state)?;
 
+    // Stage 1.5: GraphRAG Context Gating (Max-Pooling Top-K Symbol/Chunk vectors)
+    let stage1_5_results = crate::ml::skill_graphrag_gate::apply_graphrag_context_gating(
+        &proj_path,
+        &search_query,
+        stage1_results,
+        20,
+    );
+    ensure_not_cancelled(state)?;
+
     // Stage 2: 2nd Stage Context & Intent Re-ranking
     let selector = LLMSelector::new();
-    let final_results = selector.rerank(&search_query, stage1_results, &profile, 20);
+    let final_results = selector.rerank(&search_query, stage1_5_results, &profile, 20);
     ensure_not_cancelled(state)?;
 
     let mut seen_names = std::collections::HashSet::new();
@@ -181,7 +190,7 @@ fn extract_description(content: &str) -> Option<String> {
         .collect();
 
     let next_step_prompt = if formatted_results.is_empty() {
-        "-> No matching skills found.".to_string()
+        "-> No matching skills found. Proceed directly to task planning or codebase inspection (no skills need to be selected).".to_string()
     } else {
         format!(
             "-> SKILL_PROPOSAL: MANDATORY USER INTERACTION REQUIRED. Do NOT call `select_skills` automatically.\nYou MUST trigger the IDE tool `ask_question` with `is_multi_select: true` so the user selects which skills to inject:\n```json\nask_question({})\n```\nAfter the user responds, call `select_skills(skills=[...], user_confirmed=true)` (or `select_skills(skills=[])` if none selected).",
@@ -189,15 +198,17 @@ fn extract_description(content: &str) -> Option<String> {
         )
     };
 
+    let results_body = if formatted_results.is_empty() {
+        "No matching skills found for this task.".to_string()
+    } else {
+        format!("Recommended Skills:\n{}", formatted_results.join("\n"))
+    };
+
     Ok(format!(
-        "# 2-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\nRecommended Skills:\n{}\n\n{}",
+        "# 3-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 1.5 (GraphRAG Context Gating) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\n{}\n\n{}",
         search_query,
         formatted_results.len(),
-        if formatted_results.is_empty() {
-            "No matching skills found.".to_string()
-        } else {
-            formatted_results.join("\n")
-        },
+        results_body,
         next_step_prompt
     ))
 }

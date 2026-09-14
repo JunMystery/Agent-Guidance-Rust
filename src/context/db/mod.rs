@@ -5,6 +5,7 @@ use std::path::Path;
 
 pub mod schema;
 pub mod aliases;
+pub mod context_vector;
 pub mod semantic;
 pub mod storage;
 pub mod vectors;

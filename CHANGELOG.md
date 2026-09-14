@@ -2,6 +2,24 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.6.1] - 2026-09-14
+
+### GraphRAG Vector Context Gating & Precision Action-Aware Skill Engine
+- **Stage 1.5 GraphRAG Context Gating**:
+  - Implemented `apply_graphrag_context_gating` in `src/ml/skill_graphrag_gate.rs` to validate candidate skills against codebase context before Cross-Encoder re-ranking.
+  - Added Max-Pooling comparison against Top-K Symbol and Code Chunk vectors extracted from `CodeGraphDb`.
+  - Implemented soft-gating bonus (`+0.4 * max_sim`) for contextually aligned skills and penalty dampening for low similarity (< 0.25), eliminating sprawling/hallucinatory skill recommendations.
+  - Implemented graceful bypass for universal meta queries (`git`, `test`, `workflow`, `review`, `doc`) and unindexed projects.
+- **Action-Aware Skill Proposal & Stop-Word Filtering**:
+  - Implemented shared `is_generic_skill_stopword` in `src/ml/mod.rs` to filter out conversational and system stop-words (`skill`, `select_skill`, `guidance`, `agent`, `action`, `user`, etc.) from ranking bonuses and candidate bypasses across both vector search and lexical fallback.
+  - Enhanced `keyword_fallback` in `src/ml/llm_selector.rs` to enforce strict action and intent relevance, requiring explicit matches in `action_triggers`, `triggers`, `intent`, or skill names, preventing unprompted or spurious skill proposals.
+  - Updated `guidance_search.rs` to suppress `SKILL_PROPOSAL` and `ask_question` user prompts when no relevant skill matches the user's action, allowing agents to proceed smoothly without unnecessary interruptions.
+  - Updated `task_pipeline` in `src/mcp/tools/pipeline.rs` to guide agents directly into planning when no skills are matched.
+- **Context Vector Extraction**:
+  - Added modular `fetch_top_context_vectors` in `src/context/db/context_vector.rs` adhering to Clean Architecture and strict < 300 LOC limits.
+- **MCP Tool Pipeline Refinement**:
+  - Enhanced `guidance_search.rs` to seamlessly transition from a 2-Stage pipeline to a precision 3-Stage retrieval architecture.
+
 ## [1.6.0] - 2026-09-13
 
 ### UTF-8 Character Boundary Safety & Robust Multi-Byte String Truncation

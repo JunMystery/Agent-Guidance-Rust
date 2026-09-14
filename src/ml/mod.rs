@@ -2,6 +2,7 @@ pub mod cross_encoder;
 pub mod embeddings;
 pub mod llm_selector;
 pub mod onnx_engine;
+pub mod skill_graphrag_gate;
 
 use rayon::ThreadPool;
 use std::sync::{Condvar, Mutex, OnceLock};
@@ -88,4 +89,42 @@ pub fn download_models() -> anyhow::Result<()> {
 
     println!("  [OK] ML models cached at ~/.cache/huggingface/hub/");
     Ok(())
+}
+
+pub fn is_generic_skill_stopword(word: &str) -> bool {
+    let clean = word
+        .trim()
+        .trim_matches(|c| matches!(c, '\'' | '"' | '`' | '.' | ',' | ':' | ';' | '?' | '!' | '(' | ')' | '[' | ']'));
+    matches!(
+        clean,
+        "skill"
+            | "skills"
+            | "select_skill"
+            | "select_skills"
+            | "guidance"
+            | "agent"
+            | "agents"
+            | "action"
+            | "actions"
+            | "user"
+            | "tool"
+            | "tools"
+            | "help"
+            | "please"
+            | "cần"
+            | "dùng"
+            | "cho"
+            | "với"
+            | "trong"
+            | "của"
+            | "sửa"
+            | "lại"
+            | "đề"
+            | "xuất"
+            | "nếu"
+            | "không"
+            | "có"
+            | "nào"
+            | "thì"
+    )
 }

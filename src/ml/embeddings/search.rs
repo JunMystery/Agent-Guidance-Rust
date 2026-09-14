@@ -79,6 +79,9 @@ pub fn hybrid_vector_search(
                 }
 
                 for w in &words {
+                    if crate::ml::is_generic_skill_stopword(w) {
+                        continue;
+                    }
                     if name_lower.contains(w) {
                         score += 0.1;
                     }
@@ -134,6 +137,9 @@ pub fn hybrid_vector_search(
         }
 
         for w in &words {
+            if crate::ml::is_generic_skill_stopword(w) {
+                continue;
+            }
             if name_lower.contains(w) {
                 score += 0.4;
             }

@@ -177,3 +177,22 @@ fn test_unicode_char_boundary_safety() {
     let text = res2.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
     assert!(text.contains("ask_question"));
 }
+
+#[test]
+fn test_guidance_search_no_skill_when_no_action_matches() {
+    let mut state = ServerState::new();
+    let res = handle_tool_call(
+        "guidance",
+        json!({
+            "operation": "search",
+            "query": "Sửa lại đề xuất của 'select_skill' nếu không có skill nào liên quan đến action thì hoàn toàn không gợi ý lên, tránh làm phiền user."
+        }),
+        &mut state,
+    );
+    assert!(res.is_ok(), "guidance search failed: {:?}", res);
+    let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("Matches Found: 0"), "Expected 0 matches, got: {}", text);
+    assert!(!text.contains("SKILL_PROPOSAL"), "Should not contain SKILL_PROPOSAL: {}", text);
+    assert!(!text.contains("ask_question"), "Should not ask question when no skills match: {}", text);
+    assert!(state.pending_skill_proposals.is_empty(), "pending_skill_proposals should be empty");
+}

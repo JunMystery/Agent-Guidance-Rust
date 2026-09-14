@@ -29,8 +29,8 @@ impl LLMSelector {
             let name_lower = skill.name.to_lowercase();
             let relative_lower = skill.relative_path.to_lowercase();
 
-            // Direct mention in prompt bypasses filtering
-            if task_lower.contains(&name_lower) {
+            // Direct mention in prompt bypasses filtering (unless generic stopword)
+            if task_lower.contains(&name_lower) && !super::is_generic_skill_stopword(&name_lower) {
                 return true;
             }
 
@@ -127,7 +127,7 @@ impl LLMSelector {
                         ce.score(task, &text).ok().map(|logit| {
                             let mut prob = 1.0 / (1.0 + (-logit).exp());
                             let name_lower = skill.name.to_lowercase();
-                            if task_lower.contains(&name_lower) {
+                            if task_lower.contains(&name_lower) && !super::is_generic_skill_stopword(&name_lower) {
                                 prob += 0.5;
                             }
                             (prob, skill.clone())
@@ -143,10 +143,10 @@ impl LLMSelector {
             );
             scored.par_sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
-            // Relevance threshold cutoff (>= 0.35 probability)
+            // Relevance threshold cutoff (>= 0.40 probability)
             let filtered: Vec<(f32, SkillItem)> = scored
                 .into_iter()
-                .filter(|(prob, _)| *prob >= 0.35)
+                .filter(|(prob, _)| *prob >= 0.40)
                 .take(limit)
                 .collect();
             return filtered;
@@ -165,17 +165,18 @@ impl LLMSelector {
         let task_keywords: Vec<String> = task
             .to_lowercase()
             .split_whitespace()
-            .map(|s| s.to_string())
+            .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-').to_string())
+            .filter(|s| !s.is_empty() && s.chars().count() >= 2 && !super::is_generic_skill_stopword(s))
             .collect();
 
         if task_keywords.is_empty() {
-            return candidates.into_iter().take(limit).collect();
+            return Vec::new();
         }
 
         let mut scored: Vec<(f32, usize)> = candidates
             .iter()
             .enumerate()
-            .map(|(i, (base_score, skill))| {
+            .filter_map(|(i, (base_score, skill))| {
                 let name_lower = skill.name.to_lowercase();
                 let doc = skill.to_semantic_doc();
                 let intent_lower = doc.intent.to_lowercase();
@@ -186,21 +187,28 @@ impl LLMSelector {
                 let rules_lower = doc.micro_rules.join(" ").to_lowercase();
                 let content_lower = skill.content.to_lowercase();
                 let mut bonus = 0.0f32;
+                let mut has_action_or_intent_match = false;
+                let mut has_name_match = false;
 
                 for kw in &task_keywords {
                     if name_lower == *kw {
-                        bonus += 0.3;
-                    } else if name_lower.contains(kw) {
-                        bonus += 0.15;
+                        bonus += 0.4;
+                        has_name_match = true;
+                    } else if name_lower.contains(kw) && kw.len() >= 4 {
+                        bonus += 0.2;
+                        has_name_match = true;
                     }
                     if actions_lower.contains(kw) {
-                        bonus += 0.2;
-                    }
-                    if intent_lower.contains(kw) {
-                        bonus += 0.15;
+                        bonus += 0.35;
+                        has_action_or_intent_match = true;
                     }
                     if triggers_lower.contains(kw) {
-                        bonus += 0.15;
+                        bonus += 0.25;
+                        has_action_or_intent_match = true;
+                    }
+                    if intent_lower.contains(kw) {
+                        bonus += 0.25;
+                        has_action_or_intent_match = true;
                     }
                     if rules_lower.contains(kw) {
                         bonus += 0.1;
@@ -209,14 +217,21 @@ impl LLMSelector {
                         bonus += 0.1;
                     }
                     if keywords_lower.contains(kw) {
-                        bonus += 0.1;
+                        bonus += 0.15;
                     }
                     if content_lower.contains(kw) {
-                        bonus += 0.03;
+                        bonus += 0.02;
                     }
                 }
 
-                (*base_score + bonus, i)
+                // Strict relevance: genuine action/intent/name match OR high base similarity (>= 0.8)
+                if (has_action_or_intent_match || has_name_match) && (*base_score + bonus >= 0.7) {
+                    Some((*base_score + bonus, i))
+                } else if *base_score >= 0.8 {
+                    Some((*base_score + bonus, i))
+                } else {
+                    None
+                }
             })
             .collect();
 
