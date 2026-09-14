@@ -19,3 +19,5 @@ mod tools_graph_tests;
 mod snapshots_tests;
 #[cfg(test)]
 mod tests_gui_approval;
+#[cfg(test)]
+mod tools_bundle_tests;

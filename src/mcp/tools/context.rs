@@ -11,6 +11,7 @@ use super::context_graph::{
 use super::context_lsp::{handle_definition, handle_type_definition};
 use super::context_read::handle_read;
 use super::context_search::{handle_navigate, handle_search};
+use super::context_bundle::handle_subgraph_bundle;
 use super::context_enrich::{handle_enrich_graph, handle_query_semantic};
 use super::context_symbols::{handle_learn_alias, handle_references, handle_symbols};
 use super::helpers::{detect_project_path, ensure_not_cancelled};
@@ -114,6 +115,14 @@ pub(crate) fn handle(
         "blast_radius" | "impact" => handle_blast_radius(&proj_path, query),
         "definition" | "goto_definition" => handle_definition(&arguments, &proj_path, query, rel_path),
         "type_definition" => handle_type_definition(&arguments, &proj_path, query, rel_path),
+        "subgraph_bundle" | "bundle" => {
+            let target = arguments
+                .get("target_symbol")
+                .and_then(|t| t.as_str())
+                .or_else(|| if !query.is_empty() { Some(query) } else { None })
+                .unwrap_or("");
+            handle_subgraph_bundle(&arguments, &proj_path, target)
+        }
         _ => format!("Project context operation '{}' completed.", op),
     };
 

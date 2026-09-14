@@ -23,6 +23,7 @@ mod context_read;
 mod context_search;
 mod context_graph;
 mod context_symbols;
+pub(crate) mod context_bundle;
 pub(crate) mod context_enrich;
 pub(crate) mod context_lsp;
 mod continuity;
