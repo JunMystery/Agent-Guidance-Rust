@@ -143,10 +143,10 @@ impl LLMSelector {
             );
             scored.par_sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
-            // Relevance threshold cutoff (>= 0.40 probability)
+            // Relevance threshold cutoff (>= 0.65 probability)
             let filtered: Vec<(f32, SkillItem)> = scored
                 .into_iter()
-                .filter(|(prob, _)| *prob >= 0.40)
+                .filter(|(prob, _)| *prob >= 0.65)
                 .take(limit)
                 .collect();
             return filtered;
@@ -166,7 +166,7 @@ impl LLMSelector {
             .to_lowercase()
             .split_whitespace()
             .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-').to_string())
-            .filter(|s| !s.is_empty() && s.chars().count() >= 2 && !super::is_generic_skill_stopword(s))
+            .filter(|s| !s.is_empty() && s.chars().count() >= 3 && s.chars().any(|c| c.is_alphabetic()) && !super::is_generic_skill_stopword(s))
             .collect();
 
         if task_keywords.is_empty() {
@@ -190,44 +190,56 @@ impl LLMSelector {
                 let mut has_action_or_intent_match = false;
                 let mut has_name_match = false;
 
+                let matches_field = |field: &str, kw: &str| -> bool {
+                    if field.is_empty() {
+                        return false;
+                    }
+                    if kw.len() >= 4 && field.contains(kw) {
+                        return true;
+                    }
+                    field.split_whitespace().any(|tok| {
+                        tok.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-') == kw
+                    })
+                };
+
                 for kw in &task_keywords {
                     if name_lower == *kw {
                         bonus += 0.4;
                         has_name_match = true;
-                    } else if name_lower.contains(kw) && kw.len() >= 4 {
+                    } else if kw.len() >= 4 && name_lower.contains(kw) {
                         bonus += 0.2;
                         has_name_match = true;
                     }
-                    if actions_lower.contains(kw) {
+                    if matches_field(&actions_lower, kw) {
                         bonus += 0.35;
                         has_action_or_intent_match = true;
                     }
-                    if triggers_lower.contains(kw) {
+                    if matches_field(&triggers_lower, kw) {
                         bonus += 0.25;
                         has_action_or_intent_match = true;
                     }
-                    if intent_lower.contains(kw) {
+                    if matches_field(&intent_lower, kw) {
                         bonus += 0.25;
                         has_action_or_intent_match = true;
                     }
-                    if rules_lower.contains(kw) {
+                    if matches_field(&rules_lower, kw) {
                         bonus += 0.1;
                     }
-                    if desc_lower.contains(kw) {
+                    if matches_field(&desc_lower, kw) {
                         bonus += 0.1;
                     }
-                    if keywords_lower.contains(kw) {
+                    if matches_field(&keywords_lower, kw) {
                         bonus += 0.15;
                     }
-                    if content_lower.contains(kw) {
+                    if kw.len() >= 4 && content_lower.contains(kw) {
                         bonus += 0.02;
                     }
                 }
 
-                // Strict relevance: genuine action/intent/name match OR high base similarity (>= 0.8)
-                if (has_action_or_intent_match || has_name_match) && (*base_score + bonus >= 0.7) {
+                // Strict relevance: genuine action/intent/name match (>= 0.70) OR high vector similarity (>= 0.80) with context match
+                if (has_action_or_intent_match || has_name_match) && (*base_score + bonus >= 0.70) {
                     Some((*base_score + bonus, i))
-                } else if *base_score >= 0.8 {
+                } else if *base_score >= 0.80 && bonus > 0.0 {
                     Some((*base_score + bonus, i))
                 } else {
                     None

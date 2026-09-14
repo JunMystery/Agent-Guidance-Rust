@@ -13,7 +13,7 @@ export { toggleSidebar, toggleSidebarCollapse };
 const VIEWS = ['dashboard', 'actions', 'graph', 'logs'];
 
 export async function loadAndRenderGraph() {
-  const data = await fetchGraphData();
+  const data = await fetchGraphData({ view: 'files' });
   renderGraphView(data);
 }
 

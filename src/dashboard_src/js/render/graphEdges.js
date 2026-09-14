@@ -31,7 +31,7 @@ export function drawGraphEdges(ctx, edgeList, nodeMap, opts) {
         ctx.shadowBlur = 4;
       } else {
         ctx.lineWidth = 0.4;
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.04)';
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.10)';
       }
     } else {
       if (isSemantic) {
@@ -85,4 +85,35 @@ export function drawGraphEdges(ctx, edgeList, nodeMap, opts) {
       ctx.restore();
     }
   });
+}
+
+export function drawArrowhead(ctx, fromX, fromY, toX, toY, targetRadius, color, size = 7) {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const len = Math.hypot(dx, dy) || 1;
+  const cos = dx / len;
+  const sin = dy / len;
+  const tipX = toX - (targetRadius + 2) * cos;
+  const tipY = toY - (targetRadius + 2) * sin;
+  const phi = Math.PI / 7; // ~25 deg
+
+  const cosP = Math.cos(phi);
+  const sinP = Math.sin(phi);
+
+  // wing 1: rotate by -phi
+  const w1x = tipX - size * (cos * cosP + sin * sinP);
+  const w1y = tipY - size * (sin * cosP - cos * sinP);
+  // wing 2: rotate by +phi
+  const w2x = tipX - size * (cos * cosP - sin * sinP);
+  const w2y = tipY - size * (sin * cosP + cos * sinP);
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(w1x, w1y);
+  ctx.lineTo(w2x, w2y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }

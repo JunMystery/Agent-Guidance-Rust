@@ -7,6 +7,10 @@ use tiny_http::Server;
 use tracing::info;
 
 pub mod graph;
+pub(crate) mod graph_contract;
+pub(crate) use graph_contract as graph_types;
+pub(crate) mod graph_file_query;
+pub(crate) mod graph_function_query;
 pub(crate) mod graph_query;
 pub mod logs_api;
 pub mod projects;

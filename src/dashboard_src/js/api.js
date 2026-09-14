@@ -22,11 +22,28 @@ async function fetchStats() {
   return resp.json();
 }
 
-export async function fetchGraphData(proj) {
-  const p = proj || selectedProject;
-  const param = p && p !== 'all' ? `?project=${encodeURIComponent(p)}` : '';
+export async function fetchGraphData(optionsOrProj) {
+  let p = selectedProject;
+  let view = 'symbols';
+  let file = null;
+
+  if (typeof optionsOrProj === 'string') {
+    p = optionsOrProj;
+  } else if (optionsOrProj && typeof optionsOrProj === 'object') {
+    if (optionsOrProj.proj !== undefined) p = optionsOrProj.proj;
+    else if (optionsOrProj.project !== undefined) p = optionsOrProj.project;
+    if (optionsOrProj.view) view = optionsOrProj.view;
+    if (optionsOrProj.file) file = optionsOrProj.file;
+  }
+
+  const params = new URLSearchParams();
+  if (p && p !== 'all') params.set('project', p);
+  if (view && view !== 'symbols') params.set('view', view);
+  if (file) params.set('file', file);
+
+  const qs = params.toString() ? `?${params.toString()}` : '';
   try {
-    const resp = await fetch(`/api/graph${param}`);
+    const resp = await fetch(`/api/graph${qs}`);
     if (!resp.ok) return { graph_available: false, message: `HTTP ${resp.status}` };
     return resp.json();
   } catch (e) {

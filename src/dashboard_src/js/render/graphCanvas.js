@@ -118,7 +118,7 @@ export function initGraphCanvas(canvasId, nodes, edges, communities, onSelect, o
       const isHigh = !activeTargetId || neighborIds.has(n.id);
       const isSelected = n.id === selectedId;
       const isHovered = n.id === hoverId;
-      ctx.globalAlpha = matchFilter ? (isHigh ? 1.0 : 0.12) : 0.05;
+      ctx.globalAlpha = matchFilter ? (isHigh ? 1.0 : 0.10) : 0.05;
 
       if (n.isHub && matchFilter) {
         const pulseR = n.radius + 2.8 + Math.sin(animTime * 3) * 1.1;

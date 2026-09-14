@@ -5,7 +5,7 @@ import { showConfirm, showAlert } from './dialog.js';
 import { t } from './i18n/index.js';
 
 async function loadAndRenderGraph() {
-  const data = await fetchGraphData();
+  const data = await fetchGraphData({ view: 'files' });
   renderGraphView(data);
 }
 

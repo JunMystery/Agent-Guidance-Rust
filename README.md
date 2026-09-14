@@ -98,11 +98,15 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 
 ![Agent Guidance Real-Time Web Dashboard & Visual GraphRAG](docs/images/dashboard-GraphRAG.png)
 
-- **Interactive Architecture Graph**: Real-time canvas visualization of codebase symbols, call/import dependencies, and Leiden community clusters powered by a ForceAtlas2 physics simulation engine with collision culling and contrast halos.
-- **Deep Symbol & Blast Radius Inspector**: Click any node on the graph or search by name to inspect callers (incoming), dependencies (outgoing), architectural tiers, and blast radius risk assessment.
+- **Interactive Multi-Mode Architecture Graph**: Real-time canvas visualizer with 3 distinct inspection modes:
+  - **Mode 1 (File Dependencies)**: Inter-file dependency graphs (1-N & N-1), interactive Subgraph Isolation, and Directory & File Container Navigator (`#graph-symbol-list-container`).
+  - **Mode 2 (File Functions Drill-Down)**: Caller/callee function call paths with directed color-coded arrows, searchable file combobox, and global 'Show all' codebase call maps.
+  - **Mode 3 (Symbol Graph)**: Full AST symbol graph with ForceAtlas2 physics simulation, contrast halos, and Leiden community clusters.
+- **Calibrated 10% Dim Capacity**: Unselected nodes and edges gracefully dim to 10% opacity (`0.10`) for focused architecture inspection.
+- **Deep Symbol & Blast Radius Inspector**: Click any node or search by name to inspect callers, dependencies, architectural tiers, and blast radius risk scores.
 - **Parallel Symbol & Function Navigator**: Search and navigate across all project files and functions simultaneously with instantaneous filtering.
 - **Token Savings & Velocity Dynamics**: Interactive telemetry charts tracking original vs. compressed payload waves, peak velocity, and execution traces.
-- **Bilingual Interface (i18n)**: Full native support for English (`en`) and Vietnamese (`vi`) with instant dynamic switching and persistent preferences.
+- **Bilingual Interface (i18n)**: Full native parity for English (`en`) and Vietnamese (`vi`) with instant dynamic switching and persistent preferences.
 - **Zero-Friction Singleton Daemon**: Runs quietly in the background, serving all concurrent IDE instances, and automatically shuts down immediately once the last IDE window closes.
 
 ---

@@ -119,25 +119,25 @@ pub fn hybrid_vector_search(
 
         if name_lower == q_lower {
             score += 1.0;
-        } else if name_lower.contains(&q_lower) {
+        } else if name_lower.contains(&q_lower) && q_lower.len() >= 3 {
             score += 0.7;
         }
 
         if !intent_lower.is_empty() && intent_lower.contains(&q_lower) {
             score += 0.6;
         }
-        if !desc_lower.is_empty() && desc_lower.contains(&q_lower) {
-            score += 0.4;
+        if !actions_lower.is_empty() && actions_lower.contains(&q_lower) {
+            score += 0.6;
         }
         if !triggers_lower.is_empty() && triggers_lower.contains(&q_lower) {
             score += 0.5;
         }
-        if !actions_lower.is_empty() && actions_lower.contains(&q_lower) {
-            score += 0.6;
+        if !desc_lower.is_empty() && desc_lower.contains(&q_lower) {
+            score += 0.4;
         }
 
         for w in &words {
-            if crate::ml::is_generic_skill_stopword(w) {
+            if crate::ml::is_generic_skill_stopword(w) || w.len() < 3 {
                 continue;
             }
             if name_lower.contains(w) {

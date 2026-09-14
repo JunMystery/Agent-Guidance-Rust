@@ -5,10 +5,7 @@ use rusqlite::Connection;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 
-pub struct GraphQueryResult {
-    pub nodes: Vec<serde_json::Value>,
-    pub edges: Vec<serde_json::Value>,
-}
+pub use super::graph_contract::GraphQueryResult;
 
 fn parse_node_row(row: &rusqlite::Row<'_>, has_rich: bool) -> rusqlite::Result<(String, serde_json::Value)> {
     let id: String = row.get(0)?;
@@ -138,12 +135,8 @@ pub fn load_connected_graph_data(conn: &Connection, max_nodes: usize) -> Result<
 
     for er in edge_rows.filter_map(|r| r.ok()) {
         let (src, tgt, etype, weight, conf, cat, call_line) = er;
-        if !node_map.contains_key(&src) {
-            neighbor_ids.insert(src.clone());
-        }
-        if !node_map.contains_key(&tgt) {
-            neighbor_ids.insert(tgt.clone());
-        }
+        if !node_map.contains_key(&src) { neighbor_ids.insert(src.clone()); }
+        if !node_map.contains_key(&tgt) { neighbor_ids.insert(tgt.clone()); }
         candidate_edges.push((src, tgt, etype, weight, conf, cat, call_line));
     }
 
@@ -191,10 +184,8 @@ pub fn load_connected_graph_data(conn: &Connection, max_nodes: usize) -> Result<
 
     let mut sorted_nodes: Vec<serde_json::Value> = node_map.into_values().collect();
     sorted_nodes.sort_by(|a, b| {
-        let deg_b = b.get("deg").and_then(|v| v.as_i64()).unwrap_or(0);
-        let deg_a = a.get("deg").and_then(|v| v.as_i64()).unwrap_or(0);
-        let loc_b = b.get("loc").and_then(|v| v.as_i64()).unwrap_or(0);
-        let loc_a = a.get("loc").and_then(|v| v.as_i64()).unwrap_or(0);
+        let (deg_b, deg_a) = (b.get("deg").and_then(|v| v.as_i64()).unwrap_or(0), a.get("deg").and_then(|v| v.as_i64()).unwrap_or(0));
+        let (loc_b, loc_a) = (b.get("loc").and_then(|v| v.as_i64()).unwrap_or(0), a.get("loc").and_then(|v| v.as_i64()).unwrap_or(0));
         deg_b.cmp(&deg_a).then_with(|| loc_b.cmp(&loc_a))
     });
 

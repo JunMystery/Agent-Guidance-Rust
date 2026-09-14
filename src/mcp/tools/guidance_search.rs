@@ -107,6 +107,9 @@ pub(crate) fn handle_search(
     let mut seen_names = std::collections::HashSet::new();
     let mut deduped_results = Vec::new();
     for (score, item) in final_results {
+        if score < 0.65 {
+            continue;
+        }
         if seen_names.insert(item.name.clone()) {
             deduped_results.push((score, item));
             if deduped_results.len() >= 6 {

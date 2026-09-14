@@ -4,36 +4,98 @@ use std::path::Path;
 
 use super::json_response;
 
-pub(crate) fn handle_api_graph(request: tiny_http::Request, default_proj: &str) {
-    let url = request.url();
-    let query_str = url.split_once('?').map(|(_, q)| q).unwrap_or("");
-    let mut project_param = None;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GraphQueryParams {
+    pub project: Option<String>,
+    pub view: String,
+    pub file: Option<String>,
+}
 
+pub(crate) fn parse_graph_query(query_str: &str) -> GraphQueryParams {
+    let (mut project, mut view, mut file) = (None, None, None);
     for pair in query_str.split('&') {
         if let Some((k, v)) = pair.split_once('=') {
-            if k == "project" {
-                let decoded = v
-                    .replace("%20", " ")
-                    .replace("%2F", "/")
-                    .replace("%3A", ":")
-                    .replace("%5C", "\\");
-                if !decoded.is_empty() && decoded != "all" {
-                    project_param = Some(decoded);
+            let decoded = v
+                .replace("%20", " ")
+                .replace("%2F", "/")
+                .replace("%3A", ":")
+                .replace("%5C", "\\");
+            match k {
+                "project" => {
+                    if !decoded.is_empty() && decoded != "all" {
+                        project = Some(decoded);
+                    }
                 }
+                "view" => {
+                    if !decoded.is_empty() {
+                        view = Some(decoded);
+                    }
+                }
+                "file" => {
+                    if !decoded.is_empty() {
+                        file = Some(decoded);
+                    }
+                }
+                _ => {}
             }
         }
     }
+    GraphQueryParams {
+        project,
+        view: view.unwrap_or_else(|| "symbols".to_string()),
+        file,
+    }
+}
 
-    let target_dir = project_param.as_deref().unwrap_or(default_proj);
+pub(crate) fn handle_api_graph(request: tiny_http::Request, _default_proj: &str) {
+    let url = request.url();
+    let query_str = url.split_once('?').map(|(_, q)| q).unwrap_or("");
+    let params = parse_graph_query(query_str);
+
+    let target_dir = match params.project.as_deref() {
+        Some(p) => p,
+        None => {
+            json_response(
+                request,
+                200,
+                &json!({
+                    "graph_available": false,
+                    "reason": "PROJECT_REQUIRED",
+                    "message": "Please select a specific project from the Tracked Projects dropdown to view its architecture graph.",
+                    "nodes": [],
+                    "edges": [],
+                    "communities": []
+                }),
+            );
+            return;
+        }
+    };
     let path = Path::new(target_dir);
 
-    match query_graph_data(path) {
+    if params.view == "file_functions" && params.file.is_none() {
+        json_response(
+            request,
+            400,
+            &json!({"error": "Missing required 'file' query parameter for view=file_functions"}),
+        );
+        return;
+    }
+
+    match query_graph_data_with_view(path, &params.view, params.file.as_deref()) {
         Ok(data) => json_response(request, 200, &data),
         Err(e) => json_response(request, 500, &json!({"error": e.to_string()})),
     }
 }
 
 pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
+    query_graph_data_with_view(project_path, "symbols", None)
+}
+
+pub fn query_graph_data_with_view(
+    project_path: &Path,
+    view: &str,
+    file: Option<&str>,
+) -> Result<serde_json::Value> {
     if !project_path.exists() {
         return Ok(json!({
             "graph_available": false,
@@ -64,11 +126,25 @@ pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
 
-    let query_res = super::graph_query::load_connected_graph_data(&conn, 300)?;
+    match view {
+        "files" => {
+            let res = super::graph_file_query::query_file_graph_data(&conn, project_path)?;
+            Ok(serde_json::to_value(res)?)
+        }
+        "file_functions" => {
+            let target_file = file.unwrap_or("");
+            let res = super::graph_function_query::query_file_functions_data(&conn, project_path, target_file)?;
+            Ok(serde_json::to_value(res)?)
+        }
+        _ => query_symbol_graph_data(&conn, project_path),
+    }
+}
+
+fn query_symbol_graph_data(conn: &rusqlite::Connection, project_path: &Path) -> Result<serde_json::Value> {
+    let query_res = super::graph_query::load_connected_graph_data(conn, 300)?;
     let nodes = query_res.nodes;
     let mut edges = query_res.edges;
 
-    // Query semantic edges contributed by AI Agents
     if let Ok(mut sem_stmt) = conn.prepare(
         "SELECT source_symbol, target_symbol, relation_type, confidence, description
          FROM semantic_edges LIMIT 500",
@@ -80,22 +156,14 @@ pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
             let conf: f64 = row.get(3)?;
             let desc: Option<String> = row.get(4)?;
             Ok(json!({
-                "source": src,
-                "target": tgt,
-                "type": rel,
-                "weight": conf,
-                "origin": "semantic",
-                "dashed": true,
-                "description": desc,
+                "source": src, "target": tgt, "type": rel, "weight": conf,
+                "origin": "semantic", "dashed": true, "description": desc,
             }))
         }) {
-            for se in sem_edges.filter_map(|r| r.ok()) {
-                edges.push(se);
-            }
+            for se in sem_edges.filter_map(|r| r.ok()) { edges.push(se); }
         }
     }
 
-    // Read communities if available, extracting array from CommunityHierarchy object
     let comm_path = project_path.join(".agent-context").join("communities.json");
     let raw_comm: serde_json::Value = if comm_path.exists() {
         std::fs::read_to_string(&comm_path)
@@ -119,6 +187,7 @@ pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
 
     Ok(json!({
         "graph_available": true,
+        "view": "symbols",
         "project_path": project_path.to_string_lossy(),
         "total_nodes": nodes.len(),
         "total_edges": edges.len(),
@@ -132,4 +201,3 @@ pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
 #[cfg(test)]
 #[path = "graph_tests.rs"]
 mod tests;
-

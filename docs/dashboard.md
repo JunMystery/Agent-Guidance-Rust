@@ -58,13 +58,32 @@ The web dashboard is organized into 4 primary views accessible via the responsiv
 - **Log Management**: Quick button to clear historical logs (`POST /api/logs/clear`).
 
 ### 3. Architecture Graph (Visual GraphRAG)
-- **Interactive ForceAtlas2 Physics Simulation**: Full-canvas visual graph rendering AST symbols (functions, structs, classes, enums, traits), cross-file import dependencies, and Leiden hierarchical community clusters.
-- **Visual Contrast & Halos**: Node clustering with contrast halos and collision culling for smooth navigation across codebases with thousands of symbols.
-- **Deep Symbol & Blast Radius Inspector**:
-  - Click any node to open the inspector panel.
-  - View incoming callers (`callers`), outgoing dependencies (`callees`), and architectural layer classification.
-  - View **Blast Radius Risk Score** assessing downstream impact before making code modifications.
-- **Parallel Symbol Search**: Search symbols in real time to locate nodes and center the physics camera.
+The visualizer offers 3 specialized modes to explore and analyze codebase architecture at multiple granularities:
+
+- **Mode 1: File Dependencies (1-N & N-1)**:
+  - **File Architecture Graph**: Visualizes high-level inter-file dependencies derived from AST symbol calls and semantic imports, with node sizes proportional to file complexity (LOC and symbol density).
+  - **Interactive Subgraph Isolation**: Selecting a file node isolates the graph to show only that file and its immediate incoming (N-1 dependents) and outgoing (1-N dependencies). Click background to reset filter.
+  - **Directory & File Container Navigator**: Collapsible navigator (`#graph-symbol-list-container`) grouping files by folder, with auto-centering camera navigation.
+  - **Anti-Distortion Layout**: Fixed aspect ratio and dynamic `ResizeObserver` maintaining visual stability during panel resizing.
+  - **Quick Drill-Down**: Direct button to jump from any file node directly into its function call graph in Mode 2.
+
+- **Mode 2: File Functions Drill-Down & Global Call Graph**:
+  - **Single-File Function Call Isolation**: Visualizes all functions/methods inside a chosen file within a central container/aura, connecting to external caller and callee functions.
+  - **Directed Call Arrows**: Color-coded directional edges distinguishing outgoing calls (neon cyan/green) from incoming callers (purple/orange).
+  - **Global 'Show All' View**: Analyze the complete cross-file call graph across the entire project (`file=all`).
+  - **Searchable Combobox (`fileCombobox.js`)**: Real-time dropdown search by file or folder path with keyboard navigation (Arrow Up/Down, Enter, Esc) and pinned `'Show all'`.
+
+- **Mode 3: Symbol Graph**:
+  - Full-canvas granular AST symbol graph (functions, structs, classes, enums, traits) with Leiden community clustering and blast radius impact analysis.
+
+- **Standardized 10% Dim Capacity**:
+  - In all visualizer modes, selecting a node dims all unrelated nodes and edges to exactly 10% opacity (`globalAlpha = 0.10`), keeping the active subgraph crisp at 100% brightness.
+
+- **Enforced Project Selection**:
+  - Graph visualizer strictly requires an explicit project selection from the Tracked Projects dropdown (`/api/graph?project=...`). When Global (All) is active, a friendly selection guide (`📂 Select a Project to View Graph`) is displayed until a project is chosen.
+
+- **Bilingual Interface (i18n Parity)**:
+  - Full localization support across toolbars, legends, inspector panels, search combobox, and metrics in both English and Vietnamese.
 
 ### 4. Diagnostics
 - **System Health & Runtime Info**: Daemon uptime, memory usage, CPU/GPU compute provider (`CPU`, `CUDA`, `DirectML`, `Metal`).
@@ -91,7 +110,7 @@ The embedded HTTP server exposes a complete REST API for programmatic telemetry 
 | `GET` | `/api/stats` | Aggregated metrics (tool call counts, token savings, duration, active sessions). Accepts optional `?project=<path>`. |
 | `GET` | `/api/projects` | List of all registered repositories in `~/.agent-guidance/usage.db`, automatically resolved to their project roots. |
 | `POST` | `/api/projects/prune` | Remove stale, missing, or redundant child directory records from the registry. |
-| `GET` | `/api/graph` | Code graph data (nodes, edges, communities, blast radius metrics). Requires `?project=<path>`. |
+| `GET` | `/api/graph` | Code graph data. Parameters: `project` (required), `view` (`symbols`, `files`, `file_functions`), `file` (relative path or `all` for `file_functions`). |
 | `POST` | `/api/cleanup` | Trigger database vacuuming, expired log pruning, and dead project cleanup. |
 | `GET` | `/api/logs` | Paginated action logs. Parameters: `page` (default 1), `limit` (default 10), `search` (optional keyword). |
 | `POST` | `/api/logs/clear` | Clear all execution action logs from the database. |

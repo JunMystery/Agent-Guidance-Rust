@@ -1,3 +1,8 @@
 /target
 .git_old/
 .agent-context/
+/.agents/*
+!/.agents/skills/
+/PROJECT.md
+/TEST_INFRA.md
+/TEST_READY.md

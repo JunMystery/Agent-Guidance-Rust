@@ -2,6 +2,32 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.6.2] - 2026-09-14
+
+### 🕸️ Multi-Mode GraphRAG Visualizer & File Function Drill-Down
+- **Mode 1: File Dependencies (1-N & N-1)**:
+  - File-to-file architecture graph aggregating symbol references and semantic relationships.
+  - Interactive Subgraph Isolation on file selection, with dedicated Inspector breakdown of incoming dependents (N-1) and outgoing dependencies (1-N).
+  - Directory & File Container Navigator (`#graph-symbol-list-container`) with smooth pan/zoom auto-centering.
+  - Enhanced layout with 120px node repulsion, 300px edge distance, default orphan culling, anti-distortion `ResizeObserver`, and background click-to-reset.
+- **Mode 2: File Functions Drill-Down & 'Show All' View**:
+  - High-precision function call graph with directed caller/callee arrows (outgoing neon cyan, incoming purple/orange) and central aura container.
+  - Added global `'Show all'` view (`/api/graph?view=file_functions&file=all`) mapping cross-file call relationships across the entire codebase.
+- **Searchable File Combobox (`fileCombobox.js`)**:
+  - Filter files and folders dynamically with real-time fuzzy/substring search and keyboard navigation.
+  - Pinned `'Show all'` option for instant access to global call graphs.
+- **Visual Clarity & 10% Dim Capacity**:
+  - Standardized dim opacity across all canvas renderers: non-selected/unrelated nodes and edges dim to 10% (`globalAlpha = 0.10`) while selected subgraphs retain 100% brightness.
+- **Enforced Explicit Project Selection**:
+  - Resolved issue where viewing the graph with "Global (All Projects)" active fell back to an arbitrary default directory.
+  - Backend strictly requires explicit project selection via `parse_graph_query`, returning `PROJECT_REQUIRED` payload.
+  - Web UI renders a clean, friendly empty-state prompt (`📂 Select a Project to View Graph` / `Vui lòng chọn một dự án để xem đồ thị`) guiding users to select a project from the dropdown.
+- **Strict Multi-Stage ML Skill Query Filtering**:
+  - Hardened `guidance(operation="search")` against spurious skill proposals on generic maintenance actions (version bumps, docs updates).
+  - Added action/intent matching prerequisites, raised Cross-Encoder confidence threshold to 0.65, and automatically suppressed `SKILL_PROPOSAL` prompts when zero relevant skills match.
+- **Full Bilingual i18n Parity**:
+  - 100% key synchronization between English (`en/graph.js`) and Vietnamese (`vi/graph.js`) across toolbars, navigators, inspectors, search, and metrics.
+
 ## [1.6.1] - 2026-09-14
 
 ### GraphRAG Vector Context Gating & Precision Action-Aware Skill Engine
