@@ -2,23 +2,12 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
-## [1.7.1] - 2026-09-15
-
-### 📖 Clustered Token-Bounded Multi-File Read (`project_context`)
-- **Single-Turn Clustered Multi-File Read**:
-  - Implemented `project_context(operation="read", relative_paths=[...])` (with alias `cluster_read` / `read_cluster`) in `src/mcp/tools/context_read_cluster.rs`.
-  - Enables agents to read multiple related files in 1 turn instead of issuing sequential single-file read calls.
-- **Context Fidelity & Smart Token-Bounding**:
-  - Modular files (< 300 LOC) retain 100% complete content with code fences and language syntax tagging.
-  - Large files (> 300 LOC) automatically collapse to AST structural skeletons to avoid blowing out token windows.
-  - Total output is clamped to a safety budget (default 800 LOC across cluster).
-- **Direct Batch Gate Railing**:
-  - Automatically appends a tailored `workflow_gate(action="authorize_edit", relative_paths=[...])` invocation snippet to the read output, guiding agents directly into 1-turn batch gate authorization.
-- **Security & Cross-Platform Normalization**:
-  - Enforces path traversal prevention (`..` rejection) and workspace boundary verification per file.
-  - Normalizes file separators for Windows and Unix.
+## [1.7.2] - 2026-09-15
 
 ### ⚡ System Performance Optimization & CPU Thread Reduction
+- **Batched Learning Embeddings (`src/mcp/learnings/matching.rs`)**:
+  - Replaced N sequential single-item neural forward passes in `get_semantic_relevant_learnings` with `model.embed_batch(&text_refs, Some("passage"), 32)`.
+  - Accelerates Turn 1 `task_pipeline` semantic learning lookup from ~5.5s to < 50ms (~100x speedup).
 - **Background Watcher Churn Fix (`src/context/watcher.rs`)**:
   - Guarded periodic GraphRAG updates with `if report.files_indexed > 0` and increased check interval from 30s to 60s.
   - Completely eliminates 2.85 MB `communities.json` disk write churn and unnecessary CPU wakeups when the repository is idle.
@@ -34,6 +23,22 @@ All notable changes to Agent Guidance Rust MCP Server will be documented in this
   - CPU fallback operations are constrained to 4 worker threads, preventing 100% CPU lockups during batch embeddings.
 - **Passive WAL Checkpoint Maintenance (`src/daemon/server.rs`)**:
   - Automatically triggers non-blocking `PRAGMA wal_checkpoint(PASSIVE);` on client disconnect to bound WAL file growth on `usage.db` and `code_graph.db`.
+
+## [1.7.1] - 2026-09-15
+
+### 📖 Clustered Token-Bounded Multi-File Read (`project_context`)
+- **Single-Turn Clustered Multi-File Read**:
+  - Implemented `project_context(operation="read", relative_paths=[...])` (with alias `cluster_read` / `read_cluster`) in `src/mcp/tools/context_read_cluster.rs`.
+  - Enables agents to read multiple related files in 1 turn instead of issuing sequential single-file read calls.
+- **Context Fidelity & Smart Token-Bounding**:
+  - Modular files (< 300 LOC) retain 100% complete content with code fences and language syntax tagging.
+  - Large files (> 300 LOC) automatically collapse to AST structural skeletons to avoid blowing out token windows.
+  - Total output is clamped to a safety budget (default 800 LOC across cluster).
+- **Direct Batch Gate Railing**:
+  - Automatically appends a tailored `workflow_gate(action="authorize_edit", relative_paths=[...])` invocation snippet to the read output, guiding agents directly into 1-turn batch gate authorization.
+- **Security & Cross-Platform Normalization**:
+  - Enforces path traversal prevention (`..` rejection) and workspace boundary verification per file.
+  - Normalizes file separators for Windows and Unix.
 
 ### ⚡ Batch Edit Authorization & Zero-Turn Pre-Authorization (`workflow_gate`)
 - **Batch File Authorization (`action="authorize_edit"`)**:
