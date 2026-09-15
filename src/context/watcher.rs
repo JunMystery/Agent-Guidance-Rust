@@ -92,13 +92,16 @@ fn watcher_loop(project_path: PathBuf, active: std::sync::Arc<std::sync::atomic:
                 last_event = None;
                 last_snapshot_time = Instant::now();
             }
-        } else if last_snapshot_time.elapsed() >= Duration::from_secs(30) {
-            // Periodic background incremental check every 30s
+        } else if last_snapshot_time.elapsed() >= Duration::from_secs(60) {
+            // Periodic background incremental check every 60s
             if let Ok(mut indexer) = IncrementalIndexer::new(&project_path) {
-                let _ = indexer.incremental_index();
-                let _ = indexer.embed_symbols();
-                let _ = indexer.embed_chunks();
-                let _ = indexer.update_graph_rag("Auto");
+                if let Ok(report) = indexer.incremental_index() {
+                    if report.files_indexed > 0 {
+                        let _ = indexer.embed_symbols();
+                        let _ = indexer.embed_chunks();
+                        let _ = indexer.update_graph_rag("Auto");
+                    }
+                }
             }
             last_snapshot_time = Instant::now();
         }

@@ -44,7 +44,7 @@ pub(crate) fn handle(
 
     let resp = match action {
         "approve" | "approve_plan" => {
-            handle_approve_plan(state, user_confirmed, user_msg, &proj_path)
+            handle_approve_plan(&arguments, state, user_confirmed, user_msg, &proj_path)
         }
         "pass_verification" => handle_pass_verification(state, &proj_path),
         "set_stage" => handle_set_stage(state, stage_target, &proj_path),

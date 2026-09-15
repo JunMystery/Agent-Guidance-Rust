@@ -82,14 +82,15 @@ pub fn get_tools_list() -> Value {
                     "properties": {
                         "operation": {
                             "type": "string",
-                            "enum": ["search", "graph_rag", "read", "symbols", "callers", "callees", "tree", "architecture", "learn_alias", "enrich_graph", "navigate", "subgraph_bundle", "data_flow"],
-                            "description": "Operation to perform: 'search' (lexical + symbol search), 'graph_rag' (knowledge-graph RAG), 'read' (token-bounded file reader), 'symbols' (outline of functions/classes), 'callers' (find references), 'callees' (find dependencies), 'tree' (directory structure), 'architecture' (detect codebase architecture pattern), 'learn_alias' (register natural language alias), 'enrich_graph' (inject semantic relations), 'navigate' (hierarchical code navigation), 'subgraph_bundle' (pack target function + 1-hop callers and callees into a single token-bounded multi-file context bundle), or 'data_flow' (bidirectional intra-procedural taint flow & dynamic dispatch trace)"
+                            "enum": ["search", "graph_rag", "read", "cluster_read", "symbols", "callers", "callees", "tree", "architecture", "learn_alias", "enrich_graph", "navigate", "subgraph_bundle", "data_flow"],
+                            "description": "Operation to perform: 'search' (lexical + symbol search), 'graph_rag' (knowledge-graph RAG), 'read' / 'cluster_read' (token-bounded file/multi-file reader), 'symbols' (outline of functions/classes), 'callers' (find references), 'callees' (find dependencies), 'tree' (directory structure), 'architecture' (detect codebase architecture pattern), 'learn_alias' (register natural language alias), 'enrich_graph' (inject semantic relations), 'navigate' (hierarchical code navigation), 'subgraph_bundle' (pack target function + 1-hop callers and callees into a single token-bounded multi-file context bundle), or 'data_flow' (bidirectional intra-procedural taint flow & dynamic dispatch trace)"
                         },
                         "mode": { "type": "string", "enum": ["global", "local", "drift", "basic"], "description": "Query mode for 'graph_rag' operation: 'global' (community summaries), 'local' (entity fan-out), 'drift' (dual-route), or 'basic'" },
                         "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
                         "query": { "type": "string", "description": "Search keyword, symbol name, natural language query, or pattern" },
                         "intent": { "type": "string", "enum": ["auto", "logic", "guidance"], "description": "Search intent gating: 'auto' (heuristic classifier), 'logic' (boost source code, suppress markdown), or 'guidance' (boost documentation and skills, down-rank AST symbols)" },
                         "relative_path": { "type": "string", "description": "Relative file path within project (e.g. 'src/main.rs')" },
+                        "relative_paths": { "type": "array", "items": { "type": "string" }, "description": "Batch clustered read: array of relative file paths to inspect together in a single turn" },
                         "target_symbol": { "type": "string", "description": "Specific function/class/struct/enum symbol to extract precisely" },
                         "loc_budget": { "type": "integer", "description": "Maximum LOC budget for subgraph_bundle (default: 250, clamped 50..500)" },
                         "layer": { "type": "string", "enum": ["ui", "domain", "data", "infrastructure"], "description": "Architecture domain layer of the target file" },
@@ -119,6 +120,7 @@ pub fn get_tools_list() -> Value {
                         "user_confirmed": { "type": "boolean", "description": "Confirm plan approval or stage change (required for approve_plan)" },
                         "project_path": { "type": "string", "description": "Absolute path of working repository (for authorize_edit / advance / rollback)" },
                         "relative_path": { "type": "string", "description": "Specific file relative path to authorize edit on (triggers Code Graph Diff Impact Guard)" },
+                        "relative_paths": { "type": "array", "items": { "type": "string" }, "description": "Batch authorization: array of relative file paths to authorize in a single turn (or pre-authorize at approve_plan)" },
                         "risk_level": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Declared risk level (for authorize_edit / advance)" },
                         "justification": { "type": "string", "description": "Reason and test mitigation plan for edits (Mandatory for High Risk / Critical Hub files)" },
                         "architecture_pattern": { "type": "string", "enum": ["Auto", "Clean_Architecture", "Layered_Architecture", "Package_By_Feature", "Orchestrator", "CLI_Pipeline", "Flat_Library"], "description": "Declared architecture pattern (for authorize_edit / advance). Default is 'Auto' (auto-detects project architecture)." }

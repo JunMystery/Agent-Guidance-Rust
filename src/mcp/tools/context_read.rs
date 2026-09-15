@@ -10,9 +10,18 @@ pub(crate) fn handle_read(
     rel_path: &str,
     state: &mut ServerState,
 ) -> String {
-    if rel_path.is_empty() {
-        return "Error: relative_path is required for read operation. Example: project_context(operation=\"read\", project_path=\"...\", relative_path=\"src/main.rs\", target_symbol=\"my_fn\")".to_string();
+    let paths = crate::mcp::tools::gate_edit::extract_target_paths(arguments);
+    if paths.len() > 1 || arguments.get("relative_paths").is_some() || arguments.get("files").is_some() {
+        return super::context_read_cluster::handle_cluster_read(arguments, proj_path, &paths, state);
     }
+
+    let target_path = if !rel_path.is_empty() {
+        rel_path
+    } else if let Some(first) = paths.first() {
+        first.as_str()
+    } else {
+        return "Error: relative_path or relative_paths is required for read operation. Example: project_context(operation=\"read\", project_path=\"...\", relative_paths=[\"src/a.rs\", \"src/b.rs\"])".to_string();
+    };
 
     let target_symbol = arguments.get("target_symbol").and_then(|s| s.as_str());
     let view_mode = arguments.get("view_mode").and_then(|v| v.as_str()).unwrap_or("auto");
@@ -25,9 +34,9 @@ pub(crate) fn handle_read(
         .and_then(|v| v.as_u64())
         .map(|v| v as usize);
 
-    let (full_path, resolved_subpath) = if rel_path.starts_with("linked:") {
+    let (full_path, resolved_subpath) = if target_path.starts_with("linked:") {
         let linked = crate::context::multi_project::discover_linked_projects(proj_path);
-        if let Some((proj, subpath)) = crate::context::multi_project::resolve_cross_project_path(rel_path, &linked) {
+        if let Some((proj, subpath)) = crate::context::multi_project::resolve_cross_project_path(target_path, &linked) {
             match validate_path(&proj.root_path, subpath) {
                 Ok(p) => (p, subpath.to_string()),
                 Err(e) => return format!("Security Error: {}", e),
@@ -35,12 +44,12 @@ pub(crate) fn handle_read(
         } else {
             return format!(
                 "Error: Linked project not found for path '{}'. Ensure the project is registered in .agent-context/linked_projects.json or AGENT_GUIDANCE_LINKED_PROJECTS.",
-                rel_path
+                target_path
             );
         }
     } else {
-        match validate_path(proj_path, rel_path) {
-            Ok(p) => (p, rel_path.to_string()),
+        match validate_path(proj_path, target_path) {
+            Ok(p) => (p, target_path.to_string()),
             Err(err_msg) => return format!("Security Error: {}", err_msg),
         }
     };
@@ -59,10 +68,10 @@ pub(crate) fn handle_read(
                 let skeleton = crate::optimizer::skeleton::generate_code_skeleton(&content, &resolved_subpath);
                 return format!(
                     "# AST Structural Skeleton: `{}` (Total Lines: {})\n\n> **Token Saver Mode**: Function bodies collapsed to line ranges.\n\n```\n{}\n```\n\n---\n**Next Step**: Pass `target_symbol=\"<fn_or_struct_name>\"` or `start_line` / `end_line` to `project_context(operation=\"read\", relative_path=\"{}\")` to view complete body implementation.",
-                    rel_path,
+                    target_path,
                     total_lines,
                     skeleton,
-                    rel_path
+                    target_path
                 );
             }
 
@@ -73,7 +82,7 @@ pub(crate) fn handle_read(
                 if let Some(slice) = crate::optimizer::skeleton::generate_zoom_slice(&content, &resolved_subpath, symbol) {
                     return format!(
                         "# AST Semantic Context Slice (Zoom Read): `{}` (Focus: `{}`)\n\n> **Zoom Read Optimization**: Preserved 100% type, struct & import context while folding {} sibling function bodies.\n> **Token Savings**: ~{}% reduction (from {} lines down to {} lines).\n\n```\n{}\n```",
-                        rel_path,
+                        target_path,
                         symbol,
                         slice.folded_functions_count,
                         slice.savings_percent,
@@ -195,7 +204,7 @@ pub(crate) fn handle_read(
             let loc_warning = if was_capped && target_symbol.is_none() && !is_exempt {
                 format!(
                     "\n\n---\n**ARCHITECTURE MANDATE (300 LOC Cap Exceeded)**: File `{}` has **{} total lines** (capped at 300 lines).\n**MANDATORY ACTION**: Do NOT add new logic directly into this file. Decompose into sub-modules upfront (split entry dispatchers from sub-module handlers).",
-                    rel_path, total_lines
+                    target_path, total_lines
                 )
             } else {
                 String::new()
@@ -217,15 +226,15 @@ pub(crate) fn handle_read(
             if let Some(symbol) = target_symbol {
                 format!(
                     "# Target Symbol Extracted: '{}' from {} (Lines {}-{} of {})\n\n{}{}{}",
-                    symbol, rel_path, slice_start, slice_end, total_lines, indent_note, bounded, loc_warning
+                    symbol, target_path, slice_start, slice_end, total_lines, indent_note, bounded, loc_warning
                 )
             } else {
                 format!(
                     "# Bounded File Content: {} (Lines {}-{} of {})\n\n{}{}{}",
-                    rel_path, slice_start, slice_end, total_lines, indent_note, bounded, loc_warning
+                    target_path, slice_start, slice_end, total_lines, indent_note, bounded, loc_warning
                 )
             }
         }
-        Err(e) => format!("Failed to read file '{}': {}", rel_path, e),
+        Err(e) => format!("Failed to read file '{}': {}", target_path, e),
     }
 }

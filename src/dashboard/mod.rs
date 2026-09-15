@@ -45,7 +45,7 @@ pub fn spawn_dashboard_background(port: u16, project_path: Option<String>) {
 }
 
 pub(crate) const STATS_CACHE_TTL: Duration = Duration::from_secs(2);
-const DASHBOARD_WORKERS: usize = 4;
+const DASHBOARD_WORKERS: usize = 2;
 const DASHBOARD_QUEUE: usize = 32;
 
 #[derive(Default)]

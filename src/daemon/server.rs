@@ -65,6 +65,7 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
                         let (reader, writer) = stream.into_split();
                         handle_mcp_lines(reader, writer).await;
                         client_disconnected();
+                        checkpoint_usage_db();
                     });
                 }
                 Err(e) => {
@@ -139,6 +140,7 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
                         let (reader, writer) = tokio::io::split(server);
                         handle_mcp_lines(reader, writer).await;
                         client_disconnected();
+                        checkpoint_usage_db();
                     });
                 }
                 Err(e) => {
@@ -155,4 +157,16 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
         .unwrap_or(DEFAULT_STARTUP_TIMEOUT_SECS);
 
     monitor_client_lifecycle(startup_timeout_secs).await;
+}
+
+fn checkpoint_usage_db() {
+    let db_path = crate::mcp::db::get_db_path();
+    if db_path.exists() {
+        if let Ok(conn) = rusqlite::Connection::open_with_flags(
+            &db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        ) {
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);");
+        }
+    }
 }

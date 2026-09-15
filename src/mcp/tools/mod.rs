@@ -20,6 +20,7 @@ mod guidance_search;
 mod guidance_verify;
 mod context;
 mod context_read;
+pub(crate) mod context_read_cluster;
 mod context_search;
 mod context_graph;
 mod context_symbols;
@@ -33,6 +34,8 @@ mod gate;
 mod gate_stage;
 mod gate_approval;
 pub(crate) mod gate_edit;
+pub(crate) mod gate_edit_single;
+pub(crate) mod gate_edit_batch;
 mod gate_edit_modularity;
 
 fn extract_target(args: &Value) -> Option<String> {
@@ -215,3 +218,11 @@ mod tests;
 #[cfg(test)]
 #[path = "../tools_read_tests.rs"]
 mod read_tests;
+
+#[cfg(test)]
+#[path = "../tools_gate_batch_tests.rs"]
+mod batch_tests;
+
+#[cfg(test)]
+#[path = "../tools_context_cluster_tests.rs"]
+mod cluster_tests;

@@ -5,6 +5,7 @@ use crate::mcp::state::ServerState;
 use super::helpers::resolve_architecture_pattern;
 
 pub(crate) fn handle_approve_plan(
+    arguments: &Value,
     state: &mut ServerState,
     user_confirmed: bool,
     user_msg: Option<&str>,
@@ -15,6 +16,36 @@ pub(crate) fn handle_approve_plan(
     }
 
     state.approve_plan();
+
+    let paths = super::gate_edit::extract_target_paths(arguments);
+    if !paths.is_empty() {
+        let _ = state.set_stage("Build");
+        let raw_arch = arguments
+            .get("architecture_pattern")
+            .and_then(|a| a.as_str())
+            .unwrap_or("Auto");
+        let arch_pattern = resolve_architecture_pattern(raw_arch, proj_path, state);
+        let justification = arguments
+            .get("justification")
+            .and_then(|j| j.as_str())
+            .unwrap_or("Pre-authorized during implementation plan approval");
+
+        let batch_report = super::gate_edit_batch::handle_batch_authorize(
+            proj_path,
+            &paths,
+            justification,
+            &arch_pattern,
+            state,
+        );
+
+        return format!(
+            "# Workflow Gate: [approve_plan & pre-authorized]\n\nStatus: PASSED | Plan Approved: true | Stage: {}\nBatch Pre-Authorization: {} file(s) processed.\n\n{}",
+            state.workflow_stage,
+            paths.len(),
+            batch_report
+        );
+    }
+
     let _ = state.auto_checkpoint(proj_path);
     format!(
         "# Workflow Gate: [approve_plan]\n\nStatus: PASSED | Plan Approved: true | Stage: {}",

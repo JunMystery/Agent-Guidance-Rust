@@ -107,7 +107,7 @@ pub(crate) fn handle_advance(
         && state.plan_approved
     {
         state.edit_authorized = true;
-        state.active_architecture_pattern = Some(arch_pattern);
+        state.active_architecture_pattern = Some(arch_pattern.clone());
     }
 
     if stage_res.is_ok() {
@@ -115,15 +115,39 @@ pub(crate) fn handle_advance(
     }
 
     match stage_res {
-        Ok(msg) => format!(
-            "# Workflow Gate: [advance]\n\n{}\n- Edit Authorized: {}\n- Architecture Pattern: {}",
-            msg,
-            state.edit_authorized,
-            state
-                .active_architecture_pattern
-                .as_deref()
-                .unwrap_or("NONE")
-        ),
+        Ok(msg) => {
+            let paths = super::gate_edit::extract_target_paths(arguments);
+            if !paths.is_empty() && state.workflow_stage == "Build" && state.plan_approved {
+                let justification = arguments
+                    .get("justification")
+                    .and_then(|j| j.as_str())
+                    .unwrap_or("Pre-authorized during stage advance to Build");
+                let batch_report = super::gate_edit_batch::handle_batch_authorize(
+                    proj_path,
+                    &paths,
+                    justification,
+                    &arch_pattern,
+                    state,
+                );
+                format!(
+                    "# Workflow Gate: [advance & pre-authorized]\n\n{}\n- Edit Authorized: true\n- Architecture Pattern: {}\nBatch Pre-Authorization: {} file(s) processed.\n\n{}",
+                    msg,
+                    arch_pattern,
+                    paths.len(),
+                    batch_report
+                )
+            } else {
+                format!(
+                    "# Workflow Gate: [advance]\n\n{}\n- Edit Authorized: {}\n- Architecture Pattern: {}",
+                    msg,
+                    state.edit_authorized,
+                    state
+                        .active_architecture_pattern
+                        .as_deref()
+                        .unwrap_or("NONE")
+                )
+            }
+        }
         Err(err) => format!("# Workflow Gate: [advance]\n\nError: {}", err),
     }
 }

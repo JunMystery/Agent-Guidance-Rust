@@ -87,7 +87,7 @@ pub(crate) fn handle(
                 file_list.join("\n")
             )
         }
-        "read" => handle_read(&arguments, &proj_path, rel_path, state),
+        "read" | "cluster_read" | "read_cluster" => handle_read(&arguments, &proj_path, rel_path, state),
         "search" => handle_search(query, &proj_path, intent, state),
         "navigate" => handle_navigate(&arguments, query, &proj_path, state),
         "learn_alias" => handle_learn_alias(&arguments, &proj_path, rel_path),

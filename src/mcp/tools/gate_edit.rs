@@ -1,9 +1,43 @@
 use serde_json::Value;
+use std::path::Path;
 
 use crate::mcp::state::ServerState;
-use super::gate_edit_modularity::validate_new_file_modularity;
-use super::gate_stage::count_file_lines;
+use super::gate_edit_batch::handle_batch_authorize;
+use super::gate_edit_single::evaluate_single_file_auth;
 use super::helpers::{detect_project_path, resolve_architecture_pattern};
+
+pub(crate) fn extract_target_paths(arguments: &Value) -> Vec<String> {
+    if let Some(arr) = arguments
+        .get("relative_paths")
+        .or_else(|| arguments.get("files"))
+        .and_then(|v| v.as_array())
+    {
+        return arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.trim().to_string()))
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
+    if let Some(s) = arguments
+        .get("relative_path")
+        .or_else(|| arguments.get("file_path"))
+        .or_else(|| arguments.get("path"))
+        .and_then(|v| v.as_str())
+    {
+        let trimmed = s.trim();
+        if trimmed.contains(',') {
+            return trimmed
+                .split(',')
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty())
+                .collect();
+        }
+        if !trimmed.is_empty() {
+            return vec![trimmed.to_string()];
+        }
+    }
+    Vec::new()
+}
 
 pub(crate) fn handle_authorize_edit(
     arguments: &Value,
@@ -15,11 +49,8 @@ pub(crate) fn handle_authorize_edit(
         .unwrap_or(".");
     let proj_path = detect_project_path(proj_path_arg, state);
     state.update_project_path(&proj_path);
-    let rel_path = arguments
-        .get("relative_path")
-        .and_then(|r| r.as_str())
-        .unwrap_or("")
-        .trim();
+
+    let paths = extract_target_paths(arguments);
     let justification = arguments
         .get("justification")
         .and_then(|j| j.as_str())
@@ -30,24 +61,11 @@ pub(crate) fn handle_authorize_edit(
         .unwrap_or("Auto");
     let arch_pattern = resolve_architecture_pattern(raw_arch, &proj_path, state);
 
-    if rel_path.is_empty() {
+    if paths.is_empty() {
         return format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (RELATIVE_PATH_REQUIRED)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n**Error: RELATIVE_PATH_REQUIRED**: `workflow_gate(action=\"authorize_edit\")` is file-scoped and strictly requires the target `relative_path` (e.g. `relative_path: \"src/services/order_service.rs\"` or `relative_path: \"frontend/src/views/ProcurementView.tsx\"`).\n\nBlanket or global edit authorizations without a specific target file are prohibited to enforce:\n1. **< 300 LOC Cap & Decomposition**: Preventing monolithic files from being created or expanded.\n2. **Code Graph Diff Impact Guard**: Evaluating module blast radius and incoming dependencies.\n3. **Pre-Edit Rollback Snapshot**: Creating safe checkpoints for rollback protection.\n4. **Scanned Architecture Alignment**: Guiding modular sub-module placement from line 1.\n\n**Action**: Call `workflow_gate(action=\"authorize_edit\", project_path=\"...\", relative_path=\"<path>\", risk_level=\"LOW\", justification=\"...\", architecture_pattern=\"Auto\")` for EACH individual file before modifying or creating it.",
+            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (RELATIVE_PATH_REQUIRED)\n- Project Path: {}\n- Declared Architecture: '{}'\n\n**Error: RELATIVE_PATH_REQUIRED**: `workflow_gate(action=\"authorize_edit\")` requires target `relative_path` or `relative_paths` (for batch authorization).\n\nBlanket or global edit authorizations without a target file are prohibited to enforce:\n1. **< 300 LOC Cap & Decomposition**: Preventing monolithic files from being created or expanded.\n2. **Code Graph Diff Impact Guard**: Evaluating module blast radius and incoming dependencies.\n3. **Pre-Edit Rollback Snapshot**: Creating safe checkpoints for rollback protection.\n4. **Scanned Architecture Alignment**: Guiding modular sub-module placement from line 1.\n\n**Action**: Call `workflow_gate(action=\"authorize_edit\", project_path=\"...\", relative_paths=[\"path1\", \"path2\"])` to authorize all planned files in a single turn.",
             proj_path.display(),
-            if arch_pattern.is_empty() {
-                "Auto"
-            } else {
-                &arch_pattern
-            }
-        );
-    }
-
-    if let Err(err_msg) = crate::mcp::tools::helpers::validate_path(&proj_path, rel_path) {
-        return format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (PATH_TRAVERSAL_PROHIBITED)\n- Project Path: {}\n- Target File: `{}`\n\n**Security Error: PATH_TRAVERSAL_PROHIBITED**: {}. Edits outside workspace root are strictly prohibited.",
-            proj_path.display(),
-            rel_path,
-            err_msg
+            if arch_pattern.is_empty() { "Auto" } else { &arch_pattern }
         );
     }
 
@@ -55,41 +73,6 @@ pub(crate) fn handle_authorize_edit(
     if state.plan_approved && state.workflow_stage == "Plan" {
         let _ = state.set_stage("Build");
     }
-
-    // Perform Code Graph Diff Impact Guard analysis
-    let impact = crate::mcp::impact::assess_file_risk(&proj_path, rel_path);
-    let declared_risk = arguments
-        .get("risk_level")
-        .and_then(|r| r.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| match impact.risk_level {
-            crate::mcp::impact::RiskLevel::High => "HIGH".to_string(),
-            crate::mcp::impact::RiskLevel::Medium => "MEDIUM".to_string(),
-            crate::mcp::impact::RiskLevel::Low => "LOW".to_string(),
-        });
-    // Check existing target file LOC for 300 LOC architectural hard-block
-    let full_target_path = proj_path.join(rel_path);
-    let is_new_file = !full_target_path.exists();
-    let target_loc = if full_target_path.exists() && full_target_path.is_file() {
-        count_file_lines(&full_target_path)
-    } else {
-        0
-    };
-
-    let is_exempt = is_exempt_from_loc_limit(rel_path);
-
-    let is_refactoring_justification = {
-        let j_lower = justification.to_lowercase();
-        j_lower.contains("refactor")
-            || j_lower.contains("decompose")
-            || j_lower.contains("decomposition")
-            || j_lower.contains("extract")
-            || j_lower.contains("split")
-            || j_lower.contains("thin dispatcher")
-            || j_lower.contains("reduce loc")
-            || j_lower.contains("tách file")
-            || j_lower.contains("rút gọn")
-    };
 
     if !matches!(
         arch_pattern.as_str(),
@@ -100,115 +83,101 @@ pub(crate) fn handle_authorize_edit(
             | "CLI_Pipeline"
             | "Flat_Library"
     ) {
-        format!(
+        return format!(
             "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (ORCHESTRATION MANDATE VIOLATION)\n- Project Path: {}\n- Declared Architecture: '{}'\n\nError: ARCHITECTURE_GATE_BLOCKED: Trigger IDE/CLI `ask_question` tool to let user choose a valid `architecture_pattern` ('Clean_Architecture', 'Layered_Architecture', 'Package_By_Feature', 'Orchestrator', 'CLI_Pipeline', 'Flat_Library', or 'Auto'), then re-invoke `workflow_gate(action=\"authorize_edit\", ...) `.",
             proj_path.display(),
-            if arch_pattern.is_empty() {
-                "NONE"
-            } else {
-                &arch_pattern
-            }
-        )
-    } else if let Some(err_msg) = if is_new_file && !is_exempt { validate_new_file_modularity(rel_path, justification).err() } else { None } {
-        err_msg
-    } else if target_loc >= 300 && !is_exempt && !is_refactoring_justification {
-        // Hard-block adding new logic to code files >= 300 LOC
-        crate::catalog::blueprint::format_decomposition_guidance(
-            rel_path,
-            target_loc,
-            &arch_pattern,
-        )
-    } else if impact.risk_level == crate::mcp::impact::RiskLevel::High && (justification.trim().len() < 10 || justification == "No justification provided") {
-        // Strict Gate for Critical Hub: mandatory explanation
-        format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (CRITICAL HUB IMPACT GUARD)\n- Target File: `{}`\n- Incoming Dependencies: {}\n- Impacted Modules: {}\n\n**Error: HIGH_RISK_JUSTIFICATION_REQUIRED**: This file is a Critical Hub (referenced by >8 modules). You MUST provide a specific `justification` parameter explaining how your changes avoid breaking downstream modules, along with your planned test verification.",
-            rel_path,
-            impact.dependent_count,
-            if impact.dependent_files.is_empty() { "—".to_string() } else { impact.dependent_files.join(", ") }
-        )
-    } else if declared_risk == "HIGH" && !state.plan_approved {
-        format!(
-            "# Edit Approval Gate Authorization\n\n- Status: BLOCKED (HIGH RISK)\n- Project Path: {}\n- Declared Risk: HIGH\n- Justification: {}\n\nError: HIGH RISK edits require explicit user approval. Present plan and trigger IDE/CLI `ask_question` tool (or invoke `workflow_gate(action=\"set_stage\", target_stage=\"Plan\")`) to confirm approval.",
-            proj_path.display(),
-            if justification.is_empty() { "No justification provided" } else { justification }
-        )
-    } else if state.workflow_stage == "Build" && state.plan_approved {
-        state.edit_authorized = true;
-        state.active_architecture_pattern = Some(arch_pattern.clone());
-
-        // Automatically record modified file and take pre-edit snapshot for rollback guard
-        if !rel_path.is_empty() {
-            state.record_modified_file(rel_path);
-            let _ = crate::mcp::impact::create_file_snapshot(&proj_path, rel_path, &state.session_id);
-        }
-        let _ = state.auto_checkpoint(&proj_path);
-
-        let mut resp = format!(
-            "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: `{}`{}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\nFile edits are fully authorized under {} Architecture.",
-            if target_loc >= 300 && !is_exempt { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
-            proj_path.display(),
-            rel_path,
-            if is_new_file { " [NEW FILE]" } else { "" },
-            impact.risk_level,
-            impact.dependent_count,
-            arch_pattern,
-            if justification.is_empty() { "Standard development task" } else { justification },
-            state.workflow_stage,
-            arch_pattern
+            if arch_pattern.is_empty() { "NONE" } else { &arch_pattern }
         );
+    }
 
-        if is_new_file && !is_exempt {
-            resp.push_str("\n\n[LOC Limit: strictly < 300 LOC (target < 150 LOC)]");
-        } else if target_loc >= 300 && !is_exempt {
-            resp.push_str(&format!(
-                "\n\n**300 LOC Modular Refactoring Mandate**: {} lines (>= 300 LOC limit). Refactoring/decomposition only.",
-                target_loc
-            ));
-        }
-
-        if let Some(warn) = impact.warning {
-            resp.push_str(&format!("\n\n**Impact Guard**: {}", warn));
-        }
-
-        // Milestone v1.9.0: Check Co-Change Evolutionary Coupling
-        if let Ok(db) = crate::context::db::CodeGraphDb::open_for_project(&proj_path) {
-            if let Ok(coupled) = crate::context::co_change::predict_coupled_files(&db.conn, &[rel_path.to_string()], 1, 0.6) {
-                if let Some(top) = coupled.first() {
-                    resp.push_str(&format!(
-                        "\n\n> [!TIP] **Co-Change Coupling Alert**: Historically, `{}` is modified together with `{}` ({} co-changes, {:.0}% confidence). Verify whether `{}` also requires updates.",
-                        top.coupled_with, top.file, top.co_change_count, top.confidence * 100.0, top.file
-                    ));
-                }
-            }
-        }
-
-        resp
-    } else {
-        format!(
+    if state.workflow_stage != "Build" || !state.plan_approved {
+        return format!(
             "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- Project Path: {}\n- Active Stage: {}\n- Plan Approved: {}\n\nError: WORKFLOW_STAGE_BLOCKED: Edits require Build stage and plan_approved=true. If user approved via GUI/chat, invoke `workflow_gate(action=\"set_stage\", target_stage=\"Build\", user_confirmed=true)`. Only trigger `ask_question` if interactive user approval is required.",
             proj_path.display(),
             state.workflow_stage,
             state.plan_approved
-        )
+        );
     }
+
+    let is_batch = arguments.get("relative_paths").is_some()
+        || arguments.get("files").is_some()
+        || paths.len() > 1;
+
+    if is_batch {
+        return handle_batch_authorize(&proj_path, &paths, justification, &arch_pattern, state);
+    }
+
+    // Single file authorization flow
+    let rel_path = &paths[0];
+    let outcome = evaluate_single_file_auth(
+        &proj_path,
+        rel_path,
+        justification,
+        &arch_pattern,
+        state,
+    );
+
+    if !outcome.is_passed {
+        return outcome.error_msg.unwrap_or_else(|| {
+            format!(
+                "# Edit Approval Gate Authorization\n\n- Status: BLOCKED\n- File: `{}`\n\nValidation failed.",
+                rel_path
+            )
+        });
+    }
+
+    state.edit_authorized = true;
+    state.active_architecture_pattern = Some(arch_pattern.clone());
+    let _ = state.auto_checkpoint(&proj_path);
+
+    let is_exempt = is_exempt_from_loc_limit(rel_path);
+    let mut resp = format!(
+        "# Edit Approval Gate Authorization\n\n- Status: PASSED{}\n- Project Path: {}\n- Target File: `{}`{}\n- Assessed Risk Level: {:?} (Dependencies: {})\n- Architecture Pattern: {}\n- Justification: {}\n- Active Stage: {}\n- Plan Approved: true\n\nFile edits are fully authorized under {} Architecture.",
+        if outcome.target_loc >= 300 && !is_exempt { " (DECOMPOSITION / REFACTOR MODE)" } else { "" },
+        proj_path.display(),
+        rel_path,
+        if outcome.is_new { " [NEW FILE]" } else { "" },
+        outcome.risk_level,
+        outcome.dependent_count,
+        arch_pattern,
+        if justification.is_empty() { "Standard development task" } else { justification },
+        state.workflow_stage,
+        arch_pattern
+    );
+
+    if outcome.is_new && !is_exempt {
+        resp.push_str("\n\n[LOC Limit: strictly < 300 LOC (target < 150 LOC)]");
+    } else if outcome.target_loc >= 300 && !is_exempt {
+        resp.push_str(&format!(
+            "\n\n**300 LOC Modular Refactoring Mandate**: {} lines (>= 300 LOC limit). Refactoring/decomposition only.",
+            outcome.target_loc
+        ));
+    }
+
+    if let Some(warn) = outcome.warning {
+        resp.push_str(&format!("\n\n**Impact Guard**: {}", warn));
+    }
+
+    if let Some(tip) = outcome.co_change_tip {
+        resp.push_str(&format!(
+            "\n\n> [!TIP] **Co-Change Coupling Alert**: {}",
+            tip
+        ));
+    }
+
+    resp
 }
 
-/// Checks whether a target file path is exempt from the 300 LOC source code limit and modularity validation.
-/// Documentation, markdown, data, serializations, configurations, assets, and static files are exempt.
 pub fn is_exempt_from_loc_limit(rel_path: &str) -> bool {
-    let path = std::path::Path::new(rel_path);
+    let path = Path::new(rel_path);
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let ext_lower = ext.to_lowercase();
         matches!(
             ext_lower.as_str(),
-            // Documentation & Markup
             "md" | "markdown" | "mdown" | "mdx" | "txt" | "rst" | "adoc" | "doc" | "docx" | "pdf"
-            // Data, Datasets, Schemas & Serialized Configs
             | "json" | "json5" | "jsonl" | "csv" | "tsv" | "yaml" | "yml" | "xml" | "toml" | "lock"
             | "sql" | "env" | "ini" | "cfg" | "properties" | "parquet" | "dataset" | "arrow" | "proto" | "graphql" | "gql"
-            // Static Assets, Images, Web Styles
             | "html" | "htm" | "css" | "scss" | "sass" | "less" | "svg" | "png" | "jpg" | "jpeg" | "gif" | "ico" | "webp"
-            // Logs, Patches & Diffs
             | "log" | "diff" | "patch"
         )
     } else {
@@ -220,4 +189,3 @@ pub fn is_exempt_from_loc_limit(rel_path: &str) -> bool {
         )
     }
 }
-

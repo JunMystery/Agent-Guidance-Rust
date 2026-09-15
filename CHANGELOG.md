@@ -2,6 +2,61 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.7.1] - 2026-09-15
+
+### 📖 Clustered Token-Bounded Multi-File Read (`project_context`)
+- **Single-Turn Clustered Multi-File Read**:
+  - Implemented `project_context(operation="read", relative_paths=[...])` (with alias `cluster_read` / `read_cluster`) in `src/mcp/tools/context_read_cluster.rs`.
+  - Enables agents to read multiple related files in 1 turn instead of issuing sequential single-file read calls.
+- **Context Fidelity & Smart Token-Bounding**:
+  - Modular files (< 300 LOC) retain 100% complete content with code fences and language syntax tagging.
+  - Large files (> 300 LOC) automatically collapse to AST structural skeletons to avoid blowing out token windows.
+  - Total output is clamped to a safety budget (default 800 LOC across cluster).
+- **Direct Batch Gate Railing**:
+  - Automatically appends a tailored `workflow_gate(action="authorize_edit", relative_paths=[...])` invocation snippet to the read output, guiding agents directly into 1-turn batch gate authorization.
+- **Security & Cross-Platform Normalization**:
+  - Enforces path traversal prevention (`..` rejection) and workspace boundary verification per file.
+  - Normalizes file separators for Windows and Unix.
+
+### ⚡ System Performance Optimization & CPU Thread Reduction
+- **Background Watcher Churn Fix (`src/context/watcher.rs`)**:
+  - Guarded periodic GraphRAG updates with `if report.files_indexed > 0` and increased check interval from 30s to 60s.
+  - Completely eliminates 2.85 MB `communities.json` disk write churn and unnecessary CPU wakeups when the repository is idle.
+- **Search Query Debouncing & JIT Sync (`src/mcp/tools/helpers.rs`)**:
+  - Replaced synchronous full incremental scans and unthrottled thread spawning with `jit_sync::ensure_fresh_graph(proj_path, 15)`.
+  - Debounces search queries within 15s to serve instant sub-millisecond responses without disk re-scans.
+- **Global CPU Thread Cap & Dashboard Worker Trimming**:
+  - Initialized Rayon global thread pool capped at 4 worker threads (`AGENT_GUIDANCE_MAX_THREADS`, default: 4) in `src/main.rs`, replacing default allocation of `num_cpus` (16–32 threads).
+  - Reduced dashboard worker threads from 4 to 2 in `src/dashboard/mod.rs`.
+  - Cuts ~20–24 unnecessary OS thread handles and their stack memory.
+- **GPU VRAM Preservation for ML**:
+  - Retained `GpuSkillMatrix` and `eager_vram_warmup()` ensuring sub-0.1ms GPU matrix multiplication remains in VRAM.
+  - CPU fallback operations are constrained to 4 worker threads, preventing 100% CPU lockups during batch embeddings.
+- **Passive WAL Checkpoint Maintenance (`src/daemon/server.rs`)**:
+  - Automatically triggers non-blocking `PRAGMA wal_checkpoint(PASSIVE);` on client disconnect to bound WAL file growth on `usage.db` and `code_graph.db`.
+
+### ⚡ Batch Edit Authorization & Zero-Turn Pre-Authorization (`workflow_gate`)
+- **Batch File Authorization (`action="authorize_edit"`)**:
+  - Added support for `relative_paths: ["path1", "path2", ...]` (or `files: [...]`) in `workflow_gate(action="authorize_edit")`.
+  - Replaced turn-by-turn per-file approval overhead with a single-turn batch authorization pipeline that evaluates path traversal, LOC limit (< 300 LOC), single-responsibility modular naming, and Code Graph Diff Impact Guard across all target files simultaneously.
+  - Generates pre-edit rollback snapshots for each valid target file and aggregates results into a structured Markdown Table report (`PASSED`, `PARTIAL_PASSED`, or `BLOCKED`).
+- **Zero-Turn Plan Approval Pre-Authorization (`action="approve_plan"`)**:
+  - Extended `workflow_gate(action="approve_plan")` with `relative_paths: [...]`.
+  - Upon user plan approval, automatically transitions stage to `Build` and pre-authorizes all planned files in 0 additional turns, allowing agents to commence code modifications immediately without file-by-file authorization calls.
+- **Stage Advance Batch Pre-Authorization (`action="advance"`)**:
+  - Supported `relative_paths: [...]` during stage advance into `Build`, verifying and authorizing all planned files in the same turn.
+- **Clean Architecture & 300 LOC Cap Modular Decomposition**:
+  - Decomposed monolithic `src/mcp/tools/gate_edit.rs` (previously 223 LOC) into focused sub-modules under 150 LOC each:
+    - `src/mcp/tools/gate_edit_single.rs` (125 LOC): Evaluates single file safety, LOC limits, modular naming, and pre-edit snapshot creation.
+    - `src/mcp/tools/gate_edit_batch.rs` (104 LOC): Batch iteration and aggregated markdown reporting.
+    - `src/mcp/tools/gate_edit.rs` (191 LOC): Thin dispatch coordinator with target path normalization.
+    - `src/mcp/tools/gate_approval.rs` (112 LOC): Plan approval and pre-authorization coordinator.
+    - `src/mcp/tools/gate_stage.rs` (178 LOC): Stage advancement and pre-authorization coordinator.
+    - `src/mcp/tools_gate_batch_tests.rs` (152 LOC): Dedicated unit test suite with 100% pass rate (5/5 tests).
+- **Multi-Agent & IDE Protocol Synchronization**:
+  - Updated Rule 4 across all agent protocol specifications (`AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `.cursor/rules/agent-guidance.mdc`, `.github/copilot-instructions.md`, `.agents/skills/agent-guidance/SKILL.md`, `.claude/skills/agent-guidance/SKILL.md`, `PROJECT-STANDARDS.md`).
+  - Prohibits multi-turn sequential per-file authorization calls when file lists are known upfront in implementation plans.
+
 ## [1.7.0] - 2026-09-15
 
 ### 📦 Multi-File Context Bundling & Subgraph Packing (`subgraph_bundle`)

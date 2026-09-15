@@ -54,6 +54,18 @@ This file contains standards, conventions, and rules specific to this project. A
 - **Multi-Component Prohibition (`MULTI_COMPONENT_NEW_FILE_PROHIBITED`):** File creation justifications describing multiple disparate responsibilities or containing connector conjunctions (`and`, `both`, `multiple`) will be rejected. Split into discrete sub-modules.
 - **How to Test (Optional):** Enforced automatically during `workflow_gate(action="authorize_edit")`.
 
+### 📖 Clustered & Token-Bounded Multi-File Read
+- **Rule (Required):** When inspecting multiple related files, ALWAYS use clustered read `project_context(operation="read", relative_paths=[...])` (or `operation="cluster_read"`) to read all relevant files in a single turn instead of issuing sequential single-file reads. Immediately follow up by authorizing the entire cluster in a single batch turn using `workflow_gate(action="authorize_edit", relative_paths=[...])`.
+- **Reason (Required):** Prevents multi-turn roundtrip latency and piecemeal exploration while preserving 100% context fidelity for files < 300 LOC (modular architecture). Files > 300 LOC automatically collapse to AST structural skeletons to avoid token blowout.
+- **Do / Good Example (Optional):** Calling `project_context(operation="read", relative_paths=["src/a.rs", "src/b.rs"])` to read both modules simultaneously.
+- **Don't / Bad Example (Optional):** Calling `project_context(operation="read", relative_path="src/a.rs")` followed by `project_context(operation="read", relative_path="src/b.rs")` across separate turns.
+- **How to Test (Optional):** Evaluated automatically via `project_context(operation="read", relative_paths=[...])` which outputs bounded contents and an auto-generated batch authorization tip.
+
+### ⚡ Batch & Pre-Authorization Gate (Fast-Path Mandate)
+- **Rule (Required):** Authorize all planned file edits in a single batch call via `workflow_gate(action="authorize_edit", relative_paths=[...])` or directly during plan approval via `workflow_gate(action="approve_plan", user_confirmed=true, relative_paths=[...])`. Calling `authorize_edit` individually file-by-file across multiple turns when a file list is known upfront is strictly forbidden. Individual authorization (`relative_path="..."`) is reserved solely for ad-hoc single files discovered during development.
+- **Reason (Required):** Eliminates unnecessary multi-turn roundtrips, reduces AI agent latency and token bloat, while preserving 100% of safety invariants (< 300 LOC cap, modular naming, code graph diff impact guard, and rollback snapshot creation).
+- **How to Test (Optional):** Calling `workflow_gate(action="authorize_edit", relative_paths=[...])` validates and snapshots all files in a single turn.
+
 ### ✅ Multi-Lingual & GUI User Approval Detection
 - **Rule (Required):** Moving from `Plan` to `Build` stage requires user approval. Approval is detected automatically via chat intent analysis or GUI interaction.
 - **Supported Triggers:**

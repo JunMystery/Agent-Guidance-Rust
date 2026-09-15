@@ -22,6 +22,14 @@ use daemon::handle_mcp_lines;
 #[tokio::main]
 async fn main() -> Result<()> {
     crate::mcp::mcp_logger::init_mcp_logger();
+    let max_threads = std::env::var("AGENT_GUIDANCE_MAX_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4);
+    let _ = rayon::ThreadPoolBuilder::new()
+        .num_threads(max_threads)
+        .thread_name(|i| format!("ag-worker-{i}"))
+        .build_global();
     // Handle flags that don't need logging
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--version".to_string()) || args.contains(&"-v".to_string()) {
@@ -283,7 +291,6 @@ async fn main() -> Result<()> {
     if daemon::try_proxy_mode().await {
         return Ok(());
     }
-
     // 2. Fallback: if proxy mode could not connect or spawn daemon, run direct stdio server
     tracing::warn!("Could not connect to shared daemon — falling back to direct stdio server.");
     daemon::handle_mcp_lines(tokio::io::stdin(), tokio::io::stdout()).await;

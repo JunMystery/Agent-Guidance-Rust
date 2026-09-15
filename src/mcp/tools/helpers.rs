@@ -1,12 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use crate::context::db::CodeGraphDb;
-use crate::context::indexer::IncrementalIndexer;
 use crate::context::scanner::scan_project;
 use crate::context::watcher::{is_watching, start_watching};
 use crate::mcp::state::ServerState;
-
-static EMBEDDING_THREAD_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub fn ensure_not_cancelled(state: &ServerState) -> Result<(), (i32, String)> {
     if state.is_cancelled() {
@@ -252,19 +248,7 @@ pub fn detect_project_path(explicit_path: &str, state: &ServerState) -> PathBuf 
 }
 
 pub fn ensure_indexed(proj_path: &Path) -> Option<CodeGraphDb> {
-    if let Ok(mut indexer) = IncrementalIndexer::new(proj_path) {
-        let _ = indexer.incremental_index();
-        let path = proj_path.to_path_buf();
-        if !EMBEDDING_THREAD_ACTIVE.swap(true, Ordering::SeqCst) {
-            std::thread::spawn(move || {
-                if let Ok(idx) = IncrementalIndexer::new(&path) {
-                    let _ = idx.embed_symbols();
-                    let _ = idx.embed_chunks();
-                }
-                EMBEDDING_THREAD_ACTIVE.store(false, Ordering::SeqCst);
-            });
-        }
-    }
+    let _ = crate::context::graph_rag::jit_sync::ensure_fresh_graph(proj_path, 15);
     if !is_watching(proj_path) {
         start_watching(proj_path);
     }
