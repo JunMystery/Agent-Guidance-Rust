@@ -102,15 +102,20 @@ pub fn get_semantic_relevant_learnings(
 
     let total = items.len();
 
-    // Tier 1: Try ML Embeddings Vector Search (Multilingual-E5 / ONNX)
+    // Tier 1: Try ML Embeddings Vector Search (Multilingual-E5 / ONNX) via Fast Single Batch
     if let Some(model) = crate::ml::embeddings::try_cached_model() {
         if let Ok(task_vec) = model.embed_text(task, Some("query")) {
-            let mut scored: Vec<(f32, &LearningItem)> = Vec::new();
+            let texts: Vec<String> = items
+                .iter()
+                .map(|item| format!("{}: {}", item.category, item.content))
+                .collect();
+            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
 
-            for (idx, item) in items.iter().enumerate() {
-                let text_to_embed = format!("{}: {}", item.category, item.content);
-                if let Ok(item_vec) = model.embed_text(&text_to_embed, Some("passage")) {
-                    let sim = crate::ml::embeddings::cosine_similarity(&task_vec, &item_vec);
+            if let Ok(item_vecs) = model.embed_batch(&text_refs, Some("passage"), 32) {
+                let mut scored: Vec<(f32, &LearningItem)> = Vec::with_capacity(items.len());
+
+                for (idx, (item, item_vec)) in items.iter().zip(item_vecs.iter()).enumerate() {
+                    let sim = crate::ml::embeddings::cosine_similarity(&task_vec, item_vec);
                     let recency_weight = (idx + 1) as f32 / total as f32;
                     let hybrid_score = 0.8 * sim + 0.2 * recency_weight;
 
@@ -118,25 +123,25 @@ pub fn get_semantic_relevant_learnings(
                         scored.push((hybrid_score, item));
                     }
                 }
-            }
 
-            if !scored.is_empty() {
-                scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-                return scored
-                    .into_iter()
-                    .take(limit)
-                    .map(|(_, i)| {
-                        let cat_label = if i.is_pinned {
-                            format!("PINNED:{}", i.category)
-                        } else {
-                            i.category.clone()
-                        };
-                        format!("- [{}] {}", cat_label, i.content)
-                    })
-                    .collect();
-            } else {
-                // Strict Context: no items met threshold
-                return Vec::new();
+                if !scored.is_empty() {
+                    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+                    return scored
+                        .into_iter()
+                        .take(limit)
+                        .map(|(_, i)| {
+                            let cat_label = if i.is_pinned {
+                                format!("PINNED:{}", i.category)
+                            } else {
+                                i.category.clone()
+                            };
+                            format!("- [{}] {}", cat_label, i.content)
+                        })
+                        .collect();
+                } else {
+                    // Strict Context: no items met threshold
+                    return Vec::new();
+                }
             }
         }
     }

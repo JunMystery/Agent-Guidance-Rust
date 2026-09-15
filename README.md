@@ -21,9 +21,9 @@
 
 Run the one-liner setup script for your operating system to download the latest release binary, pre-cache local ML models, and auto-register `agent-guidance` across all detected IDE clients:
 
-**Windows (PowerShell):**
+**Windows (PowerShell / CMD):**
 ```powershell
-powershell -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
+powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
 ```
 
 **Linux / macOS:**

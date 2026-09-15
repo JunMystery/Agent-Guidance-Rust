@@ -6,9 +6,9 @@ Agent Guidance MCP is a 100% Native Rust MCP server that gives AI coding agents 
 
 ### 1. Install
 
-**Windows (PowerShell):**
+**Windows (PowerShell / CMD):**
 ```powershell
-powershell -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
+powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
 ```
 
 **Linux / macOS:**
