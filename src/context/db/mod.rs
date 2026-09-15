@@ -25,7 +25,7 @@ impl CodeGraphDb {
         }
         let conn = Connection::open(db_path)?;
         let _ = conn.query_row("PRAGMA journal_mode = WAL", [], |r| r.get::<_, String>(0));
-        let _ = conn.busy_timeout(std::time::Duration::from_millis(2000));
+        let _ = conn.busy_timeout(std::time::Duration::from_millis(5000));
         let _ = conn.pragma_update(None, "synchronous", "NORMAL");
         let _ = conn.pragma_update(None, "foreign_keys", "ON");
 

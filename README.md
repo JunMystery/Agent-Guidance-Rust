@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.6.1-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.7.0-blue.svg)](Cargo.toml)
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
 [![Role](https://img.shields.io/badge/Role-Autonomous%20Orchestrator-indigo.svg)](#-key-capabilities)
 [![Smart Skills](https://img.shields.io/badge/Smart%20Skills-279%2B%20ML%20Search-cyan.svg)](#-smart-skills-system)
@@ -49,11 +49,11 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 | Tool Name | Role / Action | Mandatory Arguments | Key Capabilities |
 | :--- | :--- | :--- | :--- |
 | **`task_pipeline`** | **Entrypoint Orchestrator** | `task`, `project_path`, `phase` | CALL FIRST. Scans project, unlocks priority gate, proposes skills, synthesizes **Dynamic Split Blueprints** (detects $\ge 200$ LOC files) and **Skill Recipes**, and injects **Memorized Learnings**. |
-| **`select_skills`** | **Semantic Skill Loader** | `skills` | Loads skill instructions into context with **Semantic Slicing** (Top-3 sections via Multilingual-E5 saving ~70% tokens) and injects language safety micro-guidance. |
-| **`workflow_gate`** | **Stage & Impact Guard** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`, `rollback`). Features **Zero-Turn Advance**, **Code Graph Impact Risk Gating**, and **Pre-edit Snapshot Rollback**. |
-| **`project_context`** | **Code Graph, GraphRAG & AST Skeleton** | `operation` (`graph_rag` / `search` / `navigate` / `read` / `symbols` / `references` / `callers` / `callees` / `blast_radius` / `definition` / `type_definition` / `architecture` / `tree` / `learn_alias` / `reindex` / `enrich_graph` / `semantic_query`) | **Hierarchical Leiden GraphRAG** (`global`, `local`, `drift`, `basic`), 6-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, call-graph fanout (`callers`/`callees`/`blast_radius`), LSP definitions, configurable tree depth (`max_depth: 3`), and **AST Structural Skeletonization** (`view_mode="skeleton"`, saving 90-95% tokens on files >300 LOC). |
-| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify`) | 2-stage vector search over 279 embedded skills (440 vectors), language-specific precode safety rules (Kotlin, Go, Rust, TS, Python), and empirical verification contracts. |
-| **`session_continuity`** | **Memory & Handoff** | `operation` (`save` / `load` / `clear` / `learn` / `handoff`) | Persists active task states, records **Categorized Project Learnings** in `.agent-context/learnings.md` (30-item FIFO cap), and generates **Cross-Agent Handoff** summaries in `.agent-context/handoff.md`. |
+| **`select_skills`** | **Semantic Skill Loader** | `skills` | Loads skill instructions into context with **Semantic Slicing** (Top-3 sections via Multilingual-E5 saving ~70% tokens), records analytics, and injects language safety micro-guidance. |
+| **`workflow_gate`** | **Stage & Impact Guard** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`, `rollback`, `sync_file`). Features **Zero-Turn Advance**, **Code Graph Impact Risk Gating**, **Evolutionary Co-Change Forgotten File Alerts**, **Targeted Write-Through Invalidation (<10ms)**, and **Pre-edit Snapshot Rollback**. |
+| **`project_context`** | **Code Graph, GraphRAG & Multi-File Bundling** | `operation` (`graph_rag` / `search` / `subgraph_bundle` / `data_flow` / `navigate` / `read` / `symbols` / `references` / `callers` / `callees` / `blast_radius` / `definition` / `type_definition` / `architecture` / `tree` / `learn_alias` / `reindex` / `enrich_graph` / `semantic_query`) | **Hierarchical Leiden GraphRAG** (`global`, `local`, `drift`, `basic`), **Multi-File Subgraph Bundling** (`subgraph_bundle` packing target + 1-hop callers/callees under 250 LOC budget), **Intra-procedural Data Flow** (`data_flow`), **Deep Graph Federation** (Cargo & npm monorepo workspaces, cross-repo callers/callees), **Architecture Healing Sentinel** (Cycle & Orphan detection in `architecture`), **Search Precision** (Dynamic IDF + Intent Gating), 6-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, and **AST Structural Skeletonization** (`view_mode="skeleton"`). |
+| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify` / `analytics`) | 2-stage vector search over 279 embedded skills, **Cross-Session Skill Analytics** (`analytics` operation with historical boost), language-specific precode safety rules, and empirical verification contracts. |
+| **`session_continuity`** | **Memory, Snapshots & Handoff** | `operation` (`save` / `load` / `clear` / `learn` / `handoff` / `diff` / `list` / `switch`) | Persists active task states, records **Pairwise Co-Changes** into evolutionary graph, saves **Categorized Project Learnings** in `.agent-context/learnings.md` (30-item FIFO cap with vector deduplication), and generates **Cross-Agent Handoff** summaries in `.agent-context/handoff.md`. |
 
 ---
 
@@ -108,6 +108,22 @@ Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent ro
 - **Token Savings & Velocity Dynamics**: Interactive telemetry charts tracking original vs. compressed payload waves, peak velocity, and execution traces.
 - **Bilingual Interface (i18n)**: Full native parity for English (`en`) and Vietnamese (`vi`) with instant dynamic switching and persistent preferences.
 - **Zero-Friction Singleton Daemon**: Runs quietly in the background, serving all concurrent IDE instances, and automatically shuts down immediately once the last IDE window closes.
+
+### 8. Deep Graph Federation & Multi-Workspace Monorepos
+- **Automated Workspace Discovery**: Scans Cargo workspace members (`[workspace] members`), npm/pnpm/yarn workspaces, and Go work roots to seamlessly bind virtual monorepos into a single unified knowledge graph.
+- **Cross-Repo Call Graph Traversal**: Discovers callers and callees spanning across linked repository boundaries (`project_context(operation="callers" | "callees")`), tagged with clear repository namespaces (`[repo:lib-name]`).
+
+### 9. Continuous Learning Graph & Evolutionary Co-Change Alerts
+- **Pairwise Co-Change Tracking**: Automatically records co-edited file pairs into SQLite `co_change_edges` on session persistence (`session_continuity(operation="save")`).
+- **Predictive Forgotten File Sentinel**: Evaluates historical co-change coupling ($\ge 60\%$) during edit authorization (`workflow_gate(action="authorize_edit")`), warning agents when tightly coupled code files or test suites are accidentally overlooked.
+
+### 10. Architecture Healing Sentinel (Cycles & Dead Code)
+- **Circular Dependency Detection**: Directed DFS engine detects dependency loops between modules with rotational deduplication.
+- **Dead & Orphan Symbol Scanning**: Isolates unused internal symbols with zero callers and zero callees directly within `project_context(operation="architecture")`.
+
+### 11. Distributed Graph Memory & Verified Snapshots
+- **Portable Snapshot Archival**: Export and import verified GraphRAG database snapshots (`.agpack`) with SQLite WAL checkpointing, streaming SHA256 checksums, and pre-installation `PRAGMA quick_check` validation.
+- **Zero-Latency Team Onboarding**: Distribute pre-indexed code graphs across CI/CD runners or distributed multi-agent clusters without redundant 50,000 LOC AST parsing.
 
 ---
 

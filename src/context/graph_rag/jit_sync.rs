@@ -57,6 +57,24 @@ pub fn ensure_fresh_graph(project_path: &Path, debounce_secs: u64) -> Result<Opt
     Ok(None)
 }
 
+use crate::context::indexer::invalidator::{FileInvalidationReport, invalidate_and_sync_file};
+
+pub fn ensure_fresh_targeted_file(
+    project_path: &Path,
+    rel_path: &str,
+) -> Result<Option<FileInvalidationReport>> {
+    let clean = rel_path.trim().replace('\\', "/");
+    if clean.is_empty() {
+        return Ok(None);
+    }
+    let report = invalidate_and_sync_file(project_path, &clean)?;
+    if report.reindexed {
+        Ok(Some(report))
+    } else {
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

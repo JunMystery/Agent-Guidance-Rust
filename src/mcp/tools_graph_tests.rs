@@ -139,8 +139,15 @@ fn test_neighborhood_and_drift_retrieval() {
 
 #[test]
 fn test_jit_sync_execution() {
-    let res = crate::context::graph_rag::ensure_fresh_graph(std::path::Path::new("."), 0);
+    let temp_dir = std::env::temp_dir().join(format!("jit_sync_exec_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    let _ = std::fs::create_dir_all(temp_dir.join("src"));
+    std::fs::write(temp_dir.join("src").join("lib.rs"), "pub fn test_val() -> i32 { 1 }").unwrap();
+
+    let res = crate::context::graph_rag::ensure_fresh_graph(&temp_dir, 0);
     assert!(res.is_ok());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]

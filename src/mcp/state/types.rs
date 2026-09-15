@@ -80,6 +80,8 @@ pub struct ServerState {
     pub active_architecture_pattern: Option<String>,
     #[serde(default)]
     pub modified_files: Vec<String>,
+    #[serde(default)]
+    pub dirty_files: Vec<String>,
     #[serde(skip, default)]
     pub pending_skill_proposals: Vec<(String, String, f32)>,
     #[serde(skip, default)]
@@ -124,6 +126,7 @@ impl Default for ServerState {
             edit_authorized: false,
             active_architecture_pattern: None,
             modified_files: Vec::new(),
+            dirty_files: Vec::new(),
             pending_skill_proposals: Vec::new(),
             cancellation: None,
         }
@@ -244,10 +247,23 @@ impl ServerState {
 
     /// Records a relative file path modified during this active session.
     pub fn record_modified_file(&mut self, rel_path: &str) {
-        let clean = rel_path.trim().replace('\\', "/");
-        if !clean.is_empty() && !self.modified_files.contains(&clean) {
-            self.modified_files.push(clean);
+        let clean = rel_path
+            .trim()
+            .trim_start_matches(|c| c == '/' || c == '\\')
+            .replace('\\', "/");
+        if !clean.is_empty() {
+            if !self.modified_files.contains(&clean) {
+                self.modified_files.push(clean.clone());
+            }
+            if !self.dirty_files.contains(&clean) {
+                self.dirty_files.push(clean);
+            }
         }
+    }
+
+    /// Drains all dirty files queued for write-through invalidation.
+    pub fn drain_dirty_files(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.dirty_files)
     }
     pub fn record_call(&mut self, orig_tokens: u64, opt_tokens: u64) {
         self.tool_calls += 1;

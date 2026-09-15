@@ -26,7 +26,42 @@ pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String
         .canonicalize()
         .map_err(|e| format!("Invalid project path: {}", e))?;
 
-    let full_path = canonical_base.join(rel_path);
+    let clean_base = canonical_base.to_string_lossy();
+    let clean_base_str = clean_base.strip_prefix(r"\\?\").unwrap_or(&clean_base);
+    let p_clean_base = Path::new(clean_base_str);
+
+    let p_rel = Path::new(rel_path);
+    let stripped = if p_rel.is_absolute() {
+        if let Ok(sub) = p_rel.strip_prefix(base_path) {
+            sub.to_string_lossy().to_string()
+        } else if let Ok(sub) = p_rel.strip_prefix(&canonical_base) {
+            sub.to_string_lossy().to_string()
+        } else if let Ok(sub) = p_rel.strip_prefix(p_clean_base) {
+            sub.to_string_lossy().to_string()
+        } else if let Ok(can_rel) = p_rel.canonicalize() {
+            if let Ok(sub) = can_rel.strip_prefix(&canonical_base) {
+                sub.to_string_lossy().to_string()
+            } else {
+                return Err("Target path resolves outside workspace root.".to_string());
+            }
+        } else {
+            return Err("Target path resolves outside workspace root.".to_string());
+        }
+    } else {
+        rel_path.to_string()
+    };
+
+    // 2. Strip leading slashes and normalize separators
+    let clean_rel = stripped
+        .trim()
+        .trim_start_matches(|c| c == '/' || c == '\\')
+        .replace('\\', "/");
+
+    if clean_rel.is_empty() {
+        return Ok(canonical_base);
+    }
+
+    let full_path = canonical_base.join(&clean_rel);
 
     if full_path.exists() {
         let canonical_full = full_path

@@ -56,7 +56,7 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             }
             let path = entry.path();
             let relative = path.strip_prefix(&target_root).unwrap_or(path);
-            let rel_str = relative.to_string_lossy().to_string();
+            let rel_str = relative.to_string_lossy().replace('\\', "/");
 
             let ft = entry.file_type();
             let is_dir = ft.as_ref().map(|t| t.is_dir()).unwrap_or(false);

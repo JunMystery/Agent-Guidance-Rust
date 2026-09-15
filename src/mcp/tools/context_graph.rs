@@ -31,13 +31,34 @@ pub(crate) fn handle_architecture(proj_path: &Path, state: &mut ServerState) -> 
 
     let mermaid_dag = engine.architecture_mermaid(&arch_pattern);
 
+    let mut healing_report = String::new();
+    if let Ok(db) = crate::context::db::CodeGraphDb::open_for_project(proj_path) {
+        if let Ok(cycles) = crate::context::healing::detect_file_cycles(&db.conn) {
+            if !cycles.is_empty() {
+                healing_report.push_str(&format!("\n\n### ⚠️ Architecture Healing Sentinel: {} Circular Dependencies Detected\n", cycles.len()));
+                for (i, c) in cycles.iter().take(5).enumerate() {
+                    healing_report.push_str(&format!("{}. {}\n", i + 1, c.join(" ➔ ")));
+                }
+            }
+        }
+        if let Ok(orphans) = crate::context::healing::detect_orphan_symbols(&db.conn, 10) {
+            if !orphans.is_empty() {
+                healing_report.push_str(&format!("\n\n### 🧹 Architecture Healing Sentinel: Candidate Orphan Symbols\n"));
+                for o in orphans.iter().take(5) {
+                    healing_report.push_str(&format!("- `{}` in `{}:L{}` ({})\n", o.name, o.file_path, o.line, o.kind));
+                }
+            }
+        }
+    }
+
     format!(
-        "# Project Architecture Analysis (GraphRAG)\n\n- Detected / Memorized Pattern: **{}**\n- Workspace Root: {}\n- Total Hierarchical Communities: {}\n- Persistence: Memorized in `.agent-context/architecture.json`\n\n### Core Community Subsystems:\n{}\n\n### Architecture Dependency DAG:\n```mermaid\n{}\n```",
+        "# Project Architecture Analysis (GraphRAG)\n\n- Detected / Memorized Pattern: **{}**\n- Workspace Root: {}\n- Total Hierarchical Communities: {}\n- Persistence: Memorized in `.agent-context/architecture.json`\n\n### Core Community Subsystems:\n{}\n\n### Architecture Dependency DAG:\n```mermaid\n{}\n```{red}",
         arch_pattern,
         proj_path.display(),
         hierarchy.communities.len(),
         subsystems,
-        mermaid_dag
+        mermaid_dag,
+        red = healing_report
     )
 }
 
@@ -106,7 +127,7 @@ pub(crate) fn handle_callers(proj_path: &Path, query: &str) -> String {
         Err(e) => return format!("SQL error: {}", e),
     };
 
-    let callers: Vec<String> = stmt
+    let mut callers: Vec<String> = stmt
         .query_map([query.trim()], |row| {
             let name: String = row.get(0)?;
             let file: String = row.get(1)?;
@@ -117,6 +138,14 @@ pub(crate) fn handle_callers(proj_path: &Path, query: &str) -> String {
         })
         .map(|iter| iter.filter_map(|r| r.ok()).collect())
         .unwrap_or_default();
+
+    // Milestone v1.9.0: Multi-Workspace Federated Callers
+    let fed = crate::context::federation::federated_search_callers(proj_path, query.trim(), 20);
+    for f in fed {
+        if f.repo != "local" {
+            callers.push(format!("- `{}` in `[repo:{}] {}:L{}` [{}]", f.symbol_name, f.repo, f.file_path, f.line, f.edge_type));
+        }
+    }
 
     if callers.is_empty() {
         format!("# Callers of '{}'\n\nNo incoming callers found in symbol graph.", query.trim())
@@ -146,7 +175,7 @@ pub(crate) fn handle_callees(proj_path: &Path, query: &str) -> String {
         Err(e) => return format!("SQL error: {}", e),
     };
 
-    let callees: Vec<String> = stmt
+    let mut callees: Vec<String> = stmt
         .query_map([query.trim()], |row| {
             let name: String = row.get(0)?;
             let file: String = row.get(1)?;
@@ -157,6 +186,14 @@ pub(crate) fn handle_callees(proj_path: &Path, query: &str) -> String {
         })
         .map(|iter| iter.filter_map(|r| r.ok()).collect())
         .unwrap_or_default();
+
+    // Milestone v1.9.0: Multi-Workspace Federated Callees
+    let fed = crate::context::federation::federated_search_callees(proj_path, query.trim(), 20);
+    for f in fed {
+        if f.repo != "local" {
+            callees.push(format!("- `{}` in `[repo:{}] {}:L{}` [{}]", f.symbol_name, f.repo, f.file_path, f.line, f.edge_type));
+        }
+    }
 
     if callees.is_empty() {
         format!("# Callees of '{}'\n\nNo outgoing callees found in symbol graph.", query.trim())

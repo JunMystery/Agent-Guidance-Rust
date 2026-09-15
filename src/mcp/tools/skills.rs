@@ -89,6 +89,7 @@ pub(crate) fn handle(
             let clean_name = clean_skill_identifier(raw_req);
             if let Some((canonical_name, content, tag_str)) = resolve_skill(raw_req, &proposals, &all_skills, &proj_path) {
                 crate::mcp::db::log_skill_load(&canonical_name);
+                crate::ml::skill_analytics::record_skill_usage(&proj_path, &canonical_name);
                 raw_token_acc += estimate_tokens(&content, false);
                 let processed = if !task_arg.is_empty() && !content.is_empty() {
                     crate::catalog::slicing::slice_skill_markdown(&content, task_arg, 3)

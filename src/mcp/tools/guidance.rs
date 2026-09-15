@@ -28,6 +28,11 @@ pub(crate) fn handle(
         "ui_ux" => super::guidance_docs::handle_ui_ux(&query),
         "precode" => Ok(super::guidance_precode::handle_precode(&arguments, &query, state)),
         "verify" => super::guidance_verify::handle_verify(&arguments, state),
+        "analytics" | "skill_analytics" => {
+            let p_arg = arguments.get("project_path").and_then(|p| p.as_str()).unwrap_or(".");
+            let p = super::helpers::detect_project_path(p_arg, state);
+            Ok(crate::ml::skill_analytics::format_skill_analytics_report(&p))
+        }
         _ => Ok(format!("Guidance operation '{}' completed successfully.", op)),
     }
 }

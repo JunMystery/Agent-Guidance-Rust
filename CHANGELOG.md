@@ -2,6 +2,82 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.7.0] - 2026-09-15
+
+### 📦 Multi-File Context Bundling & Subgraph Packing (`subgraph_bundle`)
+- **Single-Turn Multi-File Context Packing**:
+  - Implemented `project_context(operation="subgraph_bundle")` (alias: `context_bundle`) in `src/mcp/tools/context_bundle.rs` and `src/context/graph_rag/subgraph_bundle.rs`.
+  - Aggregates target symbol definition, 1-hop caller snippets, and 1-hop callee snippets into a single compact context bundle, eliminating 3-4 disjoint agent tool calls.
+- **Strict Token-Bounded Budget Enforcement**:
+  - Default 250 LOC budget clamp (`loc_budget`, clamped range 50..=500 LOC) distributed across target (35%), callers (35%), and callees (30%).
+  - Single-pass $O(k)$ line truncation at 300 characters (`bundle_snippet_extractor.rs`) preventing minified or single-line files from blowing out token windows.
+  - Safe omission banners (`// ... [N lines omitted] ...`) without synthetic line number artifacts.
+- **Cross-Platform Path Normalization (Windows / Linux / macOS)**:
+  - Unified POSIX `/` forward-slash output in markdown snippets and code banners across all operating systems.
+  - SQLite queries utilize `REPLACE(file_path, '\\', '/') = ?2` to seamlessly match path separators on Windows and Unix platforms.
+  - Filesystem resolution uses `build_safe_path` splitting on both slashes (`/` and `\`) and pushing segments sequentially to avoid literal backslash failures on Unix.
+- **Accurate Graph Topology & Blast Radius Metrics**:
+  - Preserves exact caller/callee counts and structural blast radius scores in headers even when LOC budget limits snippet bodies.
+  - Query prioritizes known call lines (`(e.line IS NOT NULL) DESC`) and files matching exact path scopes (`ORDER BY (REPLACE(...) = ?2) DESC`).
+  - Symmetric recursion filtering (`source_id != target_id`) excludes self-recursive duplicates on both callers and callees to maximize unique architectural context.
+- **Security & Stale State Hardening**:
+  - Robust path traversal prevention blocking relative directory navigation (`part != ".."`) and out-of-boundary paths.
+  - Out-of-bounds guards protecting against stale SQLite line numbers when files shrink on disk (`start_line > total_lines`, `call_line > total_lines`).
+
+### 🔍 Search Precision & Real-Time Write-Through AST Invalidation
+- **Dynamic Inverse Document Frequency (IDF) Down-Weighting**:
+  - Analyzes term frequency across all indexed project files in `src/context/search/idf.rs`.
+  - Terms occurring in > 30% of codebase files (or ubiquitous keywords like `graph`, `project`, `config`, `state` occurring in > 20%) are down-weighted by a factor of `0.25x` to eliminate false-positive utility noise.
+- **Search Intent Gating & Role Penalties**:
+  - Distinguishes between `Logic`, `Guidance`, and `Universal` intent in `src/context/search/intent.rs`.
+  - Guidance intent boosts markdown documentation 2.50x and dampens source code; Logic intent boosts source code 1.50x and dampens documentation.
+  - Test files/fixtures are penalized by `0.40x` unless explicit test keywords are requested; utility files penalized by `0.70x`.
+- **Targeted Write-Through AST Invalidation (<10ms)**:
+  - Added `is_file_dirty` and `invalidate_and_sync_file` in `src/context/indexer/invalidator.rs`.
+  - Immediately refreshes symbols and AST edges for touched files upon edit authorization (`workflow_gate`) without waiting for 5-second watcher debounce.
+
+### 🌊 Lightweight Data Flow & Dynamic Trait Resolution
+- **Intra-Procedural Dataflow Traversal**:
+  - Added `data_flow_edges` table tracking parameter-to-call flow (`flows_into`) across statements.
+  - Supports `project_context(operation="data_flow", query="<param_or_var>")` to trace parameter propagation across call sites.
+- **Dynamic Trait & Interface Implementation Links**:
+  - Trait resolver maps struct method implementations (`impl Trait for Struct`) to parent trait definitions with `implements_method` edges in `symbol_edges`.
+
+### 📊 Cross-Session Skill Analytics & Contextual Boost
+- **Historical Skill Tracking**:
+  - Records project-specific skill invocations in `project_skill_analytics` table within `usage.db`.
+  - `apply_analytics_boost` awards a frequency-based analytical bonus (+0.02 per invocation, clamped at +0.12) to prioritize domain-specific skills during candidate ranking.
+  - Added `guidance(operation="analytics")` producing markdown summary tables of accumulated project skills.
+
+### 🌐 Deep Graph Federation & Multi-Workspace Auto-Discovery
+- **Monorepo & Multi-Workspace Auto-Detection**:
+  - Implemented `auto_discover_workspaces` in `src/context/federation/workspace_detector.rs`.
+  - Automatically identifies Cargo workspace members (`[workspace] members`), npm/pnpm workspaces, and Go work roots without requiring manual configuration files.
+- **Federated Callers & Callees Traversal**:
+  - `federated_search_callers` and `federated_search_callees` in `src/context/federation/federated_traversal.rs`.
+  - Seamlessly queries secondary project code graphs and attaches clear namespace tags (`[repo:lib-name]`).
+
+### 🔄 Continuous Learning Graph & Co-Change Evolutionary Coupling
+- **Pairwise Co-Change Recording**:
+  - Added `co_change_edges` table with normalized alphabetical pairs (`file_a < file_b`).
+  - Automatically records co-edited files during `session_continuity(operation="save")`.
+- **Predictive Forgotten File Sentinel**:
+  - `predict_coupled_files` in `src/context/co_change/predictor.rs` identifies coupled files with $\ge 60\%$ historical co-change confidence.
+  - Emits proactive warnings (`> [!TIP] Co-Change Coupling Alert`) in `workflow_gate(action="authorize_edit")` when an agent forgets to update an associated file or test suite.
+
+### 🩺 Architecture Healing Sentinel
+- **Circular Dependency Detection**:
+  - Directed DFS algorithm in `src/context/healing/cycle_detector.rs` finds file-level dependency loops with rotation deduplication.
+- **Dead & Orphan Symbol Scanning**:
+  - `detect_orphan_symbols` in `src/context/healing/orphan_scanner.rs` identifies dead internal symbols (zero callers and zero callees).
+  - Diagnostic insights automatically rendered in `project_context(operation="architecture")`.
+
+### 💾 Distributed Graph Memory & Verified Snapshots
+- **Graph Snapshot Pack & Unpack**:
+  - Implemented `export_graph_snapshot` and `import_graph_snapshot` in `src/context/distributed/snapshot.rs`.
+  - Includes SQLite WAL flush (`PRAGMA wal_checkpoint(TRUNCATE)`), streaming checksum calculation, pre-installation `PRAGMA quick_check;` validation, and atomic file replacement.
+  - Enables zero-latency GraphRAG cache sharing across distributed agents and CI/CD pipelines.
+
 ## [1.6.2] - 2026-09-14
 
 ### 🕸️ Multi-Mode GraphRAG Visualizer & File Function Drill-Down

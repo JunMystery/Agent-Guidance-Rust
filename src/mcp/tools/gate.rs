@@ -52,6 +52,25 @@ pub(crate) fn handle(
         "set_architecture" => handle_set_architecture(&arguments, state, &proj_path),
         "advance" | "advance_stage" => handle_advance(&arguments, state, &proj_path),
         "authorize_edit" => handle_authorize_edit(&arguments, state),
+        "invalidate" | "sync_file" => {
+            let rel_path = arguments
+                .get("relative_path")
+                .and_then(|r| r.as_str())
+                .unwrap_or("");
+            if rel_path.is_empty() {
+                "# Workflow Gate: [invalidate]\n\nError: 'relative_path' is required for invalidate/sync_file action.".to_string()
+            } else {
+                match crate::context::indexer::invalidator::invalidate_and_sync_file(&proj_path, rel_path) {
+                    Ok(rep) => {
+                        format!(
+                            "# Workflow Gate: [invalidate]\n\n- File: `{}`\n- Reindexed: {}\n- Symbols: {}\n- Edges: {}\n- Duration: {}ms\n\nWrite-through AST sync complete.",
+                            rep.rel_path, rep.reindexed, rep.symbols_extracted, rep.edges_created, rep.duration_ms
+                        )
+                    }
+                    Err(e) => format!("# Workflow Gate: [invalidate]\n\nError syncing file `{}`: {}", rel_path, e),
+                }
+            }
+        }
         "rollback" => handle_rollback(state, &proj_path),
         _ => handle_check(state),
     };

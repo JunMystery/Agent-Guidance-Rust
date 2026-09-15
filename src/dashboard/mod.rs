@@ -57,11 +57,7 @@ pub(crate) struct StatsCache {
 
 pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<()> {
     DASHBOARD_PORT.store(port, Ordering::SeqCst);
-    let proj_dir = project_path.unwrap_or_else(|| {
-        std::env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| ".".to_string())
-    });
+    let proj_dir = project_path.unwrap_or_else(|| "all".to_string());
 
     let addr = format!("127.0.0.1:{}", port);
     let server = Server::http(&addr)

@@ -163,6 +163,7 @@ pub fn resolve_all_cross_edges(conn: &mut Connection, project_path: &Path) -> Re
     }
 
     let count = edges.len();
+    let all_files: Vec<String> = file_symbols.keys().cloned().collect();
     let tx = conn.transaction()?;
     {
         let mut insert_stmt = tx.prepare(
@@ -174,7 +175,24 @@ pub fn resolve_all_cross_edges(conn: &mut Connection, project_path: &Path) -> Re
         }
     }
     tx.commit()?;
-    Ok(count)
+
+    // Resolve dynamic dispatch & trait implementations
+    let dispatch_count = super::cross_edges_dispatch::resolve_dispatch_edges(
+        conn,
+        &all_files,
+        project_path,
+        &name_to_syms,
+    ).unwrap_or(0);
+
+    // Resolve intra-procedural data flow edges
+    let dataflow_count = super::cross_edges_dataflow::resolve_dataflow_edges(
+        conn,
+        &all_files,
+        project_path,
+        &name_to_syms,
+    ).unwrap_or(0);
+
+    Ok(count + dispatch_count + dataflow_count)
 }
 
 fn resolve_call_target(

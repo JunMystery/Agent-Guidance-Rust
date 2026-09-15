@@ -27,10 +27,11 @@ impl CodeGraphDb {
         }
 
         let mut stmt = self.conn.prepare(
-            "SELECT s.file_path, s.name, s.start_line 
+            "SELECT s.file_path, s.name, s.start_line
              FROM symbols s
              JOIN symbols_fts f ON s.rowid = f.rowid
              WHERE symbols_fts MATCH ?
+             ORDER BY bm25(symbols_fts)
              LIMIT ?",
         )?;
 

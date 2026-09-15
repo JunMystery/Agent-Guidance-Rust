@@ -101,8 +101,11 @@ pub(crate) fn handle_search(
 
     // Stage 2: 2nd Stage Context & Intent Re-ranking
     let selector = LLMSelector::new();
-    let final_results = selector.rerank(&search_query, stage1_5_results, &profile, 20);
+    let reranked = selector.rerank(&search_query, stage1_5_results, &profile, 20);
     ensure_not_cancelled(state)?;
+
+    // Stage 2.5: Cross-Session Skill Analytics Contextual Boost
+    let final_results = crate::ml::skill_analytics::apply_analytics_boost(reranked, &proj_path);
 
     let mut seen_names = std::collections::HashSet::new();
     let mut deduped_results = Vec::new();

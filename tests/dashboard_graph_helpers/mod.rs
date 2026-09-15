@@ -198,6 +198,7 @@ impl TestGraphContext {
         .unwrap();
     }
 
+    #[allow(dead_code)]
     pub fn populate_standard_topology(&self) {
         self.insert_symbol("c::handle_req", "handle_req", "function", "src/controller.rs", 10, 30);
         self.insert_symbol("c::validate", "validate", "function", "src/controller.rs", 35, 50);

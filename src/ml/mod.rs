@@ -2,6 +2,7 @@ pub mod cross_encoder;
 pub mod embeddings;
 pub mod llm_selector;
 pub mod onnx_engine;
+pub mod skill_analytics;
 pub mod skill_graphrag_gate;
 
 use rayon::ThreadPool;
@@ -165,3 +166,6 @@ pub fn is_generic_skill_stopword(word: &str) -> bool {
             | "tại"
     )
 }
+
+#[cfg(test)]
+mod skill_analytics_tests;

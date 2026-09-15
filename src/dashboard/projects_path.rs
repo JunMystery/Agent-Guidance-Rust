@@ -100,19 +100,25 @@ pub fn find_project_root(path: &Path) -> PathBuf {
     curr
 }
 
-/// Normalizes project path string across platforms (uppercasing Windows drive, trimming trailing slashes, consistent separator).
+/// Normalizes project path string across platforms (uppercasing Windows drive on Windows, standardizing separators, trimming trailing slashes).
 pub fn normalize_project_path(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return String::new();
     }
 
-    let mut s = trimmed.replace('/', "\\");
-    while s.len() > 3 && (s.ends_with('\\') || s.ends_with('/')) {
+    let is_win_drive = trimmed.len() >= 2 && trimmed.as_bytes()[1] == b':';
+    let is_windows = cfg!(windows) || is_win_drive;
+
+    let sep = if is_windows { '\\' } else { '/' };
+    let alt_sep = if is_windows { '/' } else { '\\' };
+
+    let mut s = trimmed.replace(alt_sep, &sep.to_string());
+    while s.len() > (if is_windows { 3 } else { 1 }) && (s.ends_with(sep) || s.ends_with(alt_sep)) {
         s.pop();
     }
 
-    if s.len() >= 2 && s.as_bytes()[1] == b':' {
+    if is_win_drive {
         let first = s.chars().next().unwrap();
         if first.is_ascii_lowercase() {
             let upper = first.to_ascii_uppercase().to_string();
@@ -123,28 +129,18 @@ pub fn normalize_project_path(raw: &str) -> String {
     let p = Path::new(&s);
     let resolved = find_project_root(p);
 
-    if let Ok(canonical) = resolved.canonicalize() {
+    let base_str = if let Ok(canonical) = resolved.canonicalize() {
         let c_str = canonical.to_string_lossy().to_string();
-        let stripped = c_str.strip_prefix(r"\\?\").unwrap_or(&c_str);
-        let mut res = stripped.replace('/', "\\");
-        while res.len() > 3 && (res.ends_with('\\') || res.ends_with('/')) {
-            res.pop();
-        }
-        if res.len() >= 2 && res.as_bytes()[1] == b':' {
-            let first = res.chars().next().unwrap();
-            if first.is_ascii_lowercase() {
-                let upper = first.to_ascii_uppercase().to_string();
-                res.replace_range(..1, &upper);
-            }
-        }
-        return res;
-    }
+        c_str.strip_prefix(r"\\?\").unwrap_or(&c_str).to_string()
+    } else {
+        resolved.to_string_lossy().to_string()
+    };
 
-    let mut res = resolved.to_string_lossy().replace('/', "\\");
-    while res.len() > 3 && (res.ends_with('\\') || res.ends_with('/')) {
+    let mut res = base_str.replace(alt_sep, &sep.to_string());
+    while res.len() > (if is_windows { 3 } else { 1 }) && (res.ends_with(sep) || res.ends_with(alt_sep)) {
         res.pop();
     }
-    if res.len() >= 2 && res.as_bytes()[1] == b':' {
+    if is_win_drive || (res.len() >= 2 && res.as_bytes()[1] == b':') {
         let first = res.chars().next().unwrap();
         if first.is_ascii_lowercase() {
             let upper = first.to_ascii_uppercase().to_string();

@@ -21,3 +21,5 @@ mod snapshots_tests;
 mod tests_gui_approval;
 #[cfg(test)]
 mod tools_bundle_tests;
+#[cfg(test)]
+mod tools_path_tests;

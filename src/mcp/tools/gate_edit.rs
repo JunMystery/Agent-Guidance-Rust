@@ -170,6 +170,18 @@ pub(crate) fn handle_authorize_edit(
             resp.push_str(&format!("\n\n**Impact Guard**: {}", warn));
         }
 
+        // Milestone v1.9.0: Check Co-Change Evolutionary Coupling
+        if let Ok(db) = crate::context::db::CodeGraphDb::open_for_project(&proj_path) {
+            if let Ok(coupled) = crate::context::co_change::predict_coupled_files(&db.conn, &[rel_path.to_string()], 1, 0.6) {
+                if let Some(top) = coupled.first() {
+                    resp.push_str(&format!(
+                        "\n\n> [!TIP] **Co-Change Coupling Alert**: Historically, `{}` is modified together with `{}` ({} co-changes, {:.0}% confidence). Verify whether `{}` also requires updates.",
+                        top.coupled_with, top.file, top.co_change_count, top.confidence * 100.0, top.file
+                    ));
+                }
+            }
+        }
+
         resp
     } else {
         format!(

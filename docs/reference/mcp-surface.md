@@ -124,6 +124,7 @@ project_context(
     query: str | None = None,          # search query / natural language / symbol name
     relative_path: str | None = None,  # relative file path for read, symbols, structure, learn_alias
     target_symbol: str | None = None,  # precise function/struct/class symbol to extract
+    loc_budget: int = 250,             # LOC budget for subgraph_bundle (default: 250, clamped: 50..=500)
     max_depth: int = 3,                # max directory depth for tree operation (default: 3, max: 5)
     start_line: int | None = None,     # 1-indexed start line for read slice
     end_line: int | None = None,       # 1-indexed end line for read slice (max 300 LOC range)
@@ -144,6 +145,7 @@ project_context(
 | Operation | Required Args | Description |
 |---|---|---|
 | `search` | `query` | 6-Phase Instant Cascade (<100ms): Alias Cache (<1ms) → Symbol FTS5 (<5ms) → Symbol Vectors (<50ms) → Content FTS5 (<5ms) → RAG Content Vectors (<100ms) → Linked Sibling Projects. Top matches auto-cached to alias index. |
+| `subgraph_bundle` | `target_symbol` (or `query` / `symbol`) | Single-turn multi-file context pack: Target symbol definition + 1-hop caller snippets + 1-hop callee snippets under token budget (default 250 LOC, clamped 50..=500). Single-pass 300-char line truncation and path normalization across OSes. (Alias: `context_bundle`). |
 | `tree` | -- | Repository directory tree scan. Accepts `max_depth` (default: 3, range: 1..=5). |
 | `read` | `relative_path` | Bounded file read with 300 LOC cap. Auto-skeletonizes files > 300 LOC unless line slice or `target_symbol` specified. Supports `start_line`/`end_line` slicing, `view_mode="zoom"` or `"slice"` (folds sibling function bodies). |
 | `symbols` | `relative_path` | Extract functions, structs, enums, classes, and traits across 6+ languages (Alias: `structure`). |
@@ -165,6 +167,7 @@ project_context(
 **Examples:**
 ```python
 project_context(operation="tree", project_path="E:/Github/MyApp", max_depth=3)
+project_context(operation="subgraph_bundle", project_path="E:/Github/MyApp", target_symbol="handle_request", loc_budget=250)
 project_context(operation="search", project_path="E:/Github/MyApp", query="handle_api_stats")
 project_context(operation="callers", project_path="E:/Github/MyApp", query="scan_project")
 project_context(operation="callees", project_path="E:/Github/MyApp", query="handle_request")

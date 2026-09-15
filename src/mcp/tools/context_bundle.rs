@@ -13,13 +13,15 @@ pub(crate) fn handle_subgraph_bundle(
         return "Error: target_symbol or query parameter is required for subgraph_bundle operation. Example: project_context(operation=\"subgraph_bundle\", target_symbol=\"my_function\")".to_string();
     }
 
+    let rel_path = arguments.get("relative_path").and_then(|r| r.as_str());
+
     let budget = arguments
         .get("loc_budget")
-        .and_then(|v| v.as_u64())
+        .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
         .map(|v| v as usize)
         .unwrap_or(250);
 
-    let bundle = match build_subgraph_bundle(proj_path, clean_target, budget) {
+    let bundle = match build_subgraph_bundle(proj_path, clean_target, rel_path, budget) {
         Ok(Some(b)) => b,
         Ok(None) => {
             return format!(
@@ -32,12 +34,14 @@ pub(crate) fn handle_subgraph_bundle(
         }
     };
 
+    let clean_target_file = bundle.target.file_path.replace('\\', "/");
+
     let mut out = Vec::new();
     out.push(format!(
         "# 📦 Multi-File Subgraph Bundle: `{}`\n- **Symbol Kind**: `{}` | **File**: `{}:L{}-L{}`\n- **Blast Radius**: **{}** (Score: {:.1}/10) | **Packed LOC**: {}/{} lines",
         bundle.target.name,
         bundle.target.kind,
-        bundle.target.file_path,
+        clean_target_file,
         bundle.target.start_line,
         bundle.target.end_line,
         bundle.risk_level,
@@ -51,7 +55,7 @@ pub(crate) fn handle_subgraph_bundle(
     if let Some(ref snip) = bundle.target_snippet {
         out.push(format!(
             "```\n// [{}:L{}-L{}]\n{}\n```",
-            snip.file_path,
+            snip.file_path.replace('\\', "/"),
             snip.start_line,
             snip.end_line,
             snip.format_with_line_numbers()
@@ -59,15 +63,17 @@ pub(crate) fn handle_subgraph_bundle(
     } else {
         out.push(format!(
             "*(Target implementation body could not be extracted from `{}`)*",
-            bundle.target.file_path
+            clean_target_file
         ));
     }
 
     // 2. Immediate Inbound Callers
-    out.push(format!(
-        "\n## ⬆️ Immediate Callers (1-Hop Inbound: {})",
-        bundle.callers.len()
-    ));
+    let callers_hdr = if bundle.total_callers_count > bundle.callers.len() {
+        format!("\n## ⬆️ Immediate Callers (Showing {} of {} total calls)", bundle.callers.len(), bundle.total_callers_count)
+    } else {
+        format!("\n## ⬆️ Immediate Callers (1-Hop Inbound: {})", bundle.callers.len())
+    };
+    out.push(callers_hdr);
     if bundle.callers.is_empty() {
         out.push("*(No direct incoming callers found in current AST graph — isolated entrypoint/leaf)*".to_string());
     } else {
@@ -76,7 +82,7 @@ pub(crate) fn handle_subgraph_bundle(
                 "### {}. `{}` in `{}:L{}` [{}, weight: {:.1}]",
                 i + 1,
                 c.symbol_name,
-                c.file_path,
+                c.file_path.replace('\\', "/"),
                 c.call_line,
                 c.edge_type,
                 c.weight
@@ -90,10 +96,12 @@ pub(crate) fn handle_subgraph_bundle(
     }
 
     // 3. Immediate Outbound Dependencies
-    out.push(format!(
-        "\n## ⬇️ Immediate Dependencies (1-Hop Outbound: {})",
-        bundle.callees.len()
-    ));
+    let callees_hdr = if bundle.total_callees_count > bundle.callees.len() {
+        format!("\n## ⬇️ Immediate Dependencies (Showing {} of {} total calls)", bundle.callees.len(), bundle.total_callees_count)
+    } else {
+        format!("\n## ⬇️ Immediate Dependencies (1-Hop Outbound: {})", bundle.callees.len())
+    };
+    out.push(callees_hdr);
     if bundle.callees.is_empty() {
         out.push("*(No outgoing dependencies recorded for this symbol)*".to_string());
     } else {
@@ -102,7 +110,7 @@ pub(crate) fn handle_subgraph_bundle(
                 "### {}. `{}` in `{}:L{}` [{}, weight: {:.1}]",
                 i + 1,
                 c.symbol_name,
-                c.file_path,
+                c.file_path.replace('\\', "/"),
                 c.start_line,
                 c.edge_type,
                 c.weight

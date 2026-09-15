@@ -4,6 +4,13 @@ use std::path::Path;
 use crate::mcp::state::ServerState;
 
 pub(crate) fn handle_save(state: &ServerState, proj_path: &Path) -> String {
+    // Milestone v1.9.0: Evolutionary Coupling Graph - record pairwise co-changes
+    if state.modified_files.len() >= 2 {
+        if let Ok(db) = crate::context::db::CodeGraphDb::open_for_project(proj_path) {
+            let _ = crate::context::co_change::record_session_co_changes(&db.conn, &state.modified_files);
+        }
+    }
+
     match state.save_to_dir(proj_path) {
         Ok(_) => format!(
             "# Session Continuity\n\nSession state saved successfully to `.agent-context/sessions/{}.json`.",

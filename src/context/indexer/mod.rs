@@ -9,13 +9,17 @@ use crate::context::scanner::scan_project;
 
 pub mod chunking;
 pub mod cross_edges;
+pub mod cross_edges_dataflow;
+pub mod cross_edges_dispatch;
 pub mod doc_data;
 pub mod edge_parser;
 pub mod embedder;
 pub mod import_resolver;
+pub mod invalidator;
 pub mod parsers;
 pub mod resolver;
 pub use edge_parser::extract_edges_from_content;
+pub use invalidator::{FileInvalidationReport, invalidate_and_sync_file, is_file_dirty, sync_dirty_files};
 pub use parsers::{
     CodeChunk, ExtractedEdge, ExtractedSymbol, chunk_code_content,
     extract_symbols_from_content,
@@ -141,15 +145,19 @@ impl IncrementalIndexer {
         };
 
         for path in paths {
-            let rel_str = path.to_string_lossy().to_string();
-            let full_path = self.project_path.join(path);
+            let clean_str = path
+                .to_string_lossy()
+                .replace('\\', "/")
+                .trim_start_matches('/')
+                .to_string();
+            let full_path = self.project_path.join(&clean_str);
             if !full_path.exists() {
                 // File was deleted
-                let _ = self.db.delete_file(&rel_str);
+                let _ = self.db.delete_file(&clean_str);
                 continue;
             }
 
-            if self.index_file(&rel_str, &mut report)? {
+            if self.index_file(&clean_str, &mut report)? {
                 report.files_indexed += 1;
             } else {
                 report.files_skipped += 1;
@@ -194,6 +202,10 @@ impl IncrementalIndexer {
         let prefix = format!("{}::%", rel_path);
         let _ = self.db.conn.execute(
             "DELETE FROM symbol_edges WHERE source_id LIKE ?1 OR target_id LIKE ?1",
+            rusqlite::params![prefix],
+        );
+        let _ = self.db.conn.execute(
+            "DELETE FROM data_flow_edges WHERE caller_symbol_id LIKE ?1 OR callee_symbol_id LIKE ?1",
             rusqlite::params![prefix],
         );
 
@@ -274,9 +286,13 @@ impl IncrementalIndexer {
 #[cfg(test)]
 #[path = "../indexer_tests.rs"]
 mod tests;
-
 #[cfg(test)]
 mod chunking_tests;
-
 #[cfg(test)]
 mod embedder_tests;
+#[cfg(test)]
+mod dispatch_tests;
+#[cfg(test)]
+mod dataflow_tests;
+#[cfg(test)]
+mod invalidator_tests;

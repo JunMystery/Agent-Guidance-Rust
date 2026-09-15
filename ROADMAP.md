@@ -8,14 +8,14 @@ Tài liệu này ghi nhận hiện trạng năng lực, các điểm nghẽn k�
 
 Hệ thống GraphRAG hiện tại đạt hiệu năng cao trong việc định vị symbol đơn lẻ (< 100ms), phân tích bán kính tác động (`blast_radius`), và bảo toàn token (`view_mode="zoom"`). Tuy nhiên, qua quá trình kiểm thử thực tế và vận hành cùng các AI Agent (Antigravity, Claude, Cursor), hệ thống tồn tại 4 điểm nghẽn cốt lõi cần giải quyết:
 
-### 1. Thiếu Multi-File Context Bundling (Điểm Nghẽn Lớn Nhất)
-- **Hiện trạng**:
+### 1. Multi-File Context Bundling [✅ Đã giải quyết ở v1.7.0]
+- **Hiện trạng trước đây**:
   - Thao tác `project_context(operation="read", view_mode="zoom")` chỉ hoạt động cục bộ trên từng file riêng lẻ.
   - Khi một tác vụ sửa lỗi hoặc tái cấu trúc trải dài trên chuỗi gọi 3–4 files (ví dụ: `Controller` $\rightarrow$ `Service` $\rightarrow$ `Repository` $\rightarrow$ `Entity`), Agent buộc phải gọi 3–4 tool calls riêng rẽ để đọc từng file.
 - **Hệ quả**: Làm tăng số turn đàm thoại, gây trễ phản hồi và tăng nguy cơ trôi ngữ cảnh khi Agent phải tự chắp vá các mảnh code rời rạc.
-- **Giải pháp quy hoạch**:
-  - Triển khai thao tác `project_context(operation="subgraph_bundle", target_symbol="...")`.
-  - Tự động gom mã nguồn của hàm mục tiêu cùng các đoạn code quan trọng của 1-hop callers và 1-hop callees vào **1 context bundle duy nhất** được nén và giới hạn chặt chẽ (< 250 LOC).
+- **Giải pháp đã triển khai (v1.7.0)**:
+  - Triển khai thao tác `project_context(operation="subgraph_bundle", target_symbol="...")` (alias: `context_bundle`).
+  - Tự động gom mã nguồn của hàm mục tiêu cùng các đoạn code quan trọng của 1-hop callers và 1-hop callees vào **1 context bundle duy nhất** được nén và giới hạn chặt chẽ (mặc định 250 LOC, tối đa 300 ký tự/dòng, bảo vệ traversal, chuẩn hóa path cross-platform).
 
 ---
 
@@ -59,32 +59,37 @@ graph TD
   v162["v1.6.2 (Released)
   - Multi-Mode Visualizer
   - Enforced Project Selection
-  - Strict ML Skill Gate"] --> v163["v1.6.3 (Q4 2026)
-  - Subgraph Context Bundle
-  - Dynamic Stop-Word IDF
-  - Write-Through AST Sync"]
-
-  v163 --> v170["v1.7.0 (Q1 2027)
-  - Intra-procedural Dataflow
-  - Trait Dynamic Dispatch Edges
-  - Cross-Session Skill Analytics"]
-
-  v170 --> v180["v1.8.0 (Q2 2027)
-  - Multi-Repo Graph Federation
-  - Autonomous Architecture Healing
-  - Distributed GraphRAG Memory"]
+  - Strict ML Skill Gate"] --> v170["v1.7.0 (Unified Enterprise Release)
+  - Multi-File Context Bundling & Token Budgeting
+  - Search Precision (Dynamic IDF) & Write-Through JIT Sync
+  - Lightweight Dataflow & Dynamic Trait Resolution
+  - Cross-Session Skill Analytics
+  - Deep Graph Federation (Monorepos & Multi-Workspaces)
+  - Continuous Learning Graph (Co-Change Evolutionary Coupling)
+  - Architecture Healing Sentinel (Cycles & Orphans)
+  - Distributed Graph Memory (Verified Snapshots)"]
 ```
 
-### 📦 v1.6.3 — Subgraph Bundling & Search Precision (Next Release)
-- [ ] **`project_context(operation="subgraph_bundle")`**: Đóng gói hàm mục tiêu + 1-hop call snippets trong 1 lượt đọc duy nhất.
-- [ ] **Dynamic Term Down-Weighting**: Tự động giảm trọng số các từ khóa có tần suất xuất hiện quá phổ biến trong dự án.
-- [ ] **Write-Through AST Invalidation**: Cập nhật đồ thị cục bộ tức thì ngay sau mỗi lệnh ghi file thành công.
+### 📦 v1.7.0 — Unified Enterprise Release (Completed)
 
-### 📦 v1.7.0 — Data Flow & Dynamic Trait Resolution
-- [ ] **Lightweight Dataflow Traversal**: Truy vết nguồn gốc biến và tham số đầu vào qua chuỗi hàm.
-- [ ] **Trait & Interface Implementation Links**: Tự động liên kết các hàm implement với trait definition qua `implements_method` edges.
-- [ ] **Context Window Budget Manager**: Thuật toán tự động căn chỉnh số lượng callers/callees sao cho không bao giờ vượt quá ngân sách token yêu cầu.
+Toàn bộ các giải pháp quy hoạch từ v1.7.0 đến v1.9.0 đã được hợp nhất và hoàn thành 100% trong bản phát hành **v1.7.0**:
 
-### 📦 v1.8.0 — Deep Graph Federation & Distributed Memory
-- [ ] **Multi-Workspace Linked Graph**: Khả năng nhảy symbol và tìm kiếm xuyên suốt nhiều Git repository liên kết trong cùng một tổ chức.
-- [ ] **Continuous Learning Graph**: Đồ thị tự học hỏi từ các session sửa lỗi thành công trong quá khứ để gợi ý các file liên đới hay bị bỏ quên.
+#### 1. Multi-File Context Bundling & Cross-Platform Subgraph Packing
+- [x] **`project_context(operation="subgraph_bundle")`**: Đóng gói hàm mục tiêu + 1-hop callers và callees trong 1 lượt đọc duy nhất.
+- [x] **Context Window Budget Manager**: Thuật toán tự động căn chỉnh số lượng callers/callees phân bổ theo ngân sách LOC (mặc định 250 LOC, kẹp 50..=500 LOC).
+- [x] **Cross-Platform Path Normalization**: Chuẩn hóa đường dẫn tương thích Windows (`\`) và Unix (`/`) xuyên suốt SQLite, filesystem và markdown output.
+- [x] **Line Boundary & Token Safety**: Truncate dòng đơn lẻ tối đa 300 ký tự và bảo vệ chống out-of-bounds dòng cũ.
+
+#### 2. Search Precision & Real-Time Sync
+- [x] **Dynamic Term Down-Weighting & Intent Gating**: Tự động giảm trọng số các từ khóa có tần suất xuất hiện quá phổ biến trong dự án (> 30% files), phân tầng SearchIntent (Logic vs Guidance), và phạt test/utility fixtures.
+- [x] **Write-Through AST Invalidation**: Cập nhật đồ thị cục bộ tức thì (<10ms) ngay sau mỗi lệnh ghi file thành công mà không cần chờ debounce 5s.
+
+#### 3. Data Flow & Dynamic Trait Resolution
+- [x] **Lightweight Dataflow Traversal**: Truy vết nguồn gốc biến và tham số đầu vào qua chuỗi hàm (`flows_into` edges).
+- [x] **Trait & Interface Implementation Links**: Tự động liên kết các hàm implement với trait definition qua `implements_method` edges.
+- [x] **Cross-Session Skill Analytics**: Ghi nhận và tối ưu tần suất sử dụng skill theo ngữ cảnh dự án với `apply_analytics_boost`.
+
+#### 4. Deep Graph Federation & Distributed Memory
+- [x] **Multi-Workspace Linked Graph**: Tự động nhận diện monorepo workspace (Cargo `members`, npm/pnpm `workspaces`, Go), tìm kiếm callers/callees và nhảy symbol xuyên suốt nhiều Git repository liên kết.
+- [x] **Continuous Learning Graph**: Đồ thị tự học Co-Change (Evolutionary Coupling) phát hiện file liên đới hay bị bỏ quên, kèm Architecture Healing Sentinel (Cycle & Orphan detection).
+- [x] **Distributed Graph Memory**: Đóng gói và chia sẻ snapshot GraphRAG database SQLite (`.agpack`) với SHA256 checksum và `PRAGMA quick_check` cho distributed agents và CI/CD.

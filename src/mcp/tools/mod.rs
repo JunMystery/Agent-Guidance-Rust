@@ -26,6 +26,7 @@ mod context_symbols;
 pub(crate) mod context_bundle;
 pub(crate) mod context_enrich;
 pub(crate) mod context_lsp;
+pub(crate) mod context_dataflow;
 mod continuity;
 mod continuity_sessions;
 mod gate;
@@ -36,12 +37,12 @@ mod gate_edit_modularity;
 
 fn extract_target(args: &Value) -> Option<String> {
     if let Some(p) = args.get("relative_path").or_else(|| args.get("file_path")).or_else(|| args.get("path")).and_then(|v| v.as_str()) {
-        if let Some(sym) = args.get("target_symbol").and_then(|v| v.as_str()) {
+        if let Some(sym) = args.get("target_symbol").or_else(|| args.get("symbol")).or_else(|| args.get("name")).and_then(|v| v.as_str()) {
             return Some(format!("{}#{}", p, sym));
         }
         return Some(p.to_string());
     }
-    if let Some(sym) = args.get("target_symbol").and_then(|v| v.as_str()) {
+    if let Some(sym) = args.get("target_symbol").or_else(|| args.get("symbol")).or_else(|| args.get("name")).and_then(|v| v.as_str()) {
         return Some(format!("#{}", sym));
     }
     if let Some(q) = args.get("query").or_else(|| args.get("alias_term")).or_else(|| args.get("key")).and_then(|v| v.as_str()) {

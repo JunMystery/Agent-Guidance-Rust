@@ -1,10 +1,15 @@
 pub mod ast;
 pub mod cache;
+pub mod co_change;
 pub mod db;
+pub mod distributed;
+pub mod federation;
 pub mod graph_rag;
+pub mod healing;
 pub mod hnsw;
 pub mod indexer;
 pub mod lsp;
 pub mod multi_project;
 pub mod scanner;
+pub mod search;
 pub mod watcher;

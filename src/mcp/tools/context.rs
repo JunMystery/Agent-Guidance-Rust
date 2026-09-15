@@ -9,6 +9,7 @@ use super::context_graph::{
     handle_reusable,
 };
 use super::context_lsp::{handle_definition, handle_type_definition};
+use super::context_dataflow::handle_data_flow;
 use super::context_read::handle_read;
 use super::context_search::{handle_navigate, handle_search};
 use super::context_bundle::handle_subgraph_bundle;
@@ -35,12 +36,26 @@ pub(crate) fn handle(
         .get("query")
         .and_then(|q| q.as_str())
         .unwrap_or("");
+    let intent = arguments
+        .get("intent")
+        .and_then(|i| i.as_str());
     let rel_path = arguments
         .get("relative_path")
         .and_then(|r| r.as_str())
         .unwrap_or("");
 
     let sync_notice = if op != "reindex" && op != "tree" {
+        // 1. Write-through flush of dirty files queued during active session
+        let dirty_paths = state.drain_dirty_files();
+        if !dirty_paths.is_empty() {
+            let _ = crate::context::indexer::invalidator::sync_dirty_files(&proj_path, &dirty_paths);
+        }
+
+        // 2. Targeted JIT sync for the requested file (bypasses 3s debounce, < 10ms)
+        if !rel_path.is_empty() {
+            let _ = crate::context::graph_rag::jit_sync::ensure_fresh_targeted_file(&proj_path, rel_path);
+        }
+
         match ensure_fresh_graph(&proj_path, 3) {
             Ok(Some(report)) if report.files_indexed > 0 => {
                 format!(
@@ -73,7 +88,7 @@ pub(crate) fn handle(
             )
         }
         "read" => handle_read(&arguments, &proj_path, rel_path, state),
-        "search" => handle_search(query, &proj_path, state),
+        "search" => handle_search(query, &proj_path, intent, state),
         "navigate" => handle_navigate(&arguments, query, &proj_path, state),
         "learn_alias" => handle_learn_alias(&arguments, &proj_path, rel_path),
         "enrich_graph" | "enrich" => handle_enrich_graph(&arguments, &proj_path),
@@ -118,10 +133,15 @@ pub(crate) fn handle(
         "subgraph_bundle" | "bundle" => {
             let target = arguments
                 .get("target_symbol")
+                .or_else(|| arguments.get("symbol"))
+                .or_else(|| arguments.get("name"))
                 .and_then(|t| t.as_str())
                 .or_else(|| if !query.is_empty() { Some(query) } else { None })
                 .unwrap_or("");
             handle_subgraph_bundle(&arguments, &proj_path, target)
+        }
+        "data_flow" | "dataflow" | "taint" | "flow" => {
+            handle_data_flow(&proj_path, query)
         }
         _ => format!("Project context operation '{}' completed.", op),
     };

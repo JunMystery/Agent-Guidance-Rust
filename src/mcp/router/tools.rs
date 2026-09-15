@@ -82,12 +82,13 @@ pub fn get_tools_list() -> Value {
                     "properties": {
                         "operation": {
                             "type": "string",
-                            "enum": ["search", "graph_rag", "read", "symbols", "callers", "callees", "tree", "architecture", "learn_alias", "enrich_graph", "navigate", "subgraph_bundle"],
-                            "description": "Operation to perform: 'search' (lexical + symbol search), 'graph_rag' (knowledge-graph RAG), 'read' (token-bounded file reader), 'symbols' (outline of functions/classes), 'callers' (find references), 'callees' (find dependencies), 'tree' (directory structure), 'architecture' (detect codebase architecture pattern), 'learn_alias' (register natural language alias), 'enrich_graph' (inject semantic relations), 'navigate' (hierarchical code navigation), or 'subgraph_bundle' (pack target function + 1-hop callers and callees into a single token-bounded multi-file context bundle)"
+                            "enum": ["search", "graph_rag", "read", "symbols", "callers", "callees", "tree", "architecture", "learn_alias", "enrich_graph", "navigate", "subgraph_bundle", "data_flow"],
+                            "description": "Operation to perform: 'search' (lexical + symbol search), 'graph_rag' (knowledge-graph RAG), 'read' (token-bounded file reader), 'symbols' (outline of functions/classes), 'callers' (find references), 'callees' (find dependencies), 'tree' (directory structure), 'architecture' (detect codebase architecture pattern), 'learn_alias' (register natural language alias), 'enrich_graph' (inject semantic relations), 'navigate' (hierarchical code navigation), 'subgraph_bundle' (pack target function + 1-hop callers and callees into a single token-bounded multi-file context bundle), or 'data_flow' (bidirectional intra-procedural taint flow & dynamic dispatch trace)"
                         },
                         "mode": { "type": "string", "enum": ["global", "local", "drift", "basic"], "description": "Query mode for 'graph_rag' operation: 'global' (community summaries), 'local' (entity fan-out), 'drift' (dual-route), or 'basic'" },
                         "project_path": { "type": "string", "description": "Absolute path of your active working repository" },
                         "query": { "type": "string", "description": "Search keyword, symbol name, natural language query, or pattern" },
+                        "intent": { "type": "string", "enum": ["auto", "logic", "guidance"], "description": "Search intent gating: 'auto' (heuristic classifier), 'logic' (boost source code, suppress markdown), or 'guidance' (boost documentation and skills, down-rank AST symbols)" },
                         "relative_path": { "type": "string", "description": "Relative file path within project (e.g. 'src/main.rs')" },
                         "target_symbol": { "type": "string", "description": "Specific function/class/struct/enum symbol to extract precisely" },
                         "loc_budget": { "type": "integer", "description": "Maximum LOC budget for subgraph_bundle (default: 250, clamped 50..500)" },
@@ -112,7 +113,7 @@ pub fn get_tools_list() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance", "rollback", "approve_plan", "approve", "pass_verification"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', 'advance', 'rollback' (restore pre-edit session snapshot), 'approve_plan' (record plan approval), or 'pass_verification' (reset fix attempts)" },
+                        "action": { "type": "string", "enum": ["check", "status", "set_stage", "set_architecture", "authorize_edit", "advance", "rollback", "approve_plan", "approve", "pass_verification", "invalidate", "sync_file"], "description": "Action to perform: 'check', 'status', 'set_stage', 'set_architecture', 'authorize_edit', 'advance', 'rollback' (restore pre-edit session snapshot), 'approve_plan' (record plan approval), 'pass_verification' (reset fix attempts), or 'invalidate'/'sync_file' (write-through AST re-index for specific file)" },
                         "target_stage": { "type": "string", "description": "Target workflow stage to transition into: 'Context', 'Plan', 'Ask_Revise', 'Build', 'Test_Recheck', 'Fix', 'Proposal', or 'Review'" },
                         "user_message": { "type": "string" },
                         "user_confirmed": { "type": "boolean", "description": "Confirm plan approval or stage change (required for approve_plan)" },

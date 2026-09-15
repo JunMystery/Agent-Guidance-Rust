@@ -110,6 +110,13 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_tracked_projects_active ON tracked_projects(last_active);
         CREATE INDEX IF NOT EXISTS idx_mcp_logs_level_time ON mcp_logs(level, timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_mcp_logs_time ON mcp_logs(timestamp DESC);
+        CREATE TABLE IF NOT EXISTS project_skill_analytics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_path TEXT NOT NULL,
+            skill_id TEXT NOT NULL,
+            used_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_psa_proj_skill ON project_skill_analytics(project_path, skill_id);
         DELETE FROM tool_calls WHERE tool_name = 'mcp_tool';",
     )?;
 

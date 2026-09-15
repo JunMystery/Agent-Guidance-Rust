@@ -47,12 +47,20 @@ pub(crate) fn parse_graph_query(query_str: &str) -> GraphQueryParams {
     }
 }
 
-pub(crate) fn handle_api_graph(request: tiny_http::Request, _default_proj: &str) {
+pub(crate) fn handle_api_graph(request: tiny_http::Request, default_proj: &str) {
     let url = request.url();
     let query_str = url.split_once('?').map(|(_, q)| q).unwrap_or("");
     let params = parse_graph_query(query_str);
 
-    let target_dir = match params.project.as_deref() {
+    let effective_proj = params.project.as_deref().or_else(|| {
+        if !default_proj.is_empty() && default_proj != "all" && default_proj != "." {
+            Some(default_proj)
+        } else {
+            None
+        }
+    });
+
+    let target_dir = match effective_proj {
         Some(p) => p,
         None => {
             json_response(

@@ -30,10 +30,16 @@ src/
 │   └── mod.rs
 ├── context/           # Project Context, AST Analysis & GraphRAG Engine
 │   ├── ast/           # Polyglot AST parsers (Rust, TS/JS, Python, Go, Kotlin, Vue, Svelte, Astro, SQL, Prisma)
-│   ├── indexer/       # Symbol indexing, doc data extraction, and cross-file edge parsing (< 200 LOC each)
+│   ├── indexer/       # Symbol indexing, doc data extraction, write-through AST invalidation (< 10ms)
 │   ├── scanner.rs     # Bounded workspace scanner (max_depth=3 default, .gitignore filters)
 │   ├── db/            # SQLite code_graph.db (FTS5 symbols, call edges, AST metadata, schema migrations)
-│   ├── graph_rag/     # Hierarchical Leiden community clustering & RAG summarization
+│   ├── graph_rag/     # Hierarchical Leiden community clustering, RAG summarization & subgraph bundling
+│   ├── co_change/     # Evolutionary coupling graph, pairwise tracking & predictive forgotten file alerts
+│   ├── federation/    # Monorepo workspace auto-discovery (Cargo, npm/pnpm, Go) & cross-repo graph traversal
+│   ├── healing/       # Architecture Healing Sentinel (circular dependency DFS & dead/orphan symbol scanner)
+│   ├── distributed/   # Verified GraphRAG snapshot packaging (.agpack with SHA256 & quick_check)
+│   ├── search/        # Search precision engine (Dynamic IDF down-weighting & Intent Gating)
+│   ├── multi_project.rs# Multi-project cross-referencing and read-only secondary db inspection
 │   └── hnsw/          # High-performance in-memory vector index for symbol retrieval
 ├── dashboard/         # Embedded Web Dashboard Server & REST API (< 300 LOC each)
 │   ├── stats.rs       # GET /api/stats with 2s TTL in-memory cache

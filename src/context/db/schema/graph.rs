@@ -99,5 +99,57 @@ pub fn create_graph_tables(tx: &Transaction) -> Result<()> {
         [],
     )?;
 
+    // Plan 04: Intra-procedural Data Flow Edges (Milestone v1.8.0)
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS data_flow_edges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            caller_symbol_id TEXT NOT NULL,
+            callee_symbol_id TEXT NOT NULL,
+            source_variable TEXT NOT NULL,
+            target_parameter TEXT NOT NULL,
+            arg_index INTEGER NOT NULL,
+            call_line INTEGER NOT NULL,
+            flow_type TEXT DEFAULT 'direct_param',
+            confidence REAL DEFAULT 0.85,
+            FOREIGN KEY (caller_symbol_id) REFERENCES symbols(id) ON DELETE CASCADE,
+            FOREIGN KEY (callee_symbol_id) REFERENCES symbols(id) ON DELETE CASCADE,
+            UNIQUE(caller_symbol_id, callee_symbol_id, source_variable, target_parameter, call_line)
+        );",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_df_caller ON data_flow_edges(caller_symbol_id);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_df_callee ON data_flow_edges(callee_symbol_id);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_df_src_var ON data_flow_edges(source_variable);",
+        [],
+    )?;
+
+    // Evolutionary Coupling & Continuous Learning Graph (Milestone v1.9.0)
+    tx.execute(
+        "CREATE TABLE IF NOT EXISTS co_change_edges (
+            file_a TEXT NOT NULL,
+            file_b TEXT NOT NULL,
+            co_change_count INTEGER DEFAULT 1,
+            last_changed_at INTEGER NOT NULL,
+            confidence REAL DEFAULT 0.5,
+            PRIMARY KEY (file_a, file_b)
+        );",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_co_change_fa ON co_change_edges(file_a);",
+        [],
+    )?;
+    tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_co_change_fb ON co_change_edges(file_b);",
+        [],
+    )?;
+
     Ok(())
 }

@@ -49,10 +49,16 @@ impl CodeGraphDb {
         // Cascade will automatically clear symbols, symbol_edges, symbol_vectors, content_chunks, chunk_vectors
         self.conn.execute("DELETE FROM symbols WHERE file_path = ?", params![file_path])?;
         self.conn.execute("DELETE FROM content_chunks WHERE file_path = ?", params![file_path])?;
+        let prefix = format!("{}::%", file_path);
+        let _ = self.conn.execute(
+            "DELETE FROM data_flow_edges WHERE caller_symbol_id LIKE ?1 OR callee_symbol_id LIKE ?1",
+            params![prefix],
+        );
         Ok(())
     }
 
     pub fn delete_file(&self, file_path: &str) -> Result<()> {
+        let _ = self.clear_file_data(file_path);
         self.conn.execute("DELETE FROM files WHERE path = ?", params![file_path])?;
         Ok(())
     }
@@ -158,6 +164,7 @@ impl CodeGraphDb {
              FROM content_chunks c
              JOIN content_fts f ON c.id = f.rowid
              WHERE content_fts MATCH ?
+             ORDER BY bm25(content_fts)
              LIMIT ?",
         )?;
 
