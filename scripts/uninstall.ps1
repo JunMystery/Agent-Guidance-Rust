@@ -18,7 +18,7 @@ if (Get-Command "uv" -ErrorAction SilentlyContinue) {
 
 if (Test-Path "$HOME\.agent-guidance") {
     Remove-Item -Recurse -Force "$HOME\.agent-guidance" -ErrorAction SilentlyContinue
-    Write-Host "  ✓ Completely removed directory $HOME\.agent-guidance" -ForegroundColor Green
+    Write-Host "  OK Completely removed directory $HOME\.agent-guidance" -ForegroundColor Green
 }
 
 if (Test-Path "$HOME\.local\bin\agent-guidance.exe") {
@@ -27,6 +27,6 @@ if (Test-Path "$HOME\.local\bin\agent-guidance.exe") {
 
 Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-Write-Host "|       ✓  Complete uninstallation finished!                  |" -ForegroundColor Green
+Write-Host "|       OK  Complete uninstallation finished!                  |" -ForegroundColor Green
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
 Write-Host ""
