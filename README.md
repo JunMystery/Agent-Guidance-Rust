@@ -23,7 +23,7 @@ Run the one-liner setup script for your operating system to download the latest 
 
 **Windows (PowerShell / CMD):**
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
+powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
 ```
 
 **Linux / macOS:**

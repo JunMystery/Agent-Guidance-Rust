@@ -10,7 +10,11 @@ Use the one-line installer script:
 
 **Windows (PowerShell / CMD):**
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
+powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
+```
+*Alternatively, stream and execute directly in memory without writing a temporary file:*
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
 ```
 
 **Linux / macOS:**

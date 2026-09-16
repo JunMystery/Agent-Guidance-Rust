@@ -30,7 +30,7 @@ Write-Host ""
 $action = Read-Host "Choice [1]"
 if (-not $action) { $action = "1" }
 
-# ── Uninstall path ────────────────────────────────────────────────────────────
+# -- Uninstall path ------------------------------------------------------------
 if ($action -eq "2") {
     Write-Host ""
     Write-Host "Uninstalling Agent Guidance..." -ForegroundColor Red
@@ -60,13 +60,13 @@ if ($action -eq "2") {
     exit 0
 }
 
-# ── Install / Update path ─────────────────────────────────────────────────────
+# -- Install / Update path -----------------------------------------------------
 Write-Host ""
 Write-Host "Stopping any running agent-guidance processes..." -ForegroundColor Yellow
 Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
-# ── Prepare binary output directory ──────────────────────────────────────────
+# -- Prepare binary output directory -------------------------------------------
 # Use %LOCALAPPDATA%\Programs\agent-guidance\bin to satisfy Windows AppLocker / WDAC policies
 $localBin = Join-Path $env:LOCALAPPDATA "Programs\agent-guidance\bin"
 if (-not (Test-Path $localBin)) {
@@ -86,14 +86,14 @@ function Ensure-Cargo {
     }
 }
 
-# ── Spinner helper ────────────────────────────────────────────────────────────
+# -- Spinner helper ------------------------------------------------------------
 function Run-WithSpinner {
     param(
         [scriptblock]$ScriptBlock,
         [string]$Message,
         [object[]]$ArgumentList = @()
     )
-    $anim = @("⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏")
+    $anim = @("|", "/", "-", "\")
     $job = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
     $i = 0
     while ($job.State -eq "Running") {
@@ -108,7 +108,7 @@ function Run-WithSpinner {
     return $output
 }
 
-# ── Detect build source (local dev or remote clone) ───────────────────────────
+# -- Detect build source (local dev or remote clone) ---------------------------
 $buildDir = ""
 $scriptParent = if ($PSScriptRoot) { Join-Path $PSScriptRoot ".." } else { "" }
 
@@ -124,7 +124,7 @@ if (Test-Path "Cargo.toml") {
     }
 }
 
-# ── Build block helper ────────────────────────────────────────────────────────
+# -- Build block helper --------------------------------------------------------
 function Build-AndInstall {
     param([string]$SourceDir)
 
@@ -141,7 +141,7 @@ function Build-AndInstall {
             cargo build --release --quiet 2>&1
         } -ArgumentList $SourceDir
 
-        $anim = @("⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏")
+        $anim = @("|", "/", "-", "\")
         $i = 0
         while ($job.State -eq "Running") {
             $char = $anim[$i % $anim.Length]
@@ -169,7 +169,7 @@ function Build-AndInstall {
     }
 }
 
-# ── Install / Update binary (Prebuilt download with fallback to build) ───────
+# -- Install / Update binary (Prebuilt download with fallback to build) --------
 $repo = "JunMystery/Agent-Guidance-Rust"
 $assetName = "agent-guidance-windows-x86_64.zip"
 
