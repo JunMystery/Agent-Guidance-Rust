@@ -10,11 +10,18 @@ import { buildKpi, buildLegend } from './kpi.js';
 import { bindChartTooltip } from './tooltip.js';
 import { t } from '../../i18n/index.js';
 
+let lastChartFingerprint = '';
+
 export function renderHourlyChart(data, totals) {
   const chart = el('hourly-chart');
   if (!chart) return;
 
   const rawHours = (data.hourly_savings || []);
+  const fingerprint = rawHours.map(h => `${h.calls || 0}:${h.avg_duration_ms || 0}:${h.optimized || h.tokens_optimized || 0}`).join('|');
+  if (fingerprint && fingerprint === lastChartFingerprint && chart.children.length > 0) {
+    return;
+  }
+  lastChartFingerprint = fingerprint;
   const hours = rawHours.map((h, i) => {
     const calls = h.calls ?? 0;
     const latency = h.avg_duration_ms ?? 0;

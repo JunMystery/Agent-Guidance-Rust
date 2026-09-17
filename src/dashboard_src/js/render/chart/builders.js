@@ -35,10 +35,6 @@ export function buildDefs(hours) {
     '<linearGradient id="heat-ribbon-grad" x1="0" y1="0" x2="1" y2="0">' +
       (heatStops || '<stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#38bdf8"/>') +
     '</linearGradient>' +
-    '<filter id="glow-violet" x="-20%" y="-20%" width="140%" height="140%">' +
-      '<feGaussianBlur stdDeviation="2.5" result="blur"/>' +
-      '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
-    '</filter>' +
   '</defs>';
 }
 
@@ -76,7 +72,7 @@ export function buildWaves(hours, box, yCalls, yLatency) {
   }));
 
   const areaCalls = '<path d="' + buildSplineAreaPath(ptsCalls, box.yMax, box.y0) + '" fill="url(#grad-glass-stream)" class="stream-area" />';
-  const strokeCalls = '<path d="' + buildSplinePath(ptsCalls, box.yMax, box.y0) + '" fill="none" stroke="#a78bfa" stroke-width="2.5" filter="url(#glow-violet)" class="stream-line-saved" />';
+  const strokeCalls = '<path d="' + buildSplinePath(ptsCalls, box.yMax, box.y0) + '" fill="none" stroke="#a78bfa" stroke-width="2" class="stream-line-saved" />';
   const strokeLatency = '<path d="' + buildSplinePath(ptsLatency, box.yMax, box.y0) + '" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-dasharray="4 3" class="stream-line-opt" />';
 
   return areaCalls + strokeLatency + strokeCalls;

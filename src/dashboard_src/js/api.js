@@ -1,7 +1,7 @@
 import { setText, setDisplay, setLoading, activeView, pollSpanFor } from './dom.js';
 import { renderDashboard } from './render/statsView.js';
 import { renderHealthPanel } from './render/health.js';
-import { pollBackoff, setBackoff, resetBackoff } from './state.js';
+import { pollBackoff, setBackoff, resetBackoff, store } from './state.js';
 import { showAlert } from './dialog.js';
 import { t } from './i18n/index.js';
 
@@ -101,28 +101,52 @@ async function clearFetchError() {
   setDisplay('error-banner', 'none');
 }
 
-export async function fetchData() {
+function computeDataHash(data) {
+  if (!data) return '';
+  const totals = data.totals || {};
+  const recent = (data.recent_actions && data.recent_actions[0]?.id) || '';
+  const calls = totals.tool_calls || 0;
+  const opt = totals.tokens_optimized || 0;
+  const skillsLen = (data.top_skills || []).length;
+  const actionsLen = (data.tool_breakdown || []).length;
+  return `${calls}:${opt}:${skillsLen}:${actionsLen}:${recent}:${data.server_port || ''}:${data.project_path || ''}`;
+}
+
+export async function fetchData(options = {}) {
+  const { force = false } = options;
+  if (store.is_fetching) return;
+  store.is_fetching = true;
   setLoading(true);
-  let data;
+
   try {
-    data = await fetchStats();
-    renderDashboard(data);
-    await clearFetchError();
-  } catch (e) {
-    console.error('fetch error', e);
-    await showFetchError(e);
-  }
-  try {
-    const hdata = await fetchHealth();
+    const [statsResult, hdata] = await Promise.all([
+      fetchStats().then(d => ({ data: d, error: null })).catch(e => ({ data: null, error: e })),
+      fetchHealth().catch(() => ({ status: 'unknown' })),
+    ]);
+
+    if (statsResult.error) {
+      console.error('fetch error', statsResult.error);
+      await showFetchError(statsResult.error);
+    } else if (statsResult.data) {
+      const newHash = computeDataHash(statsResult.data);
+      if (force || newHash !== store.last_stats_hash) {
+        store.last_stats_hash = newHash;
+        renderDashboard(statsResult.data);
+      }
+      await clearFetchError();
+    }
+
     renderHealthPanel(hdata);
-    if (hdata.db_size_bytes !== undefined) {
+    if (hdata && hdata.db_size_bytes !== undefined) {
       const mb = (hdata.db_size_bytes / (1024 * 1024)).toFixed(2);
       setText('sidebar-db-size', t('sidebar.db_size_val', { size: mb }));
     }
-  } catch (e) {
-    renderHealthPanel({ status: 'unknown' });
+  } catch (err) {
+    console.error('fetchData unexpected error', err);
+  } finally {
+    store.is_fetching = false;
+    setLoading(false);
   }
-  setLoading(false);
 }
 
 export async function refreshEmbedEngine() {

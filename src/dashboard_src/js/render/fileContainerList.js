@@ -67,7 +67,10 @@ export function initFileContainerList(container, nodes = [], onSelectFile, onDri
     });
 
     let html = '';
+    const MAX_FILES_PER_GROUP = 30;
     groups.forEach((fileList, dir) => {
+      const visibleFiles = fileList.slice(0, MAX_FILES_PER_GROUP);
+      const remaining = fileList.length - visibleFiles.length;
       html += `
         <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; overflow: hidden; flex-shrink: 0;">
           <div style="background: #1e293b; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155;">
@@ -78,7 +81,7 @@ export function initFileContainerList(container, nodes = [], onSelectFile, onDri
             <span style="font-size: 10px; color: #94a3b8; background: #0f172a; padding: 1px 6px; border-radius: 4px;">${fileList.length} ${t('graph.files_count_suffix')}</span>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 6px; padding: 8px;">
-            ${fileList.map(n => {
+            ${visibleFiles.map(n => {
               const p = (n.file || n.path || n.id).replace(/\\/g, '/');
               const fname = p.split('/').pop();
               const isSel = activeId === n.id;
@@ -99,6 +102,7 @@ export function initFileContainerList(container, nodes = [], onSelectFile, onDri
               `;
             }).join('')}
           </div>
+          ${remaining > 0 ? `<div style="padding: 4px 10px 8px; font-size: 11px; color: #64748b; font-style: italic;">+ ${remaining} more files in directory...</div>` : ''}
         </div>
       `;
     });

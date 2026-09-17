@@ -43,8 +43,12 @@ function syncView(view, { push = true } = {}) {
     loadAndRenderGraph();
   } else if (view === 'logs') {
     stopPoll();
+    const graphList = el('graph-symbol-list-container');
+    if (graphList) graphList.innerHTML = '';
     loadAndRenderLogs();
   } else {
+    const graphList = el('graph-symbol-list-container');
+    if (graphList) graphList.innerHTML = '';
     startPoll();
   }
 }

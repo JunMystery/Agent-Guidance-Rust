@@ -4,6 +4,24 @@ import { fetchData } from './api.js';
 
 let pollTimer = null;
 
+function scheduleNextPoll() {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+  if (document.hidden) return;
+  const view = activeView();
+  if (view === 'graph' || view === 'logs') return;
+
+  pollTimer = setTimeout(async () => {
+    try {
+      await fetchData();
+    } finally {
+      scheduleNextPoll();
+    }
+  }, pollBackoff);
+}
+
 export function startPoll() {
   stopPoll();
   const spanId = pollSpanFor(activeView());
@@ -11,11 +29,14 @@ export function startPoll() {
     const node = el(spanId);
     if (node) node.textContent = '(polling ' + (pollBackoff / 1000).toFixed(0) + 's)';
   }
-  if (!document.hidden) pollTimer = setInterval(fetchData, pollBackoff);
+  scheduleNextPoll();
 }
 
 export function stopPoll() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
   const aEl = el('actions-poll');
   if (aEl) aEl.textContent = '';
   const rEl = el('recent-calls-poll');
@@ -26,12 +47,11 @@ export function stopPoll() {
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    stopPoll();
   } else {
     const view = activeView();
-    if (view && view !== 'graph') {
-      fetchData();
-      startPoll();
+    if (view && view !== 'graph' && view !== 'logs') {
+      fetchData().finally(() => startPoll());
     }
   }
 });

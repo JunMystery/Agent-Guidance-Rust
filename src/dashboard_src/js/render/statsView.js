@@ -33,7 +33,6 @@ export function renderDashboard(data) {
   syncTimeframeTabs(activeTimeframe);
   updateTimeframeSummary(activeTimeframe);
 
-  renderSkillsTable(data.top_skills);
   renderRecentSkillCalls(data.recent_skill_calls);
   renderActionsView(data);
   renderHourlyChart(data, data.totals || {});
