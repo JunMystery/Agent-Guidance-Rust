@@ -109,13 +109,20 @@ pub(crate) fn handle(
         "-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, proceed with task planning."
     };
 
+    let indexing_suffix = if crate::context::graph_rag::jit_sync::is_indexing(&proj_path) {
+        ", background GraphRAG indexing active"
+    } else {
+        ""
+    };
+
     state.record_call(800, 300);
     Ok(format!(
-        "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {} ({} files scanned){}{}\n\n## Architecture Guidance\n- Active Pattern: {}\n- Enforce: Create thin dispatcher main + sub-module files from line 1 (Upfront Architecture, 300 LOC Cap)\n\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
+        "# Task Pipeline Activated\n\nTask: {}\nActive Phase: {}\nProject: {} ({} files scanned{}){}{}\n\n## Architecture Guidance\n- Active Pattern: {}\n- Enforce: Create thin dispatcher main + sub-module files from line 1 (Upfront Architecture, 300 LOC Cap)\n\n{}\n\nPriority Gate: PASSED\nStatus: Ready for execution.\n\n{}",
         task,
         phase,
         proj_path.display(),
         file_count,
+        indexing_suffix,
         learnings_section,
         blueprint_section,
         detected_arch,

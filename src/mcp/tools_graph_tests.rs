@@ -79,14 +79,24 @@ fn test_project_context_callers_and_callees() {
 
 #[test]
 fn test_full_index_creates_symbol_edges() {
-    let mut indexer = crate::context::indexer::IncrementalIndexer::new(std::path::Path::new(".")).unwrap();
+    let temp_dir = std::env::temp_dir().join(format!("ag_full_index_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    let _ = std::fs::create_dir_all(temp_dir.join("src"));
+    std::fs::write(
+        temp_dir.join("src/lib.rs"),
+        "pub fn foo() { bar(); }\npub fn bar() {}\n",
+    ).unwrap();
+
+    let mut indexer = crate::context::indexer::IncrementalIndexer::new(&temp_dir).unwrap();
     let report = indexer.full_index().unwrap();
     assert!(report.symbols_extracted > 0, "Symbols extracted must be > 0");
     assert!(report.edges_created > 0, "Edges created must be > 0, got {}", report.edges_created);
 
-    let engine = crate::context::graph_rag::GraphRagEngine::new(std::path::Path::new("."));
+    let engine = crate::context::graph_rag::GraphRagEngine::new(&temp_dir);
     let hierarchy = engine.build_or_update("Clean_Architecture").unwrap();
     assert!(!hierarchy.communities.is_empty(), "Communities must be > 0, got {}", hierarchy.communities.len());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]

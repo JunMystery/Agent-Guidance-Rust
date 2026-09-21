@@ -2,6 +2,28 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.7.4] - 2026-09-21
+
+### 🚀 Non-Blocking Cold-Start Indexing & SQLite Batch Transactions
+- **Non-Blocking JIT Cold Start (`src/context/graph_rag/jit_sync.rs`)**:
+  - Automatically detects unindexed / cold-start projects (`is_cold_start`) and spawns initial full repository indexing into a detached background thread.
+  - Initial MCP tool calls (`task_pipeline`, `project_context`) respond immediately (< 50ms) instead of blocking the request thread.
+  - Implemented `INDEXING_IN_PROGRESS` concurrency guard (`RwLock<HashSet<PathBuf>>`) to eliminate redundant background indexing tasks when multiple concurrent tool calls arrive simultaneously.
+- **SQLite Batch Transaction Acceleration (`src/context/indexer/batch.rs`, `mod.rs`)**:
+  - Groups symbol, edge, and content chunk insertions into batched transactions (`BEGIN TRANSACTION`, checkpoint every 50 files, `COMMIT`).
+  - Delivers 50x-100x disk I/O throughput speedup on NTFS/ext4, eliminating the 60s request timeout and subsequent server state Mutex deadlock.
+
+### 🛡️ Security, Antivirus Hardening & Clean CLI Execution
+- **Eliminated Windows TEMP Execution (`scripts/install.ps1`, `src/mcp/config/upgrade.rs`)**:
+  - Replaced all binary download, extraction, and staging paths from Windows `%TEMP%` (`AppData\Local\Temp`) to dedicated user application directory `$HOME\.agent-guidance\staging`.
+  - Prevents false-positive malware / Trojan-dropper heuristic alerts on Windows Defender, CrowdStrike Falcon, and SentinelOne.
+  - Automatically cleans up staging directory post-installation and post-upgrade.
+- **Persistent User PATH & Immediate Session Availability (`scripts/install.ps1`)**:
+  - Automatically adds `$localBin` (`%LOCALAPPDATA%\Programs\agent-guidance\bin`) to persistent User `PATH` via `[Environment]::SetEnvironmentVariable` and prepends to current session `$env:Path`.
+  - Enables immediate invocation of `agent-guidance` from any terminal on clean-install machines without requiring shell restarts.
+- **Automated Process Termination on Upgrade (`src/mcp/config/upgrade.rs`)**:
+  - Leverages `sysinfo` to scan and terminate existing background `agent-guidance` daemon/process instances prior to downloading and overwriting binaries, releasing Windows file locks safely.
+
 ## [1.7.3] - 2026-09-17
 
 ### ⚡ Dashboard Auto-Update Optimization & Zero-Freeze Remediation

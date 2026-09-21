@@ -42,6 +42,26 @@ pub fn get_target_bin_path() -> Result<PathBuf> {
     Ok(target)
 }
 
+fn stop_other_agent_guidance_processes() {
+    let my_pid = std::process::id();
+    let mut sys = sysinfo::System::new_all();
+    sys.refresh_all();
+    let mut killed_any = false;
+    for (pid, proc_) in sys.processes() {
+        if pid.as_u32() != my_pid {
+            let name = proc_.name().to_lowercase();
+            if name.contains("agent-guidance") {
+                let _ = proc_.kill();
+                killed_any = true;
+            }
+        }
+    }
+    if killed_any {
+        println!("  Terminated running background agent-guidance instances.");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+}
+
 pub fn run_upgrade() -> Result<()> {
     let current_version = env!("CARGO_PKG_VERSION");
     println!("Current version: v{}", current_version);
@@ -50,7 +70,12 @@ pub fn run_upgrade() -> Result<()> {
     let asset_name = get_release_asset_name()
         .ok_or_else(|| anyhow::anyhow!("Unsupported operating system or architecture for automatic upgrade"))?;
 
-    let tmp_dir = env::temp_dir().join(format!("ag-upgrade-{}", std::process::id()));
+    stop_other_agent_guidance_processes();
+
+    let staging_root = dirs::home_dir()
+        .map(|h| h.join(".agent-guidance").join("staging"))
+        .unwrap_or_else(env::temp_dir);
+    let tmp_dir = staging_root.join(format!("ag-upgrade-{}", std::process::id()));
     fs::create_dir_all(&tmp_dir)?;
 
     let download_url = format!("https://github.com/{}/releases/latest/download/{}", REPO, asset_name);
@@ -144,6 +169,11 @@ pub fn run_upgrade() -> Result<()> {
     }
 
     let _ = fs::remove_dir_all(&tmp_dir);
+    if let Ok(mut entries) = fs::read_dir(&staging_root) {
+        if entries.next().is_none() {
+            let _ = fs::remove_dir(&staging_root);
+        }
+    }
 
     println!("Successfully installed the latest release binary!");
     println!();

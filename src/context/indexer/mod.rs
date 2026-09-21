@@ -7,6 +7,7 @@ use std::time::Instant;
 use crate::context::db::CodeGraphDb;
 use crate::context::scanner::scan_project;
 
+pub mod batch;
 pub mod chunking;
 pub mod cross_edges;
 pub mod cross_edges_dataflow;
@@ -65,13 +66,18 @@ impl IncrementalIndexer {
             ..Default::default()
         };
 
+        batch::begin_batch(&self.db.conn);
         for file in files.iter().filter(|f| f.file_type == "file") {
             if self.index_file(&file.path, &mut report)? {
                 report.files_indexed += 1;
+                if report.files_indexed % 50 == 0 {
+                    batch::checkpoint_batch(&self.db.conn);
+                }
             } else {
                 report.files_skipped += 1;
             }
         }
+        batch::commit_batch(&self.db.conn);
 
         if let Ok(cross_count) = cross_edges::resolve_all_cross_edges(&mut self.db.conn, &self.project_path) {
             report.edges_created += cross_count;
@@ -90,6 +96,7 @@ impl IncrementalIndexer {
             ..Default::default()
         };
 
+        batch::begin_batch(&self.db.conn);
         for file in files.iter().filter(|f| f.file_type == "file") {
             let full_path = self.project_path.join(&file.path);
             let metadata = match std::fs::metadata(&full_path) {
@@ -122,9 +129,13 @@ impl IncrementalIndexer {
                 }
                 if self.index_file_content(&file.path, &content, current_hash, &mut report)? {
                     report.files_indexed += 1;
+                    if report.files_indexed % 50 == 0 {
+                        batch::checkpoint_batch(&self.db.conn);
+                    }
                 }
             }
         }
+        batch::commit_batch(&self.db.conn);
 
         if report.files_indexed > 0 {
             if let Ok(cross_count) = cross_edges::resolve_all_cross_edges(&mut self.db.conn, &self.project_path) {
@@ -192,22 +203,11 @@ impl IncrementalIndexer {
         current_hash: String,
         report: &mut IndexReport,
     ) -> Result<bool> {
-        // Skip files > 100KB or minified files
         if content.len() > 100 * 1024 || rel_path.ends_with(".min.js") || rel_path.ends_with(".lock") {
             return Ok(false);
         }
-
-        // Clear existing data for this file
         let _ = self.db.clear_file_data(rel_path);
-        let prefix = format!("{}::%", rel_path);
-        let _ = self.db.conn.execute(
-            "DELETE FROM symbol_edges WHERE source_id LIKE ?1 OR target_id LIKE ?1",
-            rusqlite::params![prefix],
-        );
-        let _ = self.db.conn.execute(
-            "DELETE FROM data_flow_edges WHERE caller_symbol_id LIKE ?1 OR callee_symbol_id LIKE ?1",
-            rusqlite::params![prefix],
-        );
+        batch::clear_file_edges(&self.db.conn, rel_path);
 
         let metadata = std::fs::metadata(self.project_path.join(rel_path));
         let size = metadata.as_ref().map(|m| m.len()).unwrap_or(content.len() as u64);
@@ -218,49 +218,16 @@ impl IncrementalIndexer {
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
 
-        // 1. Upsert files table
         self.db.upsert_file(rel_path, &current_hash, size, modified)?;
 
-        // 2. Extract symbols
         let symbols = extract_symbols_from_content(rel_path, content);
-        for s in &symbols {
-            self.db.insert_symbol_full(
-                &s.id,
-                &s.name,
-                &s.kind,
-                rel_path,
-                s.parent.as_deref(),
-                s.start_line,
-                s.end_line,
-                s.signature.as_deref(),
-                s.language.as_deref(),
-                s.namespace.as_deref(),
-                s.receiver.as_deref(),
-            )?;
-            report.symbols_extracted += 1;
-        }
+        batch::persist_file_symbols(&self.db, rel_path, &symbols, report)?;
 
-        // 3. Extract edges (imports / calls)
         let edges = extract_edges_from_content(rel_path, content, &symbols);
-        for e in edges {
-            self.db.insert_edge_full(
-                &e.source_id,
-                &e.target_id,
-                &e.edge_type,
-                e.weight,
-                e.confidence,
-                &e.category,
-                e.call_line,
-            )?;
-            report.edges_created += 1;
-        }
+        batch::persist_file_edges(&self.db, edges, report)?;
 
-        // 4. Content Chunking (50-line sliding window, 10-line overlap)
         let chunks = chunk_code_content(rel_path, content, 50, 10);
-        for c in chunks {
-            self.db.insert_chunk(rel_path, c.start_line, c.end_line, &c.hash, &c.text)?;
-            report.chunks_created += 1;
-        }
+        batch::persist_file_chunks(&self.db, rel_path, chunks, report)?;
 
         Ok(true)
     }

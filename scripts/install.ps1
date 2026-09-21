@@ -73,39 +73,25 @@ if (-not (Test-Path $localBin)) {
     New-Item -ItemType Directory -Path $localBin -Force | Out-Null
 }
 
+# Dedicated staging directory under user application data (avoids %TEMP% antivirus/EDR flags)
+$stagingDir = Join-Path $HOME ".agent-guidance\staging"
+if (-not (Test-Path $stagingDir)) {
+    New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+}
+
 function Ensure-Cargo {
     Write-Host "Checking Rust toolchain (cargo)..." -ForegroundColor White
     if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Path "$HOME\.cargo\bin\cargo.exe")) {
         Write-Host "  Rust toolchain not found. Installing rustup..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"
-        Start-Process -FilePath "$env:TEMP\rustup-init.exe" -ArgumentList "-y" -Wait
+        $rustupInit = Join-Path $stagingDir "rustup-init.exe"
+        Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
+        Start-Process -FilePath $rustupInit -ArgumentList "-y" -Wait
+        Remove-Item -Force $rustupInit -ErrorAction SilentlyContinue
         $env:Path += ";$HOME\.cargo\bin"
     } else {
         $env:Path += ";$HOME\.cargo\bin"
         Write-Host "  OK Found Cargo in PATH" -ForegroundColor Green
     }
-}
-
-# -- Spinner helper ------------------------------------------------------------
-function Run-WithSpinner {
-    param(
-        [scriptblock]$ScriptBlock,
-        [string]$Message,
-        [object[]]$ArgumentList = @()
-    )
-    $anim = @("|", "/", "-", "\")
-    $job = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
-    $i = 0
-    while ($job.State -eq "Running") {
-        $char = $anim[$i % $anim.Length]
-        Write-Host -NoNewline "`r  $char $Message"
-        Start-Sleep -Milliseconds 150
-        $i++
-    }
-    $output = Receive-Job $job -ErrorAction SilentlyContinue
-    $exitCode = $job.ChildJobs[0].JobStateInfo.Reason
-    Remove-Job $job -Force -ErrorAction SilentlyContinue
-    return $output
 }
 
 # -- Detect build source (local dev or remote clone) ---------------------------
@@ -179,7 +165,7 @@ try {
     $version = $latestMeta.tag_name
     Write-Host "  Latest release: $version" -ForegroundColor Gray
 } catch {
-    $version = "v1.7.3"
+    $version = "v1.7.4"
     Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
 }
 
@@ -189,7 +175,7 @@ function Try-DownloadPrebuilt {
     param([string]$DownloadUrl, [string]$Asset)
     Write-Host ""
     Write-Host "Attempting prebuilt binary installation ($Asset)..." -ForegroundColor Cyan
-    $tmpDir = Join-Path $env:TEMP "ag-download-$(Get-Random)"
+    $tmpDir = Join-Path $stagingDir "ag-download-$(Get-Random)"
     New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
     $zipPath = Join-Path $tmpDir $Asset
 
@@ -284,6 +270,24 @@ function Register-IDEMCP {
 Write-Host "`nRegistering server with detected IDE clients..." -ForegroundColor Magenta
 & "$localBin\agent-guidance.exe" --setup
 Register-IDEMCP -BinPath "$localBin\agent-guidance.exe"
+
+# -- Configure CLI PATH & Cleanup ----------------------------------------------
+Write-Host "Configuring CLI environment PATH..." -ForegroundColor White
+if ($env:Path -split ';' -notcontains $localBin) { $env:Path = "$localBin;$env:Path" }
+try {
+    $uPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $uList = if ($uPath) { $uPath -split ';' | Where-Object { $_ } } else { @() }
+    if ($uList -notcontains $localBin) {
+        [Environment]::SetEnvironmentVariable("Path", $(if ($uPath) { "$localBin;$uPath" } else { $localBin }), [EnvironmentVariableTarget]::User)
+        Write-Host "  OK Added $localBin to persistent User PATH" -ForegroundColor Green
+    }
+} catch { Write-Host "  Warning: Could not update persistent User PATH: $_" -ForegroundColor Yellow }
+
+if (Test-Path $stagingDir) {
+    if (-not (Get-ChildItem $stagingDir -Force -ErrorAction SilentlyContinue)) {
+        Remove-Item -Force -Recurse $stagingDir -ErrorAction SilentlyContinue
+    }
+}
 
 Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green

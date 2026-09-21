@@ -1,13 +1,13 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.7.3-blue.svg)](Cargo.toml)
-[![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
-[![Role](https://img.shields.io/badge/Role-Autonomous%20Orchestrator-indigo.svg)](#-key-capabilities)
-[![Smart Skills](https://img.shields.io/badge/Smart%20Skills-279%2B%20ML%20Search-cyan.svg)](#-smart-skills-system)
-[![Multi-Session Isolation](https://img.shields.io/badge/Multi--Session-Isolated-green.svg)](#-multi-session-isolation)
-[![Universal Token Optimization](https://img.shields.io/badge/Token%20Opt-300%20LOC%20Clamped-purple.svg)](#-universal-token-optimization)
-[![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-v1.7.4-blue.svg)](Cargo.toml)
+[![Rust](https://img.shields.io/badge/Rust-1.78+-orange.svg)](https://www.rust-lang.org/)
+[![Capabilities](https://img.shields.io/badge/MCP-Tools%20%26%20Resources-purple.svg)](#-key-capabilities)
+[![Skills](https://img.shields.io/badge/Skills-440%20Loaded-green.svg)](#-smart-skills-system)
+[![Multi-Session](https://img.shields.io/badge/Session-Process%20Isolated-blueviolet.svg)](#-multi-session-isolation)
+[![Token Compression](https://img.shields.io/badge/Token%20Opt-30%E2%80%9350%25%20Savings-emerald.svg)](#-universal-token-optimization)
+[![Protocol](https://img.shields.io/badge/MCP-2024--11--05-brightgreen.svg)](https://modelcontextprotocol.io/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![Agent Guidance Orchestrator Manager](docs/images/hero-banner.png)
 
@@ -23,7 +23,7 @@ Run the one-liner setup script for your operating system to download the latest 
 
 **Windows (PowerShell / CMD):**
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 -OutFile $env:TEMP\i.ps1; & $env:TEMP\i.ps1"
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
 ```
 
 **Linux / macOS:**
