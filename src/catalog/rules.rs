@@ -25,11 +25,23 @@ pub fn get_phase_rules(phase: &str) -> &'static str {
             2. **Per-File Edit Authorization & 300 LOC Hard-Block**: Must call `workflow_gate(action=\"authorize_edit\", relative_path=\"<exact_path>\")` individually for EACH file before modifying or creating it. Files >= 300 LOC are strictly blocked from adding new code; new files must remain < 300 LOC.\n\
             3. **Error Boundaries & Safety**: Never use unwrap() or empty catch blocks in production paths. Preserve existing error boundaries."
         }
-        "test" | "verify" | "review" | "test_recheck" => {
+        "fix" | "debug" | "bugfix" => {
+            "## Defect Remediation & Debugging Mandates (Karpathy: Surgical Changes)\n\
+            1. **Root-Cause Isolation**: Isolate minimal failing case or reproduction before modifying code.\n\
+            2. **Surgical Fixes Only**: Touch only what is broken. Do NOT refactor adjacent unbroken logic or modify unrelated formatting.\n\
+            3. **Regression Prevention**: Verify the fix does not break existing test contracts via `guidance(operation=\"verify\")`."
+        }
+        "test" | "verify" | "test_recheck" => {
             "## Verification & Empirical Testing Mandates (Karpathy: Goal-Driven Execution)\n\
             1. **Empirical Verification**: Run real automated tests via `guidance(operation=\"verify\")` to verify success criteria before claiming completion.\n\
             2. **Zero Assumptions**: Validate edge cases and error branches directly from test output logs.\n\
             3. **Documentation Integrity**: Keep comments and docs synchronized with code modifications."
+        }
+        "review" | "audit" | "refactor" | "decompose" => {
+            "## Code Review & Refactoring Mandates (Karpathy: Simplicity First)\n\
+            1. **Simplicity Over Cleverness**: Flag unnecessary abstractions, dead code, or monolithic bloat.\n\
+            2. **Modularity Enforcer**: Ensure all newly created or decomposed modules remain strictly < 150 LOC (hard cap 300 LOC).\n\
+            3. **Single Responsibility**: Verify decoupled interfaces and absence of compound plural classes/files."
         }
         _ => {
             "## Core Execution Mandates (Karpathy-Aligned)\n\

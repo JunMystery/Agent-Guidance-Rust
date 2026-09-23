@@ -150,7 +150,29 @@ Executes Hierarchical Leiden GraphRAG across multi-level community hierarchies a
 The engine automatically runs an OS-level inotify/file watcher in the background:
 - **5s Debounce**: File edits are buffered for 5 seconds before triggering incremental indexing and GraphRAG community re-clustering.
 - **Incremental Indexing**: Uses SHA256 hashes to only re-parse modified files.
-- **Safe Filtering**: Automatically excludes `.git`, `.agent-context`, `target`, `node_modules`, `build`, `__pycache__`, `dist`, `.next`, and binary files.
+- **Unified Exclusion Engine**: Powered by `src/context/exclusion.rs` to prune temporary directories, build caches, bytecodes, virtual environments, and media files across scanning, indexing, watching, and invalidation.
+
+---
+
+## 🧹 Unified Cache, Temp & Binary Artifact Exclusion
+
+To prevent GraphRAG and SQLite bloat, `src/context/exclusion.rs` enforces centralized O(1)/slice exclusions across the entire context pipeline:
+
+| Category | Excluded Patterns |
+| :--- | :--- |
+| **Python** | `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.nox`, `.hypothesis`, `.venv`, `venv`, `env` |
+| **Node / Web** | `node_modules`, `.next`, `.nuxt`, `.turbo`, `.svelte-kit`, `.parcel-cache`, `.docusaurus`, `.vuepress`, `.output`, `dist`, `build`, `out`, `coverage`, `.nyc_output`, `.yarn` |
+| **Native & IDE** | `target`, `.gradle`, `.dart_tool`, `cmake-build-debug`, `cmake-build-release`, `CMakeFiles`, `.idea`, `.vscode`, `.vs` |
+| **Generic Temp** | `tmp`, `temp`, `.temp`, `.cache`, `cache`, `.agent-context`, `.git`, `.svn`, `.hg` |
+| **Documentation & Docs** | `.md`, `.markdown`, `.mdown`, `.mkdn`, `.txt`, `.text`, `.rst`, `.adoc`, `.asciidoc`, `.pdf`, `.rtf`, `LICENSE`, `COPYING`, `AUTHORS` (no code functions/exports; read directly via tool instead of polluting graph) |
+| **Data Dumps & Tables** | `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.parquet`, `.ipynb`, `.drawio`, `.excalidraw` |
+| **Bytecode / Bin** | `.pyc`, `.pyo`, `.pyd`, `.class`, `.so`, `.dll`, `.dylib`, `.exe`, `.bin`, `.obj`, `.o`, `.a`, `.lib`, `.wasm` |
+| **Lockfiles & Maps** | `.lock`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, `Cargo.lock`, `.min.js`, `.min.css`, `.map` |
+| **Media & Logs** | `.png`, `.jpg`, `.jpeg`, `.gif`, `.ico`, `.webp`, `.svg`, `.mp3`, `.mp4`, `.woff`, `.woff2`, `.ttf`, `.db`, `.sqlite*`, `.log` |
+| **Retained Structured Config** | `.json`, `.toml`, `.yaml`, `.yml`, `.xml`, `.ini`, `.env`, `.properties`, `.conf` (*kept indexed for project detection and monorepo workspace federation*) |
+
+- **Subtree Pruning**: During scanning, the walker prunes entire directories at the parent level without reading child entries.
+- **Housekeeping**: `prune_orphaned_files` actively purges legacy database entries matching the exclusion rules upon full re-indexing.
 
 ---
 

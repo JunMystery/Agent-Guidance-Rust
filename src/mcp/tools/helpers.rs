@@ -252,6 +252,10 @@ pub fn ensure_indexed(proj_path: &Path) -> Option<CodeGraphDb> {
     if !is_watching(proj_path) {
         start_watching(proj_path);
     }
+    let start = std::time::Instant::now();
+    while crate::context::graph_rag::jit_sync::is_indexing(proj_path) && start.elapsed() < std::time::Duration::from_millis(2000) {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
     CodeGraphDb::open_for_project(proj_path).ok()
 }
 

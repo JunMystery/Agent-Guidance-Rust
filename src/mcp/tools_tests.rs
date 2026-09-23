@@ -1282,10 +1282,10 @@
         let level3 = level2.join("dir3");
         let _ = std::fs::create_dir_all(&level3);
 
-        std::fs::write(temp_dir.join("root.txt"), "root").unwrap();
-        std::fs::write(level1.join("l1.txt"), "level 1").unwrap();
-        std::fs::write(level2.join("l2.txt"), "level 2").unwrap();
-        std::fs::write(level3.join("l3.txt"), "level 3").unwrap();
+        std::fs::write(temp_dir.join("root.rs"), "fn root() {}").unwrap();
+        std::fs::write(level1.join("l1.rs"), "fn l1() {}").unwrap();
+        std::fs::write(level2.join("l2.rs"), "fn l2() {}").unwrap();
+        std::fs::write(level3.join("l3.rs"), "fn l3() {}").unwrap();
 
         let mut state = ServerState::new();
 
@@ -1301,9 +1301,9 @@
         assert!(res_default.is_ok());
         let text_default = res_default.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
         assert!(text_default.contains("# Project Tree (Depth Capped at 3)"));
-        assert!(text_default.contains("root.txt"));
-        assert!(text_default.contains("l1.txt"));
-        assert!(text_default.contains("l2.txt"));
+        assert!(text_default.contains("root.rs"));
+        assert!(text_default.contains("l1.rs"));
+        assert!(text_default.contains("l2.rs"));
 
         // 2. Explicit max_depth = 1
         let res_d1 = handle_tool_call(
@@ -1318,8 +1318,8 @@
         assert!(res_d1.is_ok());
         let text_d1 = res_d1.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
         assert!(text_d1.contains("# Project Tree (Depth Capped at 1)"));
-        assert!(text_d1.contains("root.txt"));
-        assert!(!text_d1.contains("l2.txt"));
+        assert!(text_d1.contains("root.rs"));
+        assert!(!text_d1.contains("l2.rs"));
 
         // 3. Clamping: max_depth = 10 clamps to 5, max_depth = 0 clamps to 1
         let res_clamp_high = handle_tool_call(

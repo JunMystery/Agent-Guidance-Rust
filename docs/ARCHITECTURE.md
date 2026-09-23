@@ -31,7 +31,9 @@ src/
 ├── context/           # Project Context, AST Analysis & GraphRAG Engine
 │   ├── ast/           # Polyglot AST parsers (Rust, TS/JS, Python, Go, Kotlin, Vue, Svelte, Astro, SQL, Prisma)
 │   ├── indexer/       # Symbol indexing, doc data extraction, write-through AST invalidation (< 10ms)
-│   ├── scanner.rs     # Bounded workspace scanner (max_depth=3 default, .gitignore filters)
+│   ├── scanner.rs     # Bounded workspace scanner (max_depth=3 default, .gitignore & exclusion filters)
+│   ├── exclusion.rs   # Centralized O(1) exclusion & filtering engine for cache, temp & build artifacts
+│   ├── watcher.rs     # Debounced background file watcher with exclusion filtering
 │   ├── db/            # SQLite code_graph.db (FTS5 symbols, call edges, AST metadata, schema migrations)
 │   ├── graph_rag/     # Hierarchical Leiden community clustering, RAG summarization & subgraph bundling
 │   ├── co_change/     # Evolutionary coupling graph, pairwise tracking & predictive forgotten file alerts

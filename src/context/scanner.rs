@@ -28,21 +28,7 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             if entry.depth() == 0 {
                 return true;
             }
-            let name = entry.file_name();
-            !(name == ".git"
-                || name == ".agent-context"
-                || name == "target"
-                || name == "node_modules"
-                || name == ".gradle"
-                || name == "build"
-                || name == "dist"
-                || name == ".next"
-                || name == "vendor"
-                || name == ".venv"
-                || name == ".cache"
-                || name == "__pycache__"
-                || name == ".turbo"
-                || name == "out")
+            !crate::context::exclusion::is_excluded_entry(entry)
         })
         .build();
 
@@ -61,6 +47,10 @@ pub fn scan_project(root: &Path, max_depth: usize) -> Vec<FileEntry> {
             let ft = entry.file_type();
             let is_dir = ft.as_ref().map(|t| t.is_dir()).unwrap_or(false);
             let is_file = ft.as_ref().map(|t| t.is_file()).unwrap_or(false);
+
+            if !is_dir && crate::context::exclusion::is_excluded_path(&rel_str) {
+                continue;
+            }
 
             let file_type = if is_dir { "directory" } else { "file" };
             let size_bytes = if is_file {
@@ -106,6 +96,26 @@ mod tests {
         assert!(files.iter().any(|f| f.path.contains("main.rs")));
         assert!(!files.iter().any(|f| f.path.contains(".agent-context")));
         assert!(!files.iter().any(|f| f.path.contains("build")));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_scan_project_excludes_pycache_and_temp() {
+        let temp_dir = std::env::temp_dir().join(format!("scan_pycache_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(temp_dir.join("src").join("__pycache__"));
+        let _ = std::fs::create_dir_all(temp_dir.join("temp"));
+        let _ = std::fs::write(temp_dir.join("src").join("__pycache__").join("mod.cpython-312.pyc"), "bytecode");
+        let _ = std::fs::write(temp_dir.join("temp").join("dump.tmp"), "dump");
+        let _ = std::fs::write(temp_dir.join("src").join("app.py"), "print('hello')");
+        let _ = std::fs::write(temp_dir.join("src").join("notes.md"), "# Notes");
+
+        let files = scan_project(&temp_dir, 5);
+        assert!(files.iter().any(|f| f.path.contains("app.py")));
+        assert!(!files.iter().any(|f| f.path.contains("__pycache__")));
+        assert!(!files.iter().any(|f| f.path.contains("dump.tmp")));
+        assert!(!files.iter().any(|f| f.path.contains("temp/")));
+        assert!(!files.iter().any(|f| f.path.contains("notes.md")));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

@@ -3,6 +3,7 @@ pub mod cache;
 pub mod co_change;
 pub mod db;
 pub mod distributed;
+pub mod exclusion;
 pub mod federation;
 pub mod graph_rag;
 pub mod healing;

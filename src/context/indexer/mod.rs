@@ -78,6 +78,7 @@ impl IncrementalIndexer {
             }
         }
         batch::commit_batch(&self.db.conn);
+        let _ = self.db.prune_orphaned_files(&self.project_path);
 
         if let Ok(cross_count) = cross_edges::resolve_all_cross_edges(&mut self.db.conn, &self.project_path) {
             report.edges_created += cross_count;
@@ -161,6 +162,11 @@ impl IncrementalIndexer {
                 .replace('\\', "/")
                 .trim_start_matches('/')
                 .to_string();
+            if crate::context::exclusion::is_excluded_path(&clean_str) {
+                let _ = self.db.delete_file(&clean_str);
+                report.files_skipped += 1;
+                continue;
+            }
             let full_path = self.project_path.join(&clean_str);
             if !full_path.exists() {
                 // File was deleted
@@ -203,7 +209,11 @@ impl IncrementalIndexer {
         current_hash: String,
         report: &mut IndexReport,
     ) -> Result<bool> {
-        if content.len() > 100 * 1024 || rel_path.ends_with(".min.js") || rel_path.ends_with(".lock") {
+        if content.len() > 100 * 1024
+            || rel_path.ends_with(".min.js")
+            || rel_path.ends_with(".lock")
+            || crate::context::exclusion::is_excluded_path(rel_path)
+        {
             return Ok(false);
         }
         let _ = self.db.clear_file_data(rel_path);

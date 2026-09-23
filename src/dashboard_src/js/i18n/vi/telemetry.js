@@ -55,7 +55,7 @@ export const telemetryVi = {
 
   // Governance & Workflow Cadence
   'governance.title': 'Nhịp Điệu Quy Trình & Ma Trận Quản Trị Agent',
-  'governance.phase_cadence': 'Nhịp Điệu Giai Đoạn (task_pipeline)',
+  'governance.phase_cadence': 'Nhịp Điệu Giai Đoạn (Workflow Lifecycle)',
   'governance.gate_controls': 'Kiểm Soát Cổng & Bảo Vệ (workflow_gate)',
   'governance.edits_authorized': 'Sửa Đổi Được Cấp Phép',
   'governance.plans_approved': 'Kế Hoạch Đã Duyệt',

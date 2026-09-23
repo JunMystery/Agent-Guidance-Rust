@@ -55,6 +55,9 @@ fn extract_target(args: &Value) -> Option<String> {
         }
         return Some(trimmed.to_string());
     }
+    if let Some(st) = args.get("target_stage").or_else(|| args.get("stage")).and_then(|v| v.as_str()) {
+        return Some(st.to_string());
+    }
     if let Some(t) = args.get("task").and_then(|v| v.as_str()) {
         let trimmed = t.trim();
         if trimmed.chars().count() > 60 {
@@ -89,45 +92,51 @@ pub fn handle_tool_call(
 
     let start_time = std::time::Instant::now();
     let target = extract_target(&arguments);
-    let op = arguments
-        .get("operation")
-        .or_else(|| arguments.get("action"))
-        .or_else(|| arguments.get("phase"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .or_else(|| {
-            if name == "select_skills" || name == "select_skill" {
-                let skills_val = arguments
-                    .get("skills")
-                    .or_else(|| arguments.get("skill"))
-                    .or_else(|| arguments.get("name"))
-                    .or_else(|| arguments.get("skill_name"))
-                    .or_else(|| arguments.get("identifier"));
-                if let Some(arr) = skills_val.and_then(|v| v.as_array()) {
-                    let names: Vec<String> = arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(skills::clean_skill_identifier))
-                        .filter(|c| !c.is_empty())
-                        .collect();
-                    if !names.is_empty() {
-                        Some(names.join(", "))
+    let op = if name == "task_pipeline" {
+        let raw_p = arguments.get("phase").and_then(|v| v.as_str());
+        let raw_t = arguments.get("task").and_then(|v| v.as_str()).unwrap_or("");
+        Some(pipeline::infer_or_normalize_phase(raw_p, raw_t))
+    } else {
+        arguments
+            .get("operation")
+            .or_else(|| arguments.get("action"))
+            .or_else(|| arguments.get("phase"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                if name == "select_skills" || name == "select_skill" {
+                    let skills_val = arguments
+                        .get("skills")
+                        .or_else(|| arguments.get("skill"))
+                        .or_else(|| arguments.get("name"))
+                        .or_else(|| arguments.get("skill_name"))
+                        .or_else(|| arguments.get("identifier"));
+                    if let Some(arr) = skills_val.and_then(|v| v.as_array()) {
+                        let names: Vec<String> = arr
+                            .iter()
+                            .filter_map(|v| v.as_str().map(skills::clean_skill_identifier))
+                            .filter(|c| !c.is_empty())
+                            .collect();
+                        if !names.is_empty() {
+                            Some(names.join(", "))
+                        } else {
+                            Some("none".to_string())
+                        }
+                    } else if let Some(s) = skills_val.and_then(|v| v.as_str()) {
+                        let clean = skills::clean_skill_identifier(s);
+                        if !clean.is_empty() {
+                            Some(clean)
+                        } else {
+                            Some("none".to_string())
+                        }
                     } else {
-                        Some("none".to_string())
-                    }
-                } else if let Some(s) = skills_val.and_then(|v| v.as_str()) {
-                    let clean = skills::clean_skill_identifier(s);
-                    if !clean.is_empty() {
-                        Some(clean)
-                    } else {
-                        Some("none".to_string())
+                        None
                     }
                 } else {
                     None
                 }
-            } else {
-                None
-            }
-        });
+            })
+    };
 
     let res = match handle_tool_call_internal(name, arguments, state) {
         Ok(mut val) => {

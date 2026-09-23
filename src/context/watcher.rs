@@ -114,42 +114,11 @@ pub fn is_relevant_path(project_root: &Path, path: &Path) -> bool {
         Err(_) => return false,
     };
 
-    let normalized = rel.replace('\\', "/");
-
-    let excluded_dirs = [
-        ".git",
-        ".agent-context",
-        "target",
-        "node_modules",
-        ".gradle",
-        "build",
-        "__pycache__",
-        ".mypy_cache",
-        "dist",
-        ".next",
-        ".nuxt",
-    ];
-    for dir in &excluded_dirs {
-        if normalized == *dir || normalized.starts_with(&format!("{}/", dir)) {
-            return false;
-        }
-    }
-
-    let excluded_extensions = [
-        ".lock", ".min.js", ".min.css", ".map", ".png", ".jpg", ".gif", ".ico", ".woff",
-        ".woff2", ".exe", ".dll", ".so", ".dylib",
-    ];
-    for ext in &excluded_extensions {
-        if normalized.ends_with(ext) {
-            return false;
-        }
-    }
-
     if path.exists() && path.is_dir() {
         return false;
     }
 
-    true
+    !crate::context::exclusion::is_excluded_path(&rel)
 }
 
 #[cfg(test)]

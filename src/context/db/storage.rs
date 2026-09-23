@@ -72,7 +72,7 @@ impl CodeGraphDb {
 
         let mut pruned = 0;
         for path in recorded_paths {
-            if !project_path.join(&path).exists() {
+            if crate::context::exclusion::is_excluded_path(&path) || !project_path.join(&path).exists() {
                 let _ = self.clear_file_data(&path);
                 let _ = self.delete_file(&path);
                 pruned += 1;

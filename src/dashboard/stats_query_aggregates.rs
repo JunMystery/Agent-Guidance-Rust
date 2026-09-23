@@ -56,28 +56,62 @@ pub fn query_hourly_savings(conn: &Connection, now: i64, is_proj: bool, p1: &str
 
 pub fn query_phase_and_gov(conn: &Connection, cutoff: i64, is_proj: bool, p1: &str, p2: &str) -> (Value, Value) {
     let sql = if is_proj {
-        "SELECT tool_name, LOWER(COALESCE(operation, '')), COUNT(*) FROM tool_calls WHERE started_at >= ?1 AND (tool_name = 'task_pipeline' OR tool_name = 'workflow_gate' OR (tool_name = 'guidance' AND operation = 'verify')) AND (project_path = ?2 COLLATE NOCASE OR project_path = ?3 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?2 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?3 COLLATE NOCASE) GROUP BY tool_name, LOWER(COALESCE(operation, ''))"
+        "SELECT tool_name, LOWER(COALESCE(operation, '')), LOWER(COALESCE(target, '')), COUNT(*) FROM tool_calls WHERE started_at >= ?1 AND (tool_name = 'task_pipeline' OR tool_name = 'workflow_gate' OR (tool_name = 'guidance' AND operation = 'verify')) AND (project_path = ?2 COLLATE NOCASE OR project_path = ?3 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?2 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?3 COLLATE NOCASE) GROUP BY tool_name, LOWER(COALESCE(operation, '')), LOWER(COALESCE(target, ''))"
     } else {
-        "SELECT tool_name, LOWER(COALESCE(operation, '')), COUNT(*) FROM tool_calls WHERE started_at >= ?1 AND (tool_name = 'task_pipeline' OR tool_name = 'workflow_gate' OR (tool_name = 'guidance' AND operation = 'verify')) GROUP BY tool_name, LOWER(COALESCE(operation, ''))"
+        "SELECT tool_name, LOWER(COALESCE(operation, '')), LOWER(COALESCE(target, '')), COUNT(*) FROM tool_calls WHERE started_at >= ?1 AND (tool_name = 'task_pipeline' OR tool_name = 'workflow_gate' OR (tool_name = 'guidance' AND operation = 'verify')) GROUP BY tool_name, LOWER(COALESCE(operation, '')), LOWER(COALESCE(target, ''))"
     };
     let mut phases = json!({ "plan": 0, "build": 0, "test": 0, "fix": 0, "review": 0, "refactor": 0 });
     let mut gov = json!({ "edits_authorized": 0, "plans_approved": 0, "verifications_passed": 0, "stages_transitioned": 0 });
+
+    let mut add_phase = |key: &str, cnt: i64| {
+        if let Some(v) = phases.get_mut(key) {
+            *v = json!(v.as_i64().unwrap_or(0) + cnt);
+        }
+    };
+
     if let Ok(mut stmt) = conn.prepare(sql) {
-        let mapper = |r: &rusqlite::Row| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?));
+        let mapper = |r: &rusqlite::Row| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?));
         let rows = if is_proj { stmt.query_map(params![cutoff, p1, p2], mapper) }
                    else { stmt.query_map([cutoff], mapper) };
         if let Ok(iter) = rows {
-            for (t, op, cnt) in iter.flatten() {
+            for (t, op, target, cnt) in iter.flatten() {
                 if t == "task_pipeline" {
-                    if let Some(v) = phases.get_mut(&op) { *v = json!(v.as_i64().unwrap_or(0) + cnt); }
-                } else if op == "authorize_edit" {
-                    gov["edits_authorized"] = json!(gov["edits_authorized"].as_i64().unwrap_or(0) + cnt);
-                } else if op == "approve_plan" || op == "approve" {
-                    gov["plans_approved"] = json!(gov["plans_approved"].as_i64().unwrap_or(0) + cnt);
-                } else if op == "verify" || op == "pass_verification" {
+                    match op.as_str() {
+                        "plan" | "architecture" | "design" | "init" => add_phase("plan", cnt),
+                        "build" | "implement" | "code" | "create" => add_phase("build", cnt),
+                        "test" | "verify" | "test_recheck" | "testing" => add_phase("test", cnt),
+                        "fix" | "debug" | "bugfix" | "patch" => add_phase("fix", cnt),
+                        "review" | "audit" => add_phase("review", cnt),
+                        "refactor" | "decompose" => add_phase("refactor", cnt),
+                        other => add_phase(other, cnt),
+                    }
+                } else if t == "workflow_gate" {
+                    if op == "authorize_edit" {
+                        gov["edits_authorized"] = json!(gov["edits_authorized"].as_i64().unwrap_or(0) + cnt);
+                        add_phase("build", cnt);
+                    } else if op == "approve_plan" || op == "approve" {
+                        gov["plans_approved"] = json!(gov["plans_approved"].as_i64().unwrap_or(0) + cnt);
+                        add_phase("plan", cnt);
+                    } else if op == "verify" || op == "pass_verification" {
+                        gov["verifications_passed"] = json!(gov["verifications_passed"].as_i64().unwrap_or(0) + cnt);
+                        add_phase("test", cnt);
+                    } else if op == "set_stage" || op == "advance" {
+                        gov["stages_transitioned"] = json!(gov["stages_transitioned"].as_i64().unwrap_or(0) + cnt);
+                        if target.contains("build") {
+                            add_phase("build", cnt);
+                        } else if target.contains("test") {
+                            add_phase("test", cnt);
+                        } else if target.contains("fix") {
+                            add_phase("fix", cnt);
+                        } else if target.contains("review") || target.contains("proposal") {
+                            add_phase("review", cnt);
+                        } else if target.contains("plan") || target.contains("context") {
+                            add_phase("plan", cnt);
+                        }
+                    }
+                } else if t == "guidance" && op == "verify" {
                     gov["verifications_passed"] = json!(gov["verifications_passed"].as_i64().unwrap_or(0) + cnt);
-                } else if op == "set_stage" || op == "advance" {
-                    gov["stages_transitioned"] = json!(gov["stages_transitioned"].as_i64().unwrap_or(0) + cnt);
+                    add_phase("test", cnt);
                 }
             }
         }
@@ -167,5 +201,42 @@ mod tests {
         let first = &res[0];
         assert_eq!(first["is_current"], false);
         assert_eq!(first["calls"], 0);
+    }
+
+    #[test]
+    fn test_query_phase_and_gov_lifecycle_cadence() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE tool_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tool_name TEXT NOT NULL,
+                operation TEXT,
+                started_at INTEGER NOT NULL,
+                duration_ms INTEGER,
+                tokens_original INTEGER DEFAULT 0,
+                tokens_optimized INTEGER DEFAULT 0,
+                error_message TEXT,
+                project_path TEXT,
+                target TEXT
+            )",
+            [],
+        ).unwrap();
+
+        let now = 1773187200;
+        conn.execute("INSERT INTO tool_calls (tool_name, operation, started_at, target) VALUES ('task_pipeline', 'plan', ?1, '')", [now]).unwrap();
+        conn.execute("INSERT INTO tool_calls (tool_name, operation, started_at, target) VALUES ('task_pipeline', 'debug', ?1, '')", [now]).unwrap();
+        conn.execute("INSERT INTO tool_calls (tool_name, operation, started_at, target) VALUES ('workflow_gate', 'authorize_edit', ?1, 'src/main.rs')", [now]).unwrap();
+        conn.execute("INSERT INTO tool_calls (tool_name, operation, started_at, target) VALUES ('guidance', 'verify', ?1, '')", [now]).unwrap();
+        conn.execute("INSERT INTO tool_calls (tool_name, operation, started_at, target) VALUES ('workflow_gate', 'advance', ?1, 'Review')", [now]).unwrap();
+
+        let (phases, gov) = query_phase_and_gov(&conn, now - 3600, false, "", "");
+        assert_eq!(phases["plan"], 1);
+        assert_eq!(phases["fix"], 1);
+        assert_eq!(phases["build"], 1);
+        assert_eq!(phases["test"], 1);
+        assert_eq!(phases["review"], 1);
+        assert_eq!(gov["edits_authorized"], 1);
+        assert_eq!(gov["verifications_passed"], 1);
+        assert_eq!(gov["stages_transitioned"], 1);
     }
 }

@@ -55,7 +55,7 @@ export const telemetryEn = {
 
   // Governance & Workflow Cadence
   'governance.title': 'Agent Workflow Cadence & Governance Matrix',
-  'governance.phase_cadence': 'Phase Cadence (task_pipeline)',
+  'governance.phase_cadence': 'Phase Cadence (Workflow Lifecycle)',
   'governance.gate_controls': 'Governance & Guard Controls (workflow_gate)',
   'governance.edits_authorized': 'Edits Authorized',
   'governance.plans_approved': 'Plans Approved',

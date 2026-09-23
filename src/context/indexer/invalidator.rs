@@ -23,6 +23,11 @@ pub fn is_file_dirty(project_path: &Path, rel_path: &str) -> bool {
         .trim()
         .trim_start_matches(|c| c == '/' || c == '\\')
         .replace('\\', "/");
+
+    if crate::context::exclusion::is_excluded_path(&clean_path) {
+        return false;
+    }
+
     let full_path = project_path.join(&clean_path);
 
     if !full_path.exists() {
@@ -69,7 +74,7 @@ pub fn invalidate_and_sync_file(
         ..Default::default()
     };
 
-    if !is_file_dirty(project_path, &clean_path) {
+    if crate::context::exclusion::is_excluded_path(&clean_path) || !is_file_dirty(project_path, &clean_path) {
         report.duration_ms = start.elapsed().as_millis() as u64;
         return Ok(report);
     }

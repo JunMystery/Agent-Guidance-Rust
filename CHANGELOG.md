@@ -2,6 +2,41 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.7.5] - 2026-09-23
+
+### 📊 Dynamic Phase Cadence & Multi-Stage Lifecycle Recognition
+- **Intelligent Phase Inference (`src/mcp/tools/pipeline.rs`, `src/mcp/tools/mod.rs`)**:
+  - Automatically infers the active development phase (`fix`, `test`, `review`, `refactor`, `build`, `plan`) from the task prompt intent even when callers default to `phase="plan"`.
+  - Normalizes lifecycle synonyms (`implement` -> `build`, `debug`/`bugfix` -> `fix`, `verify`/`test_recheck` -> `test`, `audit` -> `review`, `decompose` -> `refactor`).
+  - Added Karpathy-aligned defect remediation rules for `"fix" | "debug"` in `src/catalog/rules.rs`.
+- **Comprehensive Lifecycle Cadence Aggregation (`src/dashboard/stats_query_aggregates.rs`)**:
+  - Rewired `query_phase_and_gov` to aggregate lifecycle actions across BOTH `task_pipeline` and `workflow_gate` / `guidance`.
+  - Code edit authorizations (`authorize_edit`) contribute to `Build` cadence, test verifications (`verify`, `pass_verification`) contribute to `Test` cadence, and stage advances (`advance`, `set_stage`) dynamically increment `Build`, `Review`, `Test`, or `Fix`.
+  - Solved the issue where Phase Cadence was permanently stuck displaying 100% `Plan`.
+- **Dashboard UI & Protocol Alignment (`src/dashboard_src/index.html`, `CLAUDE.md`, `src/mcp/templates.rs`)**:
+  - Updated section header to `Phase Cadence (Workflow Lifecycle)` in English and Vietnamese dictionaries.
+  - Updated protocol templates across all IDEs to document full lifecycle phase options (`plan | build | test | debug | review | refactor`).
+
+### 🧹 Unified Cache, Documentation & Temp Artifact Exclusion Engine
+- **Centralized Exclusion Module (`src/context/exclusion.rs`)**:
+  - Implemented a unified O(1)/slice exclusion filter covering all common language runtimes, build systems, package managers, virtual environments, temporary artifact directories, documentation, and data dumps.
+  - Excluded directories: Python (`__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.nox`, `.hypothesis`, `.venv`, `venv`, `env`), Node/Web (`node_modules`, `.next`, `.nuxt`, `.turbo`, `.svelte-kit`, `.parcel-cache`, `.docusaurus`, `.vuepress`, `.output`, `dist`, `build`, `out`, `coverage`, `.nyc_output`, `.yarn`), Rust & Native (`target`, `.gradle`, `.dart_tool`, `cmake-build-debug`, `cmake-build-release`, `CMakeFiles`, `.idea`, `.vscode`, `.vs`), and Generic Temp (`tmp`, `temp`, `.temp`, `.cache`, `cache`, `.agent-context`, `.git`, `.svn`, `.hg`).
+  - Excluded documentation & text: Markdown (`.md`, `.markdown`, `.mdown`, `.mkdn`), plain text (`.txt`, `.text`, `.rst`, `.adoc`, `.asciidoc`, `.pdf`, `.rtf`), and metadata files (`LICENSE`, `COPYING`, `AUTHORS`). Users/agents read docs directly on demand without polluting the code graph.
+  - Excluded data dumps & notebooks: Tabular files (`.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.parquet`), Jupyter notebooks (`.ipynb`), and diagrams (`.drawio`, `.excalidraw`).
+  - Retained structured configuration files: Essential workspace configs (`.json`, `.toml`, `.yaml`, `.yml`, `.xml`, `.ini`, `.env`, `.properties`, `.conf`) remain fully indexed to power workspace federation and project detection.
+  - Excluded extensions & files: Bytecode & binaries (`.pyc`, `.pyo`, `.pyd`, `.class`, `.so`, `.dll`, `.dylib`, `.exe`, `.bin`, `.obj`, `.o`, `.a`, `.lib`, `.wasm`), temp/backups (`.tmp`, `.temp`, `.swp`, `.swo`, `.bak`, `.orig`), archives, media, fonts, databases/logs, minified files/source maps, and lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, `Cargo.lock`, etc.).
+- **Subtree Pruning at Directory Scanner (`src/context/scanner.rs`)**:
+  - `WalkBuilder` filter hook automatically halts subtree descent upon encountering any excluded directory, completely eliminating unnecessary filesystem traversals and I/O overhead.
+- **Incremental Indexer & AST Invalidation Guards (`src/context/indexer/mod.rs`, `invalidator.rs`)**:
+  - Indexer skips content extraction and purges any excluded paths submitted via specific batch queries.
+  - Invalidator short-circuits dirty checks and file synchronization within <0.1ms for any excluded path.
+- **Background File Watcher Optimization (`src/context/watcher.rs`)**:
+  - Rewired `is_relevant_path` directly to the centralized exclusion engine, preventing debounced background re-indexing churn when dev servers modify cache or temp files.
+- **Automated Graph Database Housekeeping (`src/context/db/storage.rs`)**:
+  - `prune_orphaned_files` cleans up both deleted files and legacy indexed files that match the exclusion rules, keeping `.agent-context/code_graph.db` lean and compact.
+- **Cold-Start Search Synchronization Guard (`src/mcp/tools/helpers.rs`)**:
+  - `ensure_indexed` gracefully coordinates with non-blocking cold-start background indexing (up to 2s timeout) to guarantee accurate search results on newly opened projects without empty false negatives.
+
 ## [1.7.4] - 2026-09-21
 
 ### 🚀 Non-Blocking Cold-Start Indexing & SQLite Batch Transactions
