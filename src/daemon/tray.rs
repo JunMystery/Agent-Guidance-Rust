@@ -3,8 +3,11 @@ use std::thread;
 #[cfg(target_os = "windows")]
 use super::tray_windows::run_windows_tray;
 
-#[cfg(not(target_os = "windows"))]
-use super::tray_unix::run_unix_tray;
+#[cfg(target_os = "linux")]
+use super::tray_linux::run_linux_tray;
+
+#[cfg(target_os = "macos")]
+use super::tray_macos::run_macos_tray;
 
 /// Spawns the cross-platform system tray icon in a dedicated background thread.
 pub fn spawn_system_tray(port: u16) {
@@ -17,20 +20,26 @@ pub fn spawn_system_tray(port: u16) {
             });
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     {
-        #[cfg(target_os = "linux")]
-        {
-            if std::env::var("DISPLAY").is_err() && std::env::var("WAYLAND_DISPLAY").is_err() {
-                tracing::info!("Headless Linux environment detected, system tray disabled");
-                return;
-            }
+        if std::env::var("DISPLAY").is_err() && std::env::var("WAYLAND_DISPLAY").is_err() {
+            tracing::info!("Headless Linux environment detected, system tray disabled");
+            return;
         }
 
         let _ = thread::Builder::new()
             .name("agent-guidance-tray".to_string())
             .spawn(move || {
-                run_unix_tray(port);
+                run_linux_tray(port);
+            });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = thread::Builder::new()
+            .name("agent-guidance-tray".to_string())
+            .spawn(move || {
+                run_macos_tray(port);
             });
     }
 }

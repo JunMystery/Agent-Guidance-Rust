@@ -1,6 +1,6 @@
 [package]
 name = "agent-guidance"
-version = "1.7.5"
+version = "1.7.6"
 edition = "2024"
 authors = ["Jun Mystery <contact@junmystery.com>"]
 
@@ -34,11 +34,8 @@ tree-sitter-typescript = "0.23"
 tree-sitter-python = "0.23"
 tree-sitter-go = "0.23"
 [target.'cfg(target_os = "linux")'.dependencies]
-tray-item = { version = "0.10", default-features = false, features = ["ksni"] }
-libdbus-sys = { version = "0.2", features = ["vendored"] }
-
-[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
-tray-item = { version = "0.10", default-features = false }
+ksni = "0.2"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.52", features = [
@@ -47,6 +44,7 @@ windows-sys = { version = "0.52", features = [
     "Win32_UI_Shell",
     "Win32_System_LibraryLoader",
     "Win32_System_StationsAndDesktops",
+    "Win32_Graphics_Gdi",
 ] }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
@@ -60,6 +58,7 @@ metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
 directml = ["ort/directml"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
+tray-item = { version = "0.10", default-features = false }
 candle-core = { version = "0.8", features = ["accelerate"] }
 candle-nn = { version = "0.8", features = ["accelerate"] }
 

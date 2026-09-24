@@ -54,6 +54,7 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
         }
     });
 
+    crate::daemon::tray::spawn_system_tray(port);
     crate::dashboard::spawn_dashboard_background(port, project_path);
 
     tokio::spawn(async move {

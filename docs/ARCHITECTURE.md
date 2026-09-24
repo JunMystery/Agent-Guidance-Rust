@@ -21,7 +21,11 @@ src/
 │   ├── server.rs      # Named pipe (Windows) / Unix socket server dispatch
 │   ├── handler.rs     # Worker thread pool (32 concurrent permits, zero-alloc bypass)
 │   ├── spawn.rs       # Detached spawn (Windows WMI breakaway + Unix nohup)
-│   ├── tray.rs        # Windows taskbar system notification tray icon
+│   ├── tray.rs        # Cross-platform system tray dispatcher & headless detection
+│   ├── tray_windows.rs# Windows Win32 Shell_NotifyIcon taskbar tray
+│   ├── tray_linux.rs  # Linux D-Bus StatusNotifierItem (ksni) zero-C-dependency tray
+│   ├── tray_macos.rs  # macOS Cocoa NSStatusItem (tray-item) background tray
+│   ├── tray_platform.rs# Cross-platform browser & directory opener helpers
 │   └── lock.rs        # File-lock singleton mutex guard
 ├── catalog/           # Skills Catalog & Architecture Blueprints
 │   ├── store.rs       # 279 embedded skills (rust_embed) + workspace .agents/skills scanning

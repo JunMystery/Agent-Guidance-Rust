@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.7.5-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.7.6-blue.svg)](Cargo.toml)
 [![Rust](https://img.shields.io/badge/Rust-1.78+-orange.svg)](https://www.rust-lang.org/)
 [![Capabilities](https://img.shields.io/badge/MCP-Tools%20%26%20Resources-purple.svg)](#-key-capabilities)
 [![Skills](https://img.shields.io/badge/Skills-440%20Loaded-green.svg)](#-smart-skills-system)

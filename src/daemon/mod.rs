@@ -10,8 +10,12 @@ pub mod server;
 pub mod lock;
 pub mod spawn;
 pub mod tray;
+#[cfg(target_os = "windows")]
 pub mod tray_windows;
-pub mod tray_unix;
+#[cfg(target_os = "linux")]
+pub mod tray_linux;
+#[cfg(target_os = "macos")]
+pub mod tray_macos;
 pub mod tray_platform;
 pub mod ide_detector;
 pub mod lifecycle;
