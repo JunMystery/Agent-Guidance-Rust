@@ -1,40 +1,41 @@
 # 🦀 Agent Guidance MCP Server
 
 [![Version](https://img.shields.io/badge/Version-v1.8.0-blue.svg)](Cargo.toml)
-[![Rust](https://img.shields.io/badge/Rust-1.78+-orange.svg)](https://www.rust-lang.org/)
-[![Capabilities](https://img.shields.io/badge/MCP-Tools%20%26%20Resources-purple.svg)](#-key-capabilities)
-[![Skills](https://img.shields.io/badge/Skills-440%20Loaded-green.svg)](#-smart-skills-system)
-[![Multi-Session](https://img.shields.io/badge/Session-Process%20Isolated-blueviolet.svg)](#-multi-session-isolation)
-[![Token Compression](https://img.shields.io/badge/Token%20Opt-30%E2%80%9350%25%20Savings-emerald.svg)](#-universal-token-optimization)
-[![Protocol](https://img.shields.io/badge/MCP-2024--11--05-brightgreen.svg)](https://modelcontextprotocol.io/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Language-Rust%202024-orange.svg)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
+[![Contributing](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+[![MCP Compliant](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-green.svg)](https://modelcontextprotocol.io/)
+[![Token Reduction](https://img.shields.io/badge/Tokens%20Saved-~80%25-brightgreen.svg)](#-surgical-skill-rag-slicing-token-savings)
 
-![Agent Guidance Orchestrator Manager](docs/images/hero-banner.png)
+![Agent Guidance Hero Banner](docs/images/hero-banner.png)
 
-> **Agent Guidance** is a native, high-performance **MCP (Model Context Protocol) Server & Autonomous Orchestrator** written in Rust. It supervises AI Coding Agents (Antigravity, Claude Code, Cursor, Windsurf, Devin, OpenCode) to enforce enterprise architecture patterns, isolate multi-IDE session states, prevent context window blowups via token compression, and deliver sub-millisecond **Smart Skills Calls** via local ML vector search.
+> **The Architectural Conductor for AI Coding Agents.**
+> Stop spaghetti code, cut context bloat by 80%, and supercharge agent reasoning. Agent Guidance supervises AI Coding Agents (Claude Code, Cursor, Windsurf, Devin, Codex) by enforcing architectural patterns, preventing monolithic slop with a 300 LOC cap, and delivering sub-millisecond **Hierarchical GraphRAG** with neural skill retrieval.
 
 ---
 
 ## 🚀 Quickstart & Installation
 
-### Interactive Mode Selection (v1.8.0)
+Installers provide an interactive mode selector:
+- **`[1] Full Standalone`**: Single binary with in-process Candle/ORT inference (~40 MB).
+- **`[2] Lightweight Client`**: Zero-ML footprint (~15 MB RAM), forwards queries to Remote Worker.
+- **`[3] Dedicated Server Worker`**: Central ML worker daemon with systemd / launchd / Windows Scheduled Task.
 
-Installers prompt for your deployment profile:
-- **`[1] Full Standalone`**: All-in-one local binary with in-process Candle/ORT inference (~40 MB).
-- **`[2] Lightweight Client`**: Zero-ML footprint (~15 MB RAM), pure AST parsing, forwards semantic queries to a Remote ML Worker.
-- **`[3] Dedicated Server Worker`**: High-throughput ML node, centralized binary registry, auto-configures background daemon (systemd/launchd/Windows Task).
+### Automatic One-Line Install
 
-**Windows (PowerShell / CMD):**
+**Windows (PowerShell):**
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
 ```
 
-**Linux / macOS:**
+**Linux / macOS (Bash):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.sh | bash
 ```
 
-### Manual Build via Cargo
+### Manual Cargo Build
 
 ```bash
 git clone https://github.com/JunMystery/Agent-Guidance-Rust.git
@@ -45,170 +46,172 @@ cargo build --release
 
 ---
 
-## 🛠️ MCP Tool Suite Reference
+## ⚡ The Difference: AI with vs. without Agent Guidance
 
-Agent Guidance exposes 6 high-efficiency MCP tools designed to minimize agent round-trips and token waste:
-
-| Tool Name | Role / Action | Mandatory Arguments | Key Capabilities |
-| :--- | :--- | :--- | :--- |
-| **`task_pipeline`** | **Entrypoint Orchestrator** | `task`, `project_path`, `phase` | CALL FIRST. Scans project, unlocks priority gate, proposes skills, synthesizes **Dynamic Split Blueprints** (detects $\ge 200$ LOC files) and **Skill Recipes**, and injects **Memorized Learnings**. |
-| **`select_skills`** | **Semantic Skill Loader** | `skills` | Loads skill instructions into context with **Semantic Slicing** (Top-3 sections via Multilingual-E5 saving ~70% tokens), records analytics, and injects language safety micro-guidance. |
-| **`workflow_gate`** | **Stage & Impact Guard** | `action` | Manages stage transitions (`check`, `status`, `set_stage`, `advance`, `authorize_edit`, `rollback`, `sync_file`). Features **Zero-Turn Advance**, **Code Graph Impact Risk Gating**, **Evolutionary Co-Change Forgotten File Alerts**, **Targeted Write-Through Invalidation (<10ms)**, and **Pre-edit Snapshot Rollback**. |
-| **`project_context`** | **Code Graph, GraphRAG & Multi-File Bundling** | `operation` (`graph_rag` / `search` / `subgraph_bundle` / `data_flow` / `navigate` / `read` / `symbols` / `references` / `callers` / `callees` / `blast_radius` / `definition` / `type_definition` / `architecture` / `tree` / `learn_alias` / `reindex` / `enrich_graph` / `semantic_query`) | **Hierarchical Leiden GraphRAG** (`global`, `local`, `drift`, `basic`), **Multi-File Subgraph Bundling** (`subgraph_bundle` packing target + 1-hop callers/callees under 250 LOC budget), **Intra-procedural Data Flow** (`data_flow`), **Deep Graph Federation** (Cargo & npm monorepo workspaces, cross-repo callers/callees), **Architecture Healing Sentinel** (Cycle & Orphan detection in `architecture`), **Search Precision** (Dynamic IDF + Intent Gating), 6-phase cascade search (<100ms), RAG code chunk vectors, AST symbol extraction, and **AST Structural Skeletonization** (`view_mode="skeleton"`). |
-| **`guidance`** | **Skills & Rule Engine** | `operation` (`search` / `docs` / `workflow` / `precode` / `verify` / `analytics`) | 2-stage vector search over 279 embedded skills, **Cross-Session Skill Analytics** (`analytics` operation with historical boost), language-specific precode safety rules, and empirical verification contracts. |
-| **`session_continuity`** | **Memory, Snapshots & Handoff** | `operation` (`save` / `load` / `clear` / `learn` / `handoff` / `diff` / `list` / `switch`) | Persists active task states, records **Pairwise Co-Changes** into evolutionary graph, saves **Categorized Project Learnings** in `.agent-context/learnings.md` (30-item FIFO cap with vector deduplication), and generates **Cross-Agent Handoff** summaries in `.agent-context/handoff.md`. |
+| Challenge | Without Agent Guidance (The AI Slop Problem) | With Agent Guidance (The Disciplined Architect) |
+| :--- | :--- | :--- |
+| **Code Structure & Modularity** | AI writes sprawling 800–1,500 LOC monolithic files, mixing database queries directly into UI components. | **Enforced 300 LOC Hard Cap** & upfront pattern blueprints (**Clean Architecture**, **Layered**, **Package-by-Feature**). Files are decomposed from line 1. |
+| **Container & File Naming** | Creates messy junk-drawer files (`utils.ts`, `services.py`, `helpers.go`). | **40 Compound Plural Suffixes Blocked** (`COMPOUND_FILE_NAME_PROHIBITED`). Every file must strictly observe Single Responsibility. |
+| **Context Window & Tokens** | Dumps full files and 500-line markdown skills into prompt, exhausting context windows and triggering hallucinations. | **Surgical Section-Level RAG Slicing**: Delivers only the top 2–3 relevant sections (~350 tokens, **~80% token savings**) using Candle BERT vector ranking. |
+| **Codebase Onboarding** | AI reads files sequentially, taking dozens of turns to guess relationships and losing track of dependencies. | **10-Second Hierarchical GraphRAG**: Instant macro community outline (Level 0/1/2) and 1-hop caller/callee bundling under 250 LOC. |
+| **Test & Fix Cycles** | Enters infinite repair loops, repeatedly making blind edits that break adjacent modules. | **Fix Circuit Breaker**: Trips automatically after 3 consecutive failed attempts, rolling back snapshots and requesting human intervention. |
+| **Deployment Topology** | Heavy local Python/ML dependencies consume 1GB+ RAM, slowing down developer laptops. | **Dual-Role Topology**: Lightweight Client runs in **~15MB RAM**, delegating heavy neural vector workloads to a dedicated Remote ML Worker. |
 
 ---
 
-## 🎯 Key Capabilities
+## 🧭 Instant Codebase Onboarding with Hierarchical GraphRAG
 
-### 1. Hierarchical Codebase GraphRAG (Global, Local, DRIFT Search)
-- **Leiden Hierarchical Community Clustering**: Partitions codebase symbols and AST relationships into Level 0 (Macro Subsystems), Level 1 (Feature Modules), and Level 2 (Micro Clusters).
-- **The 4 Query Modes**:
-  - **Global Search**: High-level reasoning across community summaries.
-  - **Local Search**: Targeted symbol search with 1-hop & 2-hop DAG call/import fan-out.
-  - **DRIFT Search**: Dual-route combining macro community layer context with micro AST signatures.
-  - **Basic Search**: Fast HNSW vector and FTS5 fallback.
-- **Continuous Reactive Watcher**: Background file watcher automatically updates AST nodes and re-clusters community summaries upon code modifications.
+AI agents waste up to 70% of their context reading full source files just to understand function call chains. Agent Guidance implements **Hierarchical Leiden GraphRAG** backed by Tree-sitter AST symbol tables and SQLite:
 
-### 2. Autonomous Single-Entrypoint Orchestration
-- Governs the complete AI agent lifecycle through `task_pipeline`. The MCP server inspects the workspace, unlocks priority gates, selects skills, and dynamically directs next steps.
-- Enforces enterprise architecture styles (**Clean Architecture**, **Layered Architecture**, **Package-by-Feature**, **CLI Pipeline**, **Flat Library**, **Orchestrator**) with cross-session persistence in `.agent-context/architecture.json`.
+![Hierarchical GraphRAG Architecture](docs/images/graphrag-architecture.png)
 
-### 3. High-Speed 6-Phase Search Cascade (<100ms)
-- Replaces slow raw disk scans with an instant multi-tier cascade stored in `<project_root>/.agent-context/code_graph.db`:
-  1. **Phase 1: Alias Cache (<1ms)**: Instant lookup for learned natural language queries.
-  2. **Phase 2: Symbol FTS5 (<5ms)**: SQLite FTS5 index on all functions, structs, enums, classes, and traits.
-  3. **Phase 3: Symbol Vectors (<50ms)**: BERT semantic similarity on symbol signatures.
-  4. **Phase 4: Content FTS5 (<5ms)**: Full-text search across 50-line code chunks.
-  5. **Phase 5: RAG Content Vectors (<100ms)**: Multilingual-E5 semantic search on actual code chunks.
-  6. **Phase 6: Linked Projects (<120ms)**: Cross-workspace semantic and symbol search across linked repositories.
-- **Adaptive Alias Learning**: Automatically learns successful queries, increasing confidence with reuse and decaying inactive mappings (50% reduction after 30 days, purged after 90 days).
-- **Proactive Background File Watcher**: Uses OS-level file monitoring (`notify`) with a 5s debounce to incrementally update AST symbols, DAG edges, and RAG chunks before the agent even issues a query.
-
-### 4. Hardened 300 LOC Cap & Upfront Decomposition
-- Physically clamps file reads at 300 lines max and automatically injects architectural decomposition mandates on large files.
-- Generates concrete Upfront Split Blueprints per pattern during pre-code guidance.
-
-### 5. Universal In-Engine Token Compression
-- Automatically intercepts and compresses all outgoing MCP tool responses, stripping HTML comments, badges, and redundant whitespace.
-- Reduces context payload size by **30–50%** while logging real-time token savings to SQLite (`~/.agent-guidance/usage.db`).
-
-### 6. Multi-Session & Multi-IDE Isolation
-- Assigns process-isolated Session IDs (`session_{PID}_{ClientName}`) to eliminate state collisions across concurrent IDEs (VS Code, Cursor, Antigravity) or CLI tools in the same codebase.
-
-### 7. Real-Time Web Dashboard & Visual GraphRAG
-
-![Agent Guidance Real-Time Web Dashboard & Visual GraphRAG](docs/images/dashboard-GraphRAG.png)
-
-- **Interactive Multi-Mode Architecture Graph**: Real-time canvas visualizer with 3 distinct inspection modes:
-  - **Mode 1 (File Dependencies)**: Inter-file dependency graphs (1-N & N-1), interactive Subgraph Isolation, and Directory & File Container Navigator (`#graph-symbol-list-container`).
-  - **Mode 2 (File Functions Drill-Down)**: Caller/callee function call paths with directed color-coded arrows, searchable file combobox, and global 'Show all' codebase call maps.
-  - **Mode 3 (Symbol Graph)**: Full AST symbol graph with ForceAtlas2 physics simulation, contrast halos, and Leiden community clusters.
-- **Calibrated 10% Dim Capacity**: Unselected nodes and edges gracefully dim to 10% opacity (`0.10`) for focused architecture inspection.
-- **Deep Symbol & Blast Radius Inspector**: Click any node or search by name to inspect callers, dependencies, architectural tiers, and blast radius risk scores.
-- **Parallel Symbol & Function Navigator**: Search and navigate across all project files and functions simultaneously with instantaneous filtering.
-- **Token Savings & Velocity Dynamics**: Interactive telemetry charts tracking original vs. compressed payload waves, peak velocity, and execution traces.
-- **Bilingual Interface (i18n)**: Full native parity for English (`en`) and Vietnamese (`vi`) with instant dynamic switching and persistent preferences.
-- **Zero-Friction Singleton Daemon**: Runs quietly in the background, serving all concurrent IDE instances, and automatically shuts down immediately once the last IDE window closes.
-
-### 8. Deep Graph Federation & Multi-Workspace Monorepos
-- **Automated Workspace Discovery**: Scans Cargo workspace members (`[workspace] members`), npm/pnpm/yarn workspaces, and Go work roots to seamlessly bind virtual monorepos into a single unified knowledge graph.
-- **Cross-Repo Call Graph Traversal**: Discovers callers and callees spanning across linked repository boundaries (`project_context(operation="callers" | "callees")`), tagged with clear repository namespaces (`[repo:lib-name]`).
-
-### 9. Continuous Learning Graph & Evolutionary Co-Change Alerts
-- **Pairwise Co-Change Tracking**: Automatically records co-edited file pairs into SQLite `co_change_edges` on session persistence (`session_continuity(operation="save")`).
-- **Predictive Forgotten File Sentinel**: Evaluates historical co-change coupling ($\ge 60\%$) during edit authorization (`workflow_gate(action="authorize_edit")`), warning agents when tightly coupled code files or test suites are accidentally overlooked.
-
-### 10. Architecture Healing Sentinel (Cycles & Dead Code)
-- **Circular Dependency Detection**: Directed DFS engine detects dependency loops between modules with rotational deduplication.
-- **Dead & Orphan Symbol Scanning**: Isolates unused internal symbols with zero callers and zero callees directly within `project_context(operation="architecture")`.
-
-### 11. Distributed Graph Memory & Verified Snapshots
-- **Portable Snapshot Archival**: Export and import verified GraphRAG database snapshots (`.agpack`) with SQLite WAL checkpointing, streaming SHA256 checksums, and pre-installation `PRAGMA quick_check` validation.
-- **Zero-Latency Team Onboarding**: Distribute pre-indexed code graphs across CI/CD runners or distributed multi-agent clusters without redundant 50,000 LOC AST parsing.
-
----
-
-## 🏗️ Architectural Workflow
-
-![Orchestrator Workflow Flowchart](docs/images/orchestrator-flow.png)
-
-### The 7-Stage Workflow Gate
-`Context` $\longrightarrow$ `Plan` $\longrightarrow$ `Ask_Revise` $\longrightarrow$ `Build` $\longrightarrow$ `Test_Recheck` $\longrightarrow$ `Fix` $\longrightarrow$ `Proposal`
-
-- **Composite Gate Action (`workflow_gate action="advance"`)**: Performs stage check, transition, and architecture pattern authorization in a single composite MCP call.
-- **Hard Edit Gate (`workflow_gate action="authorize_edit"`)**: Code modification is BLOCKED until `plan_approved = true` and a valid `architecture_pattern` is verified.
-- **Circuit Breaker**: If 3 consecutive fix attempts fail during `Fix`, the MCP server automatically trips, resets stage to `Ask_Revise`, and requests human intervention.
-
----
-
-## 🧠 Smart Skills System
-
-The built-in ML catalog engine leverages local Rust bindings for Hugging Face `candle` to perform sub-millisecond semantic skill discovery:
-
-- **Stage 1 (Cosine Similarity)**: Scans 279 embedded skills (440 precomputed vector embeddings) using Candle BERT vector embeddings with precomputed binary vector acceleration ($<5\text{ ms}$).
-- **Stage 2 (Intent Reranking)**: Cross-encoder (`ms-marco-MiniLM-L-6-v2`) reranks top candidates with language profile boosting.
-- **On-Demand Loading**: Skills are injected dynamically into context via `select_skills(skills=[...])` only when confirmed.
-
-### Custom Skill Sets (User Extensibility)
-You can easily add your own custom skills without rebuilding or reconfiguring the MCP server:
-- **Global Custom Skills**: Simply copy or paste your skill directories/markdown files directly into:
-  - **`~/.agent-guidance/skills/`** (or `~/.agents/skills/`)
-- **Workspace-Specific Skills**: Place custom skills directly in your active project repository under:
-  - **`<project_root>/.agents/skills/`**
-  - **`<project_root>/.opencode/skills/`**
-  - **`<project_root>/.claude/skills/`**
-
-All `.md` files in these directories are automatically scanned, parsed for YAML frontmatter (`name: ...`), and indexed into the local search catalog on the fly.
-
----
-
-## ⚡ Universal Token Optimization
-
-- **Hard Clamping**: Capped at 300 LOC per file read, 20 results per search, 30 references per symbol search, and 15 items per tree preview.
-- **Symbol-Targeted Extraction**: Extract exact function/struct blocks using `project_context(operation="read", target_symbol="...")` saving up to 85% of tokens.
-- **Dynamic Compression**: Automatic stripping of markdown comments, badges, and empty lines across all responses.
-- **SQLite Analytics**: All tool metrics, durations, and token savings are logged to `~/.agent-guidance/usage.db`.
-
----
-
-## 🔒 Multi-Session Isolation
-
-When running multiple AI agents across different IDEs or terminals simultaneously in the same repository, `Agent Guidance` maintains total isolation:
+### The 3-Tier Community Hierarchy
+- **Level 0 (Macro Subsystems)**: Broad domain boundaries (`ui`, `domain`, `infrastructure`, `ml`).
+- **Level 1 (Feature Modules)**: Logical service groups and package boundaries.
+- **Level 2 (Micro Clusters)**: Tightly-coupled function and class clusters.
 
 ```text
-.agent-context/
-├── architecture.json                    (Persistent Architecture Memory)
-├── sessions/
-│   ├── session_14820_antigravity.json   (Build Stage - Plan Approved)
-│   ├── session_29401_cursor.json        (Plan Stage - Awaiting Approval)
-│   └── session_8812_cli.json            (Context Stage)
-└── session.json                         (Legacy Atomic Pointer)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LEVEL 0: MACRO SUBSYSTEMS (Macro Architecture Layer)                        │
+│   [ UI & Presentation ]        [ Domain & Logic ]        [ Infrastructure ] │
+└─────────────┬───────────────────────────┬─────────────────────────┬─────────┘
+              │                           │                         │
+              ▼                           ▼                         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LEVEL 1: FEATURE MODULES (Leiden Community Clusters)                        │
+│   [ Authentication Service ]   [ Billing Engine ]        [ Rusqlite Store ] │
+└─────────────┬───────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LEVEL 2: MICRO CALL GRAPH (AST Directed Function Nodes)                     │
+│   verify_token() ──────► check_permissions() ──────► query_user()           │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Automated GC Policy**: On startup and session load, stale session files older than 30 days are automatically purged. If total session files exceed 100, the oldest files are pruned.
+### The 4 GraphRAG Search Modes
+1. **DRIFT Search (Default)**: Dual-route search combining macro community summaries with micro AST signatures for complete structural grounding.
+2. **Global Search**: High-level architectural reasoning across macro community summaries.
+3. **Local Search**: Targeted symbol search with 1-hop and 2-hop DAG call/import fan-out.
+4. **Subgraph Bundling (`subgraph_bundle`)**: Packs target function definition + 1-hop callers + 1-hop callees into a single token-bounded snippet (<250 LOC).
 
 ---
 
-## 💻 CLI Commands & Maintenance
+## 📉 Surgical Skill RAG Slicing (Token Savings)
 
-`agent-guidance` provides built-in CLI commands for managing IDE clients, remote worker nodes, updates, and metrics:
+Traditional prompt injection dumps entire 300–600 line skill files into the context window, causing prompt bloat, high costs, and attention drift. Agent Guidance splits skills by `##` headers, computes vector embeddings, and delivers only the exact 2–3 sections relevant to the active task:
+
+```text
+TRADITIONAL FULL SKILL INJECTION:
+[██████████████████████████████████████████████████] ~2,100 tokens (Full SKILL.md Dump)
+
+AGENT GUIDANCE SURGICAL RAG SLICING:
+[████████] ~350 tokens (Top 2-3 Vector-Ranked Sections)
+═════════════════════════════════════════════════════════════════════════════
+🚀 ~83.3% CONTEXT SAVED PER SKILL CALL | < 0.2ms In-Memory Binary AGV1/AGS1
+```
+
+- **In-Memory Binary Runtime (`AGV1` & `AGS1`)**: Zero disk reads or live markdown parsing during queries.
+- **HTTP 304 Zero-Payload Caching**: Returns empty `304 Not Modified` when catalog ETag matches, cutting network round-trips to `<0.2 ms`.
+- **Local SQLite LRU Cache**: Repeated skill selections resolve locally from disk in `<1 ms`.
+
+---
+
+## 🛡️ Step-by-Step AI Guardrail Pipeline
+
+Agent Guidance forces autonomous agents to follow an enterprise engineering lifecycle:
+
+![Orchestrator Workflow & Safety Gates](docs/images/orchestrator-workflow.png)
+
+```text
+  [ User Prompt ]
+         │
+         ▼
+┌─────────────────┐
+│  task_pipeline  │ ──► Priority Gate & Architecture Pattern Detection
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Plan Stage    │ ──► 300 LOC Upfront Decomposition Blueprint
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐       No (Revise)
+│ Human Approval? ├─────────────────────────┐
+└────────┬────────┘                         │
+         │ Yes                              ▼
+         ▼                          ┌───────────────┐
+┌─────────────────┐                 │ Ask / Revise  │
+│   Build Stage   │                 └───────▲───────┘
+│  workflow_gate  │ ──► 300 LOC Ceiling     │
+└────────┬────────┘     Rollback Snapshot   │
+         │                                  │
+         ▼                                  │
+┌─────────────────┐                         │
+│  Test & Verify  │                         │
+└────────┬────────┘                         │
+         │                                  │
+         ├────── Pass ────────► [ Review & Document ]
+         │                                  │
+         ├────── Fail (<= 3 attempts) ──────┤ (Auto Fix Loop)
+         │                                  │
+         └────── Fail (> 3 attempts) ───────┘ (Circuit Breaker Trips)
+```
+
+1. **Priority & Architecture Gate (`task_pipeline`)**: Mandatory first step. Detects project architecture, flags monolithic files ($\ge 200$ LOC), and generates modular blueprints.
+2. **Human-in-the-Loop Plan Approval**: Code modification remains strictly locked until `plan_approved = true`.
+3. **Write-Through Authorization (`workflow_gate`)**: Creates pre-edit rollback snapshots, blocks compound plural containers, and enforces the 300 LOC hard ceiling.
+4. **Predictive Co-Change Sentinel**: Evaluates historical commit graphs to warn agents if coupled files or test suites were forgotten.
+5. **Fix Circuit Breaker**: Automatically trips after 3 consecutive failed test attempts, halting hallucinated fix spirals.
+
+---
+
+## 🌐 Dual-Role Topology (v1.8.0)
+
+Split your AI coding workloads to fit your development environment:
+
+![Dual-Role Client/Server Topology](docs/images/dual-role-topology.png)
+
+```text
+Personal Developer Device (Client)             Remote Server (Worker Daemon)
+┌───────────────────────────────────────┐      ┌───────────────────────────────────────┐
+│ • ZERO Local ML & Vector Files        │      │ • SOLE CUSTODIAN of Binary Vectors:   │
+│   (skills.bin & vectors.bin ABSENT)   │      │     vectors.bin & skills.bin (<1ms)   │
+│ • Tree-sitter AST & Graph Engine      │      │ • Multi-Threaded Worker Pool (4x)     │
+│ • Local SQLite (.agent-context/*.db)  │      │ • Candle BERT Embedder in VRAM/RAM    │
+│ • File Reading & 300 LOC Diff Guards  │      │ • ONNX Cross-Encoder Reranker         │
+│ • RAM Footprint: ~15 MB               │      │ • 1-N Compaction & Tombstone Engine   │
+│ • Auto Task Context Forwarding        │      │ • RAM Footprint: ~600–800 MB          │
+└──────────────────┬────────────────────┘      └──────────────────▲────────────────────┘
+                   │                                              │
+                   │ (HTTP Keep-Alive Pool / Zero-Payload 304)    │
+                   ├─────────── POST /api/skills/search ──────────┤
+                   ├─────────── POST /api/skills/slice ───────────┤
+                   ├─────────── GET  /api/skills/stats ───────────┤
+                   └─────────── GET  /health ─────────────────────┘
+```
+
+- **Lightweight Client (~15 MB RAM)**: Ideal for laptops. Runs local AST indexing and safety gates; delegates all semantic vector retrieval to the remote worker.
+- **Dedicated Server Worker**: Centralizes skill storage for engineering teams, compiling staged custom skills into compacted binary matrices with atomic hot-swapping (<1ms).
+
+---
+
+## 💻 CLI Command Matrix
 
 ```bash
 agent-guidance [OPTIONS]
 
-Client & IDE Options:
+Client & IDE Configuration:
   --setup                  Install and configure MCP server across all IDE clients
-  --verify-setup           Verify MCP configuration paths in all IDE clients
+  --verify-setup           Verify MCP configuration paths across IDEs
   --upgrade                Download and install latest release package, update IDE configs
-  --self-update            Alias for --upgrade
   --set-server <URL|local> Configure remote ML worker endpoint (or 'local' for standalone)
   --test-server            Test connection and measure ping latency to remote ML worker
   --stats, --status        Display client mode, system telemetry, and remote skill stats
   --uninstall              Remove MCP server configurations from all IDE clients
 
-Remote Worker & Server Options (v1.8.0):
+Remote Worker & Server Administration:
   --server                 Start remote ML worker daemon (default: http://127.0.0.1:11998)
   --worker-port <PORT>     Custom ML worker port (default: 11998)
   --bind <ADDR>            Network bind address (e.g. 0.0.0.0 or 127.0.0.1)
@@ -217,7 +220,7 @@ Remote Worker & Server Options (v1.8.0):
   --reindex-skills         Compile staging skills into in-memory binary format
   --delete-skill <NAME...> Prune 1-N skills from binary bundle and staging with tombstones
 
-Daemon & Maintenance Options:
+Daemon & Maintenance:
   --daemon, -d             Force start in background singleton daemon mode
   --proxy                  Force connect as client proxy to daemon; exit if no daemon
   --dashboard              Start real-time web usage dashboard at http://127.0.0.1:11997
@@ -231,64 +234,16 @@ Daemon & Maintenance Options:
 
 ---
 
-## 📂 Project Structure
+## 🛠️ MCP Tool Suite Reference
 
-```text
-Agent-Guidance-Rust/
-├── src/
-│   ├── main.rs                   # CLI entrypoint, argument parsing, stdio MCP dispatcher
-│   ├── catalog/                  # Built-in and custom skills scanner, indexer, YAML parser
-│   ├── context/                  # Codebase indexing, AST parsing, GraphRAG, 5-phase cascade search
-│   │   ├── graph_rag/            # Hierarchical Leiden community clustering, DRIFT/Local/Global search
-│   │   ├── indexer/              # Tree-sitter AST symbol and reference extraction
-│   │   ├── scanner/              # File walker, gitignore resolution, change detection
-│   │   └── watcher/              # Real-time background filesystem watcher
-│   ├── daemon/                   # Zero-friction singleton daemon, IPC named pipe/socket, client lifecycle
-│   ├── dashboard/                # Embedded tiny_http web server, REST endpoints, SQLite telemetry queries
-│   ├── dashboard_src/            # Frontend SPA (Vanilla JS + CSS, zero runtime npm dependencies)
-│   │   ├── index.html            # Dashboard layout and accessible view containers
-│   │   ├── js/i18n/              # Modular bilingual dictionaries (EN/VI: core, telemetry, graph)
-│   │   └── js/render/            # Canvas graph visualizer, ForceAtlas2 layout engine, symbol inspector
-│   ├── mcp/                      # Model Context Protocol implementation & tool execution handlers
-│   │   ├── tools/                # task_pipeline, select_skills, workflow_gate, project_context, guidance
-│   │   ├── state/                # Multi-session state machine, priority gate, checkpointing
-│   │   └── db/                   # SQLite database operations, automatic cleanup, and vacuuming
-│   ├── ml/                       # Candle BERT neural embeddings, vector similarity, ONNX inference
-│   └── optimizer/                # Universal token compression engine, AST code skeletonizer
-├── skills/                       # Pre-packaged domain skills catalog (279 embedded skills, 440 vectors)
-├── docs/                         # Architectural diagrams, specifications, setup guides
-│   └── images/                   # Dashboard screenshots, hero banners, and flowcharts
-└── scripts/                      # Automated installation and maintenance scripts (PowerShell, Bash)
-```
-
----
-
-## 📚 Documentation Index
-
-Comprehensive guides, architecture deep-dives, and client setup instructions are available in the [`docs/`](docs/) directory:
-
-| Section | Topic | Documentation Link |
+| Tool Name | Role / Action | Key Capabilities |
 | :--- | :--- | :--- |
-| **Architecture** | System Design & Lifecycles | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| **Getting Started** | Quickstart & Overview | [`docs/getting-started.md`](docs/getting-started.md) |
-| **Web Dashboard** | Real-Time Telemetry & Visual GraphRAG | [`docs/dashboard.md`](docs/dashboard.md) |
-| **Installation** | Platform Setup & Upgrades | [`docs/installation.md`](docs/installation.md) |
-| **Usage Guide** | Orchestrator & Workflow Usage | [`docs/usage.md`](docs/usage.md) |
-| **Development** | Contributing & Testing | [`docs/development.md`](docs/development.md) |
-| **IDE Setup** | Antigravity, Cursor, VS Code, Windsurf | [`docs/setup/`](docs/setup/) |
-| **Skills Guide** | Skill Anatomy & Catalog Policy | [`docs/skills/SKILLS_OVERVIEW.md`](docs/skills/SKILLS_OVERVIEW.md) |
-| **Reference** | MCP Surface & Protocol Spec | [`docs/reference/mcp-surface.md`](docs/reference/mcp-surface.md) |
-
----
-
-## 🙏 Credits & Acknowledgments
-
-This project references and acknowledges the following third-party security resources:
-
-| Resource | Description | Repository |
-| :--- | :--- | :--- |
-| **ECC** | Elliptic Curve Cryptography reference implementation | [affaan-m/ECC](https://github.com/affaan-m/ECC) |
-| **OWASP CheatSheetSeries** | Collection of high-value security cheat sheets for application security | [OWASP/CheatSheetSeries](https://github.com/OWASP/CheatSheetSeries) |
+| **`task_pipeline`** | **Entrypoint Orchestrator** | CALL FIRST. Unlocks priority gate, detects architecture, injects memorized learnings, and synthesizes upfront modular blueprints (<300 LOC mandate). |
+| **`select_skills`** | **Semantic Skill Loader** | Delivers vector-ranked surgical section slices (30–60 lines, ~350 tokens, ~80% token savings), records usage analytics, and injects language safety micro-rules. |
+| **`workflow_gate`** | **Stage & Impact Guard** | Manages stage transitions (`Context` $\rightarrow$ `Plan` $\rightarrow$ `Build` $\rightarrow$ `Test` $\rightarrow$ `Fix` $\rightarrow$ `Review`), enforces 300 LOC hard ceiling, blocks compound plural containers, and controls fix circuit breakers. |
+| **`project_context`** | **GraphRAG & AST Search** | Hierarchical Leiden GraphRAG (`drift`, `global`, `local`), Subgraph Bundling (<250 LOC definition + 1-hop callers/callees), intra-procedural data flow, AST skeletonization, and 6-phase instant cascade (<100ms). |
+| **`guidance`** | **Standards & Skill Catalog** | 2-stage Candle BERT vector search + Cross-Encoder reranking over 279 embedded skills, pre-code architecture checklists, and empirical verification contracts. |
+| **`session_continuity`** | **Memory & Snapshots** | Persists session memory, tracks pairwise co-changes into evolutionary git graphs, stores categorised project learnings, and generates cross-agent handoff briefs. |
 
 ---
 

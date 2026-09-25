@@ -1,0 +1,78 @@
+name: '🐛 Bug Report'
+description: 'Report a bug or unexpected behavior in Agent Guidance'
+title: '[Bug]: '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please fill out the form below to help us reproduce and fix it.
+  - type: input
+    id: version
+    attributes:
+      label: 'Agent Guidance Version'
+      description: 'Run `agent-guidance --version`'
+      placeholder: 'e.g. 1.8.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 'Operating System'
+      options:
+        - 'Windows 11 / 10'
+        - 'Linux (Ubuntu / Debian)'
+        - 'Linux (Arch / Fedora / Other)'
+        - 'macOS (Apple Silicon - arm64)'
+        - 'macOS (Intel - x86_64)'
+    validations:
+      required: true
+  - type: dropdown
+    id: client_mode
+    attributes:
+      label: 'Deployment Profile / Mode'
+      options:
+        - 'Standalone (Local ML + Local AST)'
+        - 'Lightweight Client (Connected to Remote ML Worker)'
+        - 'Dedicated Server Worker (ML Daemon)'
+    validations:
+      required: true
+  - type: dropdown
+    id: ide_client
+    attributes:
+      label: 'AI Agent / IDE Client'
+      options:
+        - 'Claude Code CLI'
+        - 'Cursor'
+        - 'Windsurf'
+        - 'VS Code (Copilot / Antigravity)'
+        - 'Codex CLI'
+        - 'Other'
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 'Describe the Bug'
+      description: 'A clear and concise description of what the bug is.'
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 'Steps to Reproduce'
+      description: 'Step-by-step instructions to reproduce the behavior.'
+      placeholder: |
+        1. Run `agent-guidance ...`
+        2. Execute tool `...`
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 'Relevant Logs / Output'
+      description: 'Please paste stderr logs or terminal output.'
+      render: shell
+    validations:
+      required: false

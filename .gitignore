@@ -8,3 +8,9 @@
 /TEST_READY.md
 *.exe
 .claude/
+dist/
+/dist
+bin/
+/bin
+*.zip
+*.tar.gz

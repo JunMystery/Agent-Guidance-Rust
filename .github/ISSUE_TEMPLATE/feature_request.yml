@@ -1,0 +1,43 @@
+name: '✨ Feature Request'
+description: 'Suggest a new feature, architecture pattern, skill, or improvement'
+title: '[Feature]: '
+labels: ['enhancement', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to improve Agent Guidance? We welcome proposals for new MCP tools, safety rules, GraphRAG enhancements, and skills!
+  - type: dropdown
+    id: category
+    attributes:
+      label: 'Feature Category'
+      options:
+        - 'MCP Protocol / Tools (task_pipeline, project_context, workflow_gate, etc.)'
+        - 'GraphRAG / Code Graph Indexing'
+        - 'Skills Catalog / Slicing Engine'
+        - 'Client / Server Remote Topology'
+        - 'Dashboard / Web Telemetry'
+        - 'CLI / Packaging / Installation'
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 'Problem or Motivation'
+      description: 'Is your feature request related to a problem or limitation? Please describe.'
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 'Proposed Solution / Architectural Design'
+      description: 'Describe the solution you would like, including any API design or tool contract ideas.'
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 'Alternatives Considered'
+      description: 'Describe any alternative solutions or workarounds you have considered.'
+    validations:
+      required: false
