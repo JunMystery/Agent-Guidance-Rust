@@ -59,14 +59,17 @@ impl VectorBinary {
         }
 
         let mut vectors = Vec::with_capacity(count as usize);
+        let dim_sz = dim as usize;
         let mut cur = offset;
         for _ in 0..count {
-            let mut vec = Vec::with_capacity(dim as usize);
-            for _ in 0..dim {
-                vec.push(f32::from_le_bytes(data[cur..cur + 4].try_into()?));
-                cur += 4;
+            let mut vec = vec![0.0f32; dim_sz];
+            let chunk = &data[cur..cur + dim_sz * 4];
+            for (j, dst) in vec.iter_mut().enumerate() {
+                let s = j * 4;
+                *dst = f32::from_le_bytes([chunk[s], chunk[s + 1], chunk[s + 2], chunk[s + 3]]);
             }
             vectors.push(vec);
+            cur += dim_sz * 4;
         }
         Ok(Self { count, dim, vectors })
     }

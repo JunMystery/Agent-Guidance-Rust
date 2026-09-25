@@ -99,7 +99,7 @@ fn handle_server_command(args: &[String]) -> Result<bool> {
         .cloned();
 
     if !args.contains(&"--no-dashboard".to_string()) {
-        crate::dashboard::spawn_dashboard_background(dashboard_port, proj_arg);
+        crate::dashboard::spawn_dashboard_background_bind(&bind_addr, dashboard_port, proj_arg);
     }
 
     println!("[Server Mode] ML Worker daemon starting on http://{}:{} (dashboard: http://127.0.0.1:{})...", bind_addr, worker_port, dashboard_port);

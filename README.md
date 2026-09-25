@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.7.6-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.8.0-blue.svg)](Cargo.toml)
 [![Rust](https://img.shields.io/badge/Rust-1.78+-orange.svg)](https://www.rust-lang.org/)
 [![Capabilities](https://img.shields.io/badge/MCP-Tools%20%26%20Resources-purple.svg)](#-key-capabilities)
 [![Skills](https://img.shields.io/badge/Skills-440%20Loaded-green.svg)](#-smart-skills-system)
@@ -17,9 +17,12 @@
 
 ## 🚀 Quickstart & Installation
 
-### Automatic One-Line Install (Recommended)
+### Interactive Mode Selection (v1.8.0)
 
-Run the one-liner setup script for your operating system to download the latest release binary, pre-cache local ML models, and auto-register `agent-guidance` across all detected IDE clients:
+Installers prompt for your deployment profile:
+- **`[1] Full Standalone`**: All-in-one local binary with in-process Candle/ORT inference (~40 MB).
+- **`[2] Lightweight Client`**: Zero-ML footprint (~15 MB RAM), pure AST parsing, forwards semantic queries to a Remote ML Worker.
+- **`[3] Dedicated Server Worker`**: High-throughput ML node, centralized binary registry, auto-configures background daemon (systemd/launchd/Windows Task).
 
 **Windows (PowerShell / CMD):**
 ```powershell
@@ -190,16 +193,31 @@ When running multiple AI agents across different IDEs or terminals simultaneousl
 
 ## 💻 CLI Commands & Maintenance
 
-`agent-guidance` provides built-in CLI commands for managing IDE clients, updates, and metrics:
+`agent-guidance` provides built-in CLI commands for managing IDE clients, remote worker nodes, updates, and metrics:
 
 ```bash
 agent-guidance [OPTIONS]
 
-Options:
+Client & IDE Options:
   --setup                  Install and configure MCP server across all IDE clients
   --verify-setup           Verify MCP configuration paths in all IDE clients
   --upgrade                Download and install latest release package, update IDE configs
   --self-update            Alias for --upgrade
+  --set-server <URL|local> Configure remote ML worker endpoint (or 'local' for standalone)
+  --test-server            Test connection and measure ping latency to remote ML worker
+  --stats, --status        Display client mode, system telemetry, and remote skill stats
+  --uninstall              Remove MCP server configurations from all IDE clients
+
+Remote Worker & Server Options (v1.8.0):
+  --server                 Start remote ML worker daemon (default: http://127.0.0.1:11998)
+  --worker-port <PORT>     Custom ML worker port (default: 11998)
+  --bind <ADDR>            Network bind address (e.g. 0.0.0.0 or 127.0.0.1)
+  --api-key <KEY>          Bearer authentication token for remote worker
+  --setup-server           Interactive CLI setup wizard for remote ML worker & OS daemon
+  --reindex-skills         Compile staging skills into in-memory binary format
+  --delete-skill <NAME...> Prune 1-N skills from binary bundle and staging with tombstones
+
+Daemon & Maintenance Options:
   --daemon, -d             Force start in background singleton daemon mode
   --proxy                  Force connect as client proxy to daemon; exit if no daemon
   --dashboard              Start real-time web usage dashboard at http://127.0.0.1:11997
@@ -208,8 +226,6 @@ Options:
   --prune-missing          Prune non-existent projects from usage tracking registry
   --cleanup                Auto-clean expired logs, prune dead projects, and vacuum SQLite DB
   --retention-days <N>     Retention window in days for detail logs (default: 7)
-  --reindex-skills         Precompute and build rich semantic vector index for all skills
-  --uninstall              Remove MCP server configurations from all IDE clients
   --help, -h               Print help message
 ```
 

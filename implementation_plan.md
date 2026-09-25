@@ -117,7 +117,7 @@ Split `agent-guidance` workloads to support:
   - "Client Connection Helper" card: displays one-click copyable `agent-guidance --set-server http://<ip>:<port>`.
 
 ### Milestone 6: Installer Upgrade & Prebuilt Release Matrix
-- [ ] Update [scripts/install.sh](scripts/install.sh) and [scripts/install.ps1](scripts/install.ps1):
+- [x] Update [scripts/install.sh](scripts/install.sh) and [scripts/install.ps1](scripts/install.ps1):
   - Interactive Mode Selector:
     - `[1] Full Standalone` (Single binary with local Candle/ORT + SQLite FTS5)
     - `[2] Lightweight Client` (Zero-ML ~15 MB RAM, prompts for server URL, sets `~/.agent-guidance/config.toml`, configures IDEs)
@@ -131,6 +131,21 @@ Split `agent-guidance` workloads to support:
     - Linux: `~/.config/systemd/user/agent-guidance.service` via `install.sh`
     - macOS: `~/Library/LaunchAgents/com.junmystery.agent-guidance.plist` via `install.sh`
     - Windows: Scheduled Task (`schtasks /create`) or Windows Service via `install.ps1`
+
+### Milestone 7: Performance Optimizations & Semantic Slicing Upgrade
+- [x] HTTP 304 `If-None-Match` & Zero-Payload Caching:
+  - Server worker router checks `If-None-Match` against in-memory `catalog_hash` and responds `304 Not Modified`.
+  - Client `get_skill_stats()` sends `If-None-Match` and reuses cached stats with zero JSON parsing on 304 response.
+- [x] Stage 2 Cross-Encoder Semantic Re-Ranking on Remote Worker:
+  - Remote worker expands initial candidate pool and applies `ms-marco-MiniLM-L-6-v2` cross-encoder reranking before returning top-$K$.
+  - Delivers equal search precision between remote worker and local standalone mode.
+- [x] Neural Vector Section Slicing on Remote Worker:
+  - Replaced heuristic word-overlap with neural embedding of task query and section embeddings via Candle BERT.
+  - Automatically falls back to fast token heuristic if model is offline or uninitialized.
+- [x] Zero-Copy Deserialization & Startup Resilience:
+  - VectorBinary chunk-deserialization eliminates per-float reallocation.
+  - WorkerState gracefully initializes empty catalog on fresh installs when binary files are absent instead of crashing.
+  - Resolved drive-root false positive in path normalization.
 
 ---
 

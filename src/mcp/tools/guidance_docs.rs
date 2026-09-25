@@ -25,6 +25,18 @@ pub(crate) fn handle_get(
     if !id.is_empty() {
         crate::mcp::db::log_skill_load(id);
     }
+
+    let cfg = crate::config::current_config();
+    if cfg.server.is_remote() {
+        let client = crate::client::default_client();
+        let clean_id = crate::mcp::tools::skills::clean_skill_identifier(id);
+        if let Ok(slice) = client.slice_skill(&clean_id, "") {
+            if !slice.content.is_empty() {
+                return Ok(compress_markdown(&slice.content));
+            }
+        }
+    }
+
     if let Some(content) = get_embedded_skill(id) {
         Ok(compress_markdown(&content))
     } else if let Ok(full_path) = validate_path(&proj_path, id) {
@@ -53,9 +65,40 @@ pub(crate) fn handle_docs(
         .and_then(|p| p.as_str())
         .unwrap_or(".");
     let proj_path = detect_project_path(proj_path_arg, state);
-    let all_skills = load_all_skills(&proj_path);
     let search_term = if !query.is_empty() { query } else { id };
 
+    let cfg = crate::config::current_config();
+    if cfg.server.is_remote() {
+        let client = crate::client::default_client();
+        match client.search_skills(search_term, 3) {
+            Ok(remote_res) => {
+                let mut docs_sections = Vec::new();
+                for hit in remote_res.skills {
+                    let slice = match client.slice_skill(&hit.name, search_term) {
+                        Ok(s) => s.content,
+                        Err(_) => format!("*Documentation content for {}*", hit.name),
+                    };
+                    docs_sections.push(format!(
+                        "### Doc Skill: {} [Remote ML Worker] (Score: {:.2})\nPath: skills/{}/SKILL.md\n\n{}",
+                        hit.name, hit.score, hit.name, slice
+                    ));
+                }
+                if !docs_sections.is_empty() {
+                    return Ok(format!(
+                        "# Documentation Guidance for '{}'\n\nQuery: '{}'\n\n{}",
+                        id,
+                        search_term,
+                        docs_sections.join("\n\n---\n\n")
+                    ));
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Remote docs search failed: {}; attempting local fallback", e);
+            }
+        }
+    }
+
+    let all_skills = load_all_skills(&proj_path);
     let stage1 = hybrid_vector_search(search_term, &all_skills, 5);
     let selector = LLMSelector::new();
     let profile = detect_language_fast(&proj_path, search_term);

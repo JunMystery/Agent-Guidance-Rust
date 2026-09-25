@@ -31,10 +31,12 @@ fn main() {
         res.set("LegalCopyright", "Copyright © 2026 Jun Mystery. All rights reserved.");
         res.set("OriginalFilename", "agent-guidance.exe");
         res.set("InternalName", "agent-guidance");
+        res.set("FileVersion", "1.8.0.0");
+        res.set("ProductVersion", "1.8.0.0");
 
         const WINDOWS_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="JunMystery.AgentGuidance" version="1.6.2.0" processorArchitecture="*"/>
+  <assemblyIdentity type="win32" name="JunMystery.AgentGuidance" version="1.8.0.0" processorArchitecture="*"/>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

@@ -151,6 +151,11 @@ pub fn spawn_background_auto_warmup() {
         return;
     }
 
+    if crate::config::current_config().server.is_remote() {
+        info!("[ML Engine] Auto-ML warmup bypassed in Remote Client mode (Zero-ML Client Invariant)");
+        return;
+    }
+
     if std::env::var("AGENT_GUIDANCE_DISABLE_ML")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)

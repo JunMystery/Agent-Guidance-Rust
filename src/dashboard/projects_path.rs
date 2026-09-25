@@ -1,5 +1,13 @@
 use std::path::{Path, PathBuf};
 
+fn is_filesystem_root(p: &Path) -> bool {
+    p.parent().is_none()
+        || p == Path::new("/")
+        || p == Path::new("")
+        || p.components().count() <= 1
+        || (p.to_string_lossy().len() <= 3 && p.to_string_lossy().contains(':'))
+}
+
 fn is_submodule_dir_name(p: &Path) -> bool {
     if p.join(".git").exists() {
         return false;
@@ -46,6 +54,9 @@ pub fn find_project_root(path: &Path) -> PathBuf {
     let mut best_agent_root: Option<PathBuf> = None;
     let mut check_agent = curr.clone();
     for _ in 0..15 {
+        if is_filesystem_root(&check_agent) {
+            break;
+        }
         if let Some(ref h) = home {
             if &check_agent == h {
                 break;
@@ -69,6 +80,9 @@ pub fn find_project_root(path: &Path) -> PathBuf {
     let mut best_manifest_root: Option<PathBuf> = None;
     let mut check_manifest = curr.clone();
     for _ in 0..15 {
+        if is_filesystem_root(&check_manifest) {
+            break;
+        }
         if let Some(ref h) = home {
             if &check_manifest == h {
                 break;
@@ -171,6 +185,9 @@ pub fn is_temp_project_path(raw: &str) -> bool {
         return true;
     }
     let clean = trimmed.trim_end_matches(['/', '\\']);
+    if (clean.len() <= 3 && clean.contains(':')) || clean == "/" || clean == "\\" || clean.is_empty() {
+        return true;
+    }
     if let Some(home) = dirs::home_dir() {
         let home_str = home.to_string_lossy().to_string();
         let clean_home = home_str.trim_end_matches(['/', '\\']);

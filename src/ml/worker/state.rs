@@ -35,6 +35,11 @@ impl WorkerState {
         let skills_path = skills_bin_path();
         let v_path = vectors_path();
 
+        if !skills_path.exists() || !v_path.exists() {
+            tracing::warn!("skills.bin or vectors.bin not found on disk at {:?}. Starting with empty catalog.", skills_path);
+            return Ok(Self::new_empty());
+        }
+
         let s_data = std::fs::read(&skills_path)
             .with_context(|| format!("Missing skills.bin at {:?}", skills_path))?;
         let v_data = std::fs::read(&v_path)

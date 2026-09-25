@@ -88,7 +88,6 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
 
 #[cfg(windows)]
 pub async fn daemon_main(port: u16, project_path: Option<String>) {
-    crate::daemon::tray::spawn_system_tray(port);
     use tokio::net::windows::named_pipe::ServerOptions;
     use super::WINDOWS_PIPE_NAME;
 
@@ -99,6 +98,8 @@ pub async fn daemon_main(port: u16, project_path: Option<String>) {
             return;
         }
     };
+
+    crate::daemon::tray::spawn_system_tray(port);
 
     let pipe_name = WINDOWS_PIPE_NAME;
     info!("Daemon listening on Windows Named Pipe: {}", pipe_name);

@@ -2,13 +2,13 @@ use crate::catalog::language_detector::ProjectLanguageProfile;
 use crate::optimizer::compressor::compress_markdown;
 
 #[derive(Debug, Clone)]
-struct MarkdownSection {
-    title: String,
-    content: String,
+pub struct MarkdownSection {
+    pub title: String,
+    pub content: String,
 }
 
 /// Splits a Markdown document into logical sections based on headers (`#`, `##`, `###`).
-fn split_markdown_into_sections(md: &str) -> Vec<MarkdownSection> {
+pub fn split_markdown_into_sections(md: &str) -> Vec<MarkdownSection> {
     let mut sections = Vec::new();
     let mut current_title = "Overview".to_string();
     let mut current_lines = Vec::new();

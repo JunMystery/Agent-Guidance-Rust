@@ -59,16 +59,34 @@ impl RemoteMlClient {
 
     pub fn get_skill_stats(&self) -> Result<SkillStatsResponse> {
         let url = self.config.endpoint_url("/api/skills/stats");
-        let req = self.prepare_request(self.agent.get(&url));
+        let cached = get_cached_remote_stats();
+        let mut req = self.prepare_request(self.agent.get(&url));
+        if let Some(ref c) = cached {
+            if !c.catalog_hash.is_empty() {
+                req = req.set("If-None-Match", &format!("\"{}\"", c.catalog_hash));
+            }
+        }
         let resp = match req.call() {
             Ok(r) => r,
+            Err(ureq::Error::Status(304, _)) => {
+                if let Some(c) = cached {
+                    return Ok(c);
+                }
+                return Err(anyhow!("Received 304 Not Modified but local cache is empty"));
+            }
             Err(e) => {
-                if let Some(cached) = get_cached_remote_stats() {
-                    return Ok(cached);
+                if let Some(c) = cached {
+                    return Ok(c);
                 }
                 return Err(anyhow!("Failed to fetch stats from {}: {}", url, e));
             }
         };
+
+        if resp.status() == 304 {
+            if let Some(c) = cached {
+                return Ok(c);
+            }
+        }
 
         let stats: SkillStatsResponse = resp
             .into_json()

@@ -38,16 +38,32 @@ pub fn route_request(mut request: Request, state: &WorkerState, api_key: &str) {
         .map(|g| g.catalog_hash.clone())
         .unwrap_or_default();
 
+    let if_none_match = request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("if-none-match"))
+        .map(|h| h.value.as_str().trim_matches('"'));
+
+    let is_not_modified = !cat_hash.is_empty() && if_none_match == Some(cat_hash.as_str());
+
     match (method, path) {
         ("GET", "/health") => {
             let res = handle_health(state);
             send_json(request, 200, &serde_json::to_string(&res).unwrap_or_default(), &cat_hash);
         }
         ("GET", "/api/skills/stats") => {
+            if is_not_modified {
+                send_not_modified(request, &cat_hash);
+                return;
+            }
             let res = handle_stats(state);
             send_json(request, 200, &serde_json::to_string(&res).unwrap_or_default(), &cat_hash);
         }
         ("GET", "/api/skills/list") => {
+            if is_not_modified {
+                send_not_modified(request, &cat_hash);
+                return;
+            }
             let res = handle_list(state);
             send_json(request, 200, &serde_json::to_string(&res).unwrap_or_default(), &cat_hash);
         }
@@ -97,6 +113,12 @@ fn read_body(req: &mut Request) -> String {
     let mut buf = String::new();
     let _ = req.as_reader().read_to_string(&mut buf);
     buf
+}
+
+fn send_not_modified(req: Request, cat_hash: &str) {
+    let mut resp = Response::empty(304);
+    add_cors_headers(&mut resp, cat_hash);
+    let _ = req.respond(resp);
 }
 
 fn send_json(req: Request, status: u16, json: &str, cat_hash: &str) {
