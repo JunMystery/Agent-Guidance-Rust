@@ -45,6 +45,12 @@ pub(crate) fn handle_dashboard_request(
         }
         "/api/graph" => graph::handle_api_graph(request, project_path),
         "/api/cleanup" => handle_api_cleanup(request),
+        "/api/skills/registry" => super::skills_api::handle_api_skills_registry(request),
+        "/api/skills/binary_stats" => super::skills_api::handle_api_skills_binary_stats(request),
+        "/api/skills/delete_bulk" => super::skills_api::handle_api_skills_delete_bulk(request),
+        "/api/skills/compile" => super::skills_api::handle_api_skills_compile(request),
+        "/api/config/server" => super::config_api::handle_api_server_config(request),
+        "/api/config/test" => super::config_api::handle_api_test_connection(request),
         "/api/logs" | "/api/logs/clear" => logs_api::handle_api_logs(request),
         "/health" => {
             let db_bytes = crate::mcp::db::get_db_size_bytes();

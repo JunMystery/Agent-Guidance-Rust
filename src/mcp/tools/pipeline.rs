@@ -145,6 +145,7 @@ pub(crate) fn handle(
         state.edit_authorized = true;
     }
     state.user_intent_summary = Some(task.to_string());
+    state.active_task = Some(task.to_string());
 
     // Fast-path file count: use existing code_graph.db count if present, else snapshot
     let file_count = {

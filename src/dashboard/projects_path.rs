@@ -108,6 +108,20 @@ pub fn normalize_project_path(raw: &str) -> String {
     }
 
     let is_win_drive = trimmed.len() >= 2 && trimmed.as_bytes()[1] == b':';
+    if is_win_drive && !cfg!(windows) {
+        let mut s = trimmed.replace('/', "\\");
+        while s.len() > 3 && s.ends_with('\\') {
+            s.pop();
+        }
+        if let Some(first) = s.chars().next() {
+            if first.is_ascii_lowercase() {
+                let upper = first.to_ascii_uppercase().to_string();
+                s.replace_range(..1, &upper);
+            }
+        }
+        return s;
+    }
+
     let is_windows = cfg!(windows) || is_win_drive;
 
     let sep = if is_windows { '\\' } else { '/' };

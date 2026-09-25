@@ -51,8 +51,12 @@ fallback_to_local = true
 cache_vectors = true
 ```
 
-### 2.2 Client Resilience & Silent Fallback Engine
+### 2.2 Client HTTP Engine, Resilience & Silent Fallback Engine
 When connecting to the remote ML worker:
+- **HTTP Client Implementation (`ureq`)**:
+  - Employs `ureq` (already in the dependency tree via `hf-hub`) wrapped in `tokio::task::spawn_blocking`.
+  - Zero extra async client runtime bloat, keeping the client binary ultra-light (~15 MB).
+  - Configured with connection pooling, 3500ms default request timeout, and keep-alive.
 - **Primary Route**: HTTP POST to remote worker endpoint (e.g. `http://172.16.11.24:9000/api/skills/search`).
 - **Failover Route (Silent FTS5 Fallback)**:
   - If request exceeds `timeout_ms` (default 3500ms) or connection drops, client logs a warning to stderr:
@@ -119,14 +123,14 @@ The installation script in Client Mode installs the lightweight binary and immed
     - Hot-swaps remote connection inside running client daemon immediately (zero daemon or IDE restart required).
     - Displays confirmation: *"Remote Server 172.16.11.24:11998 active. IDE configurations verified."*
 
-### 2.6 Client Dashboard Custom Port Configuration
-
-If port `11997` is occupied or developer prefers a custom port (e.g. `12000`, `8080`):
-
-1. **CLI Flag**:
-   ```bash
-   agent-guidance --dashboard --port 12000
-   ```
+### 2.5 Dynamic Client Configuration Reload Engine
+- **Watch Channel (`tokio::sync::watch`)**:
+  - The client daemon maintains an active `watch::channel<Arc<ClientConfig>>`.
+  - All background MCP proxy tasks, HTTP connection pools, and tool dispatchers hold a `watch::Receiver`.
+- **Filesystem & IPC Change Detection**:
+  - A lightweight `notify` filesystem watcher observes `~/.agent-guidance/config.toml`.
+  - Manual text-editor edits, CLI `--set-server` commands, and Dashboard `/api/config/server` saves trigger an instant reload notification.
+  - Active in-flight requests finish cleanly; subsequent requests immediately adopt new server URLs, API keys, or timeout thresholds without killing or restarting the daemon.
 ### 2.5 Headless Server Administration & Custom Port Configuration
 
 Servers often have firewall constraints or port conflicts requiring custom ports instead of defaults (`11997` / `11998`).
@@ -220,19 +224,26 @@ If port `11997` is occupied on client or developer prefers a custom port (e.g. `
   - When upgrading server binaries, untouched built-in skills receive updates, while custom staged skills remain intact and active.
 - The live query engine **NEVER** reads from this staging directory during agent tool calls (`guidance` / `select_skills`). This guarantees zero file lock contention, zero filesystem I/O latency, and absolute crash safety.
 
-### 3.2 Unlimited Dynamic Capacity Specification
-- Binary header format: `[count: u32][dim: u32]` (supports up to $4.29 \times 10^9$ entries).
+### 3.2 Unlimited Dynamic Capacity & Binary Header Specification
+- **16-Byte Header Format**:
+  - `vectors.bin`: `[4B magic: "AGV1"][4B version: 1][4B count: u32][4B dim: 384]` followed by 64-byte aligned Little-Endian `f32` vectors.
+  - `skills.bin`: `[4B magic: "AGS1"][4B version: 1][4B count: u32][4B table_offset: u32]` followed by dynamic offset table and packed content.
+- Supports up to $4.29 \times 10^9$ entries with strict endianness safety and zero-copy slicing.
 - Offset table in `skills.bin`: `Vec<SkillOffsetEntry>` dynamically scaled to exact count $N$.
 - In-memory `GpuSkillMatrix`: Dynamically allocates 2D Tensor shape `[N, 384]` at load time.
 - Matrix multiplication: Batch cosine dot product `[1, 384] @ [N, 384]^T -> [N]` scales linearly on CPU/GPU.
 
-### 3.3 Deletion & Binary Compaction Engine (1-N Skills)
-1. **Dashboard Trigger**: User selects 1 to $N$ skills and clicks **"Delete Selected"** (with option to also purge from staging).
+### 3.3 Deletion & Binary Compaction Engine (Purge & Tombstone)
+1. **Dashboard / CLI Trigger**: User selects 1 to $N$ skills and clicks **"Delete Selected"** (or runs `agent-guidance --delete-skill <NAME...>`).
 2. **API Endpoint**: `POST /api/skills/delete` with `{ "names": ["skill-a", "skill-b"], "purge_staging": true }`.
-3. **Vector Compaction**: Slices out target vector rows; decrements `count` in binary header.
-4. **Content Compaction**: Rebuilds `skills.bin` offset table without deleted entries and repacks contiguous text blocks.
-5. **Tombstone Blacklist** (for Built-In Skills): Deleted built-in skills recorded in `tombstones: ["..."]` in `skills_manifest.json` so defaults do not revive.
-6. **Atomic Hot-Swap**: Memory pointers swap in `< 1 ms`.
+3. **Staging Disk Purge**:
+   - If present in `~/.agent-guidance/staging/skills/<name>`, deletes directory from server disk.
+4. **Tombstone Recording (`tombstones.json`)**:
+   - Records slug in `~/.agent-guidance/tombstones.json`.
+   - Prevents built-in default skills from reviving during future binary reindexes or server restarts.
+5. **Vector Compaction**: Slices out target vector rows from contiguous LE array; decrements `count` in the `AGV1` binary header.
+6. **Content Compaction**: Rebuilds `skills.bin` offset table without deleted entries and repacks contiguous text blocks.
+7. **Atomic Hot-Swap**: In-memory pointers and active tensor matrices swap in `< 1 ms`.
 
 ### 3.4 SHA-256 Differential Reindex Compiler (`agent-guidance --reindex-skills`)
 1. **Diff Stage**: Compares SHA-256 hashes of all markdown files in `staging/skills/` against `skills_manifest.json`.
@@ -422,8 +433,17 @@ Personal Developer Device (Client)             Remote Server (Worker Daemon)
   - "Compile Staging to Binary (SHA Diff)" action button with progress modal.
   - Telemetry: VRAM / RAM profile, inference latency, connected clients.
 
-### Phase 6: Installer Split
+### Phase 6: Installer Split & Prebuilt Release Matrix
 - [ ] Update `scripts/install.sh` and `scripts/install.ps1`:
-  - `[1] Full Standalone`
-  - `[2] Lightweight Client` (prompts for server URL, sets `~/.agent-guidance/config.toml`)
-  - `[3] Dedicated Server Worker` (creates staging directory, initializes default binary, sets up systemd unit).
+  - `[1] Full Standalone` (All-in-one local binary with Candle/ORT + SQLite FTS5)
+  - `[2] Lightweight Client` (Zero-ML ~15 MB RAM, prompts for server URL, sets `~/.agent-guidance/config.toml`, configures IDEs)
+  - `[3] Dedicated Server Worker` (Creates staging directory, initializes default binary, sets up background auto-start daemon).
+- [ ] Multi-OS Server Background Daemon Support:
+  - Linux: systemd user service (`~/.config/systemd/user/agent-guidance.service`)
+  - macOS: launchd LaunchAgent (`~/Library/LaunchAgents/com.junmystery.agent-guidance.plist`)
+  - Windows: Scheduled Task (`schtasks /create /sc onlogon`) or Windows Service via `install.ps1`
+- [ ] Prebuilt Release Distribution Matrix:
+  - `agent-guidance-client-<os>-<arch>` (~6MB, zero ML dependencies, pure AST + MCP client)
+  - `agent-guidance-server-<os>-<arch>` (~40MB, full Candle/ORT ML engine, server worker)
+  - `agent-guidance-standalone-<os>-<arch>` (all-in-one fallback)
+  - Platforms: Linux (x86_64, aarch64), macOS (x86_64, Apple Silicon aarch64), Windows (x86_64).

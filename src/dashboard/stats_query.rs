@@ -139,6 +139,22 @@ pub fn query_usage_stats(db_path: &Path, proj_filter: Option<&str>) -> Result<Va
 
     let past_24h = summaries["past_24h"].clone();
     let (phase_stats, governance_stats) = query_phase_and_gov(&conn, cutoff_24h, is_proj, &p1, &p2);
+
+    let remote_skills = if crate::config::current_config().server.is_remote() {
+        crate::client::cache::get_cached_remote_stats().map(|s| {
+            json!({
+                "mode": "remote",
+                "total_skills": s.total_skills,
+                "total_sections": s.total_sections,
+                "catalog_hash": s.catalog_hash,
+                "token_savings_ratio": s.token_savings_ratio,
+                "last_reindex_at": s.last_reindex_at
+            })
+        })
+    } else {
+        None
+    };
+
     Ok(json!({
         "db_status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
@@ -153,7 +169,8 @@ pub fn query_usage_stats(db_path: &Path, proj_filter: Option<&str>) -> Result<Va
         "hourly_savings": hourly_savings,
         "phase_stats": phase_stats,
         "governance_stats": governance_stats,
-        "embed_recent": embed_recent
+        "embed_recent": embed_recent,
+        "remote_skills": remote_skills
     }))
 }
 

@@ -6,6 +6,9 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod catalog;
+mod cli;
+mod client;
+mod config;
 mod context;
 mod daemon;
 mod dashboard;
@@ -57,7 +60,15 @@ async fn main() -> Result<()> {
         println!("  --self-update       Alias for --upgrade");
         println!("  --dashboard         Start real-time web usage dashboard at http://127.0.0.1:11997");
         println!("  --port, --dashboard-port <PORT> Custom dashboard port (default: 11997)");
+        println!("  --server            Start remote ML worker daemon (default: http://127.0.0.1:11998)");
+        println!("  --worker-port <PORT> Custom ML worker port (default: 11998)");
+        println!("  --bind <ADDR>       Network bind address (e.g. 0.0.0.0 or 127.0.0.1)");
+        println!("  --api-key <KEY>     Bearer authentication token for remote worker");
+        println!("  --setup-server      Interactive CLI setup wizard for remote ML worker");
         println!("  --project <PATH>    Filter dashboard to a specific project path or name");
+        println!("  --set-server <URL>  Configure remote ML worker endpoint (or 'local' for standalone)");
+        println!("  --test-server       Test connection and ping latency to remote ML worker");
+        println!("  --stats, --status   Display client mode, system telemetry, and remote skill stats");
         println!("  --prune-missing     Prune deleted/moved projects from usage tracking registry");
         println!("  --cleanup           Auto-clean expired logs, prune dead projects, and vacuum DB");
         println!("  --retention-days <N> Retention window in days for detail logs (default: 7)");
@@ -69,51 +80,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    if args.contains(&"--cleanup".to_string()) {
-        let db_path = dirs::home_dir()
-            .map(|h| h.join(".agent-guidance").join("usage.db"))
-            .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
-
-        let retention = args
-            .iter()
-            .position(|a| a == "--retention-days")
-            .and_then(|i| args.get(i + 1))
-            .and_then(|s| s.parse::<i64>().ok())
-            .unwrap_or(mcp::db::cleanup::DEFAULT_RETENTION_DAYS);
-
-        let conn = rusqlite::Connection::open_with_flags(
-            &db_path,
-            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_FULL_MUTEX,
-        )?;
-
-        let summary = mcp::db::run_auto_cleanup(&conn, retention)?;
-        let db_bytes = mcp::db::get_db_size_bytes();
-
-        let proj_path = args
-            .iter()
-            .position(|a| a == "--project")
-            .and_then(|i| args.get(i + 1))
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-        let pruned_snaps = if proj_path.exists() {
-            mcp::snapshots::cleanup_stale_snapshots(&proj_path, retention, 20)
-        } else {
-            0
-        };
-
-        println!("[OK] Auto-Cleanup & Database Vacuum Completed:");
-        println!("  - Tool calls pruned: {}", summary.tool_calls_pruned);
-        println!("  - Skill loads pruned: {}", summary.skill_loads_pruned);
-        println!("  - Queries pruned: {}", summary.embed_queries_pruned + summary.llm_queries_pruned);
-        println!("  - Daily summaries pruned: {}", summary.daily_summaries_pruned);
-        println!("  - Dead projects pruned: {}", summary.dead_projects_pruned);
-        if pruned_snaps > 0 {
-            println!("  - Stale project snapshots pruned: {}", pruned_snaps);
-        }
-        if summary.lru_tool_calls_pruned > 0 {
-            println!("  - LRU cap pruned: {}", summary.lru_tool_calls_pruned);
-        }
-        println!("  - Current DB size on disk: {:.2} MB", db_bytes as f64 / (1024.0 * 1024.0));
+    if cli::handle_cli_commands(&args)? {
         return Ok(());
     }
 

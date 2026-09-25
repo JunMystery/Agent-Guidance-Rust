@@ -4,6 +4,7 @@ pub mod llm_selector;
 pub mod onnx_engine;
 pub mod skill_analytics;
 pub mod skill_graphrag_gate;
+pub mod worker;
 
 use rayon::ThreadPool;
 use std::sync::{Condvar, Mutex, OnceLock};

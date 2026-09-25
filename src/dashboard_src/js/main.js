@@ -2,6 +2,8 @@ import { qsa, el } from './dom.js';
 import { fetchData, refreshEmbedStatus, fetchGraphData } from './api.js';
 import { renderGraphView } from './render/graphView.js';
 import { renderLogsView } from './render/logsView.js';
+import { renderSkillsView } from './render/skillsView.js';
+import { initSettingsView } from './render/settingsView.js';
 import { startPoll, stopPoll } from './poll.js';
 import { changeProjectPath, closeDirBrowser, selectDirPath } from './dirBrowser.js';
 import { initI18n, getLanguage, setLanguage, onLanguageChange } from './i18n/index.js';
@@ -10,7 +12,7 @@ import { initProjectSelector } from './projectSelect.js';
 
 export { toggleSidebar, toggleSidebarCollapse };
 
-const VIEWS = ['dashboard', 'actions', 'graph', 'logs'];
+const VIEWS = ['dashboard', 'actions', 'graph', 'logs', 'skills', 'settings'];
 
 export async function loadAndRenderGraph() {
   const data = await fetchGraphData({ view: 'files' });
@@ -46,6 +48,16 @@ function syncView(view, { push = true } = {}) {
     const graphList = el('graph-symbol-list-container');
     if (graphList) graphList.innerHTML = '';
     loadAndRenderLogs();
+  } else if (view === 'skills') {
+    stopPoll();
+    const graphList = el('graph-symbol-list-container');
+    if (graphList) graphList.innerHTML = '';
+    renderSkillsView();
+  } else if (view === 'settings') {
+    stopPoll();
+    const graphList = el('graph-symbol-list-container');
+    if (graphList) graphList.innerHTML = '';
+    initSettingsView();
   } else {
     const graphList = el('graph-symbol-list-container');
     if (graphList) graphList.innerHTML = '';

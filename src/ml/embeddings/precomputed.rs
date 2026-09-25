@@ -21,6 +21,10 @@ pub fn vectors_path() -> PathBuf {
     cache_dir().join("vectors.bin")
 }
 
+pub fn skills_bin_path() -> PathBuf {
+    cache_dir().join("skills.bin")
+}
+
 pub fn catalog_fingerprint(skills: &[SkillItem]) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     for skill in skills {
@@ -139,17 +143,8 @@ pub fn save_passage_cache(vectors: &[Vec<f32>], skills: &[SkillItem]) {
         let _ = std::fs::write(manifest_path(), manifest_str);
     }
 
-    let count = vectors.len() as u32;
-    let dim = (vectors.first().map(|v| v.len()).unwrap_or(0)) as u32;
-    let mut data = Vec::with_capacity(8 + (count as usize) * (dim as usize) * 4);
-    data.extend_from_slice(&count.to_le_bytes());
-    data.extend_from_slice(&dim.to_le_bytes());
-    for vec in vectors {
-        for val in vec {
-            data.extend_from_slice(&val.to_le_bytes());
-        }
-    }
-    let _ = std::fs::write(vectors_path(), data);
+    let vb = super::binary_format::VectorBinary::new(vectors.to_vec());
+    let _ = std::fs::write(vectors_path(), vb.serialize());
 }
 
 pub fn load_passage_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
@@ -162,29 +157,11 @@ pub fn load_passage_cache(skills: &[SkillItem]) -> Option<Vec<Vec<f32>>> {
     }
 
     let data = std::fs::read(vectors_path()).ok()?;
-    if data.len() < 8 {
-        return None;
-    }
-
-    let count = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
-    let dim = u32::from_le_bytes(data[4..8].try_into().ok()?) as usize;
-    let expected_len = 8 + count * dim * 4;
-    if data.len() != expected_len {
-        return None;
-    }
-
-    let mut vectors = Vec::with_capacity(count);
-    let mut offset = 8;
-    for _ in 0..count {
-        let mut vec = Vec::with_capacity(dim);
-        for _ in 0..dim {
-            let mut bytes = [0u8; 4];
-            bytes.copy_from_slice(&data[offset..offset + 4]);
-            vec.push(f32::from_le_bytes(bytes));
-            offset += 4;
+    if let Ok(vb) = super::binary_format::VectorBinary::deserialize(&data) {
+        if vb.count as usize == skills.len() {
+            return Some(vb.vectors);
         }
-        vectors.push(vec);
     }
 
-    Some(vectors)
+    None
 }

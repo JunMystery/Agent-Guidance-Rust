@@ -43,13 +43,18 @@ pub fn run_setup(binary_path: &Path) -> Result<()> {
 
     register_cli_clients(&bin_str, SERVER_ID);
 
-    println!();
-    println!("Pre-downloading ML models for skill search...");
-    if let Err(e) = crate::ml::download_models() {
-        println!(
-            "  Warning: Model download failed: {}. Models will download on first use.",
-            e
-        );
+    if !crate::config::is_remote_mode() {
+        println!();
+        println!("Pre-downloading ML models for skill search...");
+        if let Err(e) = crate::ml::download_models() {
+            println!(
+                "  Warning: Model download failed: {}. Models will download on first use.",
+                e
+            );
+        }
+    } else {
+        println!();
+        println!("[OK] Remote ML Worker mode active — skipping local model download (Zero-ML Client).");
     }
 
     Ok(())

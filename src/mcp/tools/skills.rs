@@ -1,6 +1,7 @@
 use serde_json::Value;
 use crate::catalog::language_detector::detect_language_fast;
 use crate::catalog::store::load_all_skills;
+use crate::config::current_config;
 use crate::mcp::state::ServerState;
 use crate::optimizer::compressor::{compress_markdown, estimate_tokens};
 use super::{detect_project_path, ensure_not_cancelled};
@@ -64,7 +65,6 @@ pub(crate) fn handle(
         .unwrap_or(".");
     let proj_path = detect_project_path(proj_path_arg, state);
 
-    // Strict Gate: Calling select_skills without confirmation must be blocked with USER_CONFIRMATION_REQUIRED
     if let Some(gate_block) = check_confirmation_gate(&active_skills, is_confirmed, &proposals, &proj_path, state) {
         return Ok(gate_block);
     }
@@ -73,6 +73,11 @@ pub(crate) fn handle(
         .get("task")
         .and_then(|t| t.as_str())
         .unwrap_or("");
+    let task_to_use = if !task_arg.trim().is_empty() {
+        task_arg.trim()
+    } else {
+        state.active_task.as_deref().unwrap_or("")
+    };
 
     let resp = if active_skills.is_empty() {
         let text = "# Skill Selection\n\nNo skills selected. Proceeding directly to task execution.\n\n-> NEXT STEP: If codebase inspection is needed, use `project_context(operation=\"search\" | \"read\")`. Otherwise, answer directly or proceed to task planning.".to_string();
@@ -85,19 +90,42 @@ pub(crate) fn handle(
         let mut not_found = Vec::new();
         let mut raw_token_acc: usize = 0;
 
+        let cfg = current_config();
+        let is_remote = cfg.server.is_remote();
+        let client = if is_remote { Some(crate::client::default_client()) } else { None };
+
         for raw_req in &active_skills {
             let clean_name = clean_skill_identifier(raw_req);
-            if let Some((canonical_name, content, tag_str)) = resolve_skill(raw_req, &proposals, &all_skills, &proj_path) {
+            let mut resolved_content: Option<(String, String, String)> = None;
+
+            if let Some(ref c) = client {
+                match c.slice_skill(&clean_name, task_to_use) {
+                    Ok(slice_res) => {
+                        resolved_content = Some((clean_name.clone(), slice_res.content, " [Remote ML Worker]".to_string()));
+                    }
+                    Err(e) => {
+                        tracing::warn!("Remote slice failed for {}: {}; fallback to local", clean_name, e);
+                    }
+                }
+            }
+
+            if resolved_content.is_none() {
+                if let Some((canonical_name, content, tag_str)) = resolve_skill(raw_req, &proposals, &all_skills, &proj_path) {
+                    let processed = if !task_to_use.is_empty() && !content.is_empty() {
+                        crate::catalog::slicing::slice_skill_markdown(&content, task_to_use, 3)
+                    } else if !content.is_empty() {
+                        compress_markdown(&content)
+                    } else {
+                        "*Content empty or unavailable*".to_string()
+                    };
+                    resolved_content = Some((canonical_name, processed, tag_str.to_string()));
+                }
+            }
+
+            if let Some((canonical_name, processed, tag_str)) = resolved_content {
                 crate::mcp::db::log_skill_load(&canonical_name);
                 crate::ml::skill_analytics::record_skill_usage(&proj_path, &canonical_name);
-                raw_token_acc += estimate_tokens(&content, false);
-                let processed = if !task_arg.is_empty() && !content.is_empty() {
-                    crate::catalog::slicing::slice_skill_markdown(&content, task_arg, 3)
-                } else if !content.is_empty() {
-                    compress_markdown(&content)
-                } else {
-                    "*Content empty or unavailable*".to_string()
-                };
+                raw_token_acc += estimate_tokens(&processed, false);
                 loaded_sections.push(format!("### Skill: {}{}\n```markdown\n{}\n```", canonical_name, tag_str, processed));
             } else {
                 crate::mcp::db::log_skill_load(&clean_name);
@@ -105,7 +133,7 @@ pub(crate) fn handle(
             }
         }
 
-        let profile = detect_language_fast(&proj_path, task_arg);
+        let profile = detect_language_fast(&proj_path, task_to_use);
         let safety_rules = crate::catalog::slicing::get_language_safety_rules(&profile);
 
         let mut resp = format!(

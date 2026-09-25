@@ -38,10 +38,22 @@ pub fn validate_path(base_path: &Path, rel_path: &str) -> Result<PathBuf, String
             if let Ok(sub) = can_rel.strip_prefix(&canonical_base) {
                 sub.to_string_lossy().to_string()
             } else {
-                return Err("Target path resolves outside workspace root.".to_string());
+                let candidate = rel_path.trim_start_matches(|c| c == '/' || c == '\\');
+                let joined = canonical_base.join(candidate);
+                if joined.exists() && joined.canonicalize().map(|p| p.starts_with(&canonical_base)).unwrap_or(false) {
+                    candidate.to_string()
+                } else {
+                    return Err("Target path resolves outside workspace root.".to_string());
+                }
             }
         } else {
-            return Err("Target path resolves outside workspace root.".to_string());
+            let candidate = rel_path.trim_start_matches(|c| c == '/' || c == '\\');
+            let joined = canonical_base.join(candidate);
+            if joined.starts_with(&canonical_base) {
+                candidate.to_string()
+            } else {
+                return Err("Target path resolves outside workspace root.".to_string());
+            }
         }
     } else {
         rel_path.to_string()

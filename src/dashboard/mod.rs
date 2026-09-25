@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use tiny_http::Server;
 use tracing::info;
 
+pub mod config_api;
 pub mod graph;
 pub(crate) mod graph_contract;
 pub(crate) use graph_contract as graph_types;
@@ -17,6 +18,7 @@ pub mod projects;
 pub(crate) mod projects_path;
 pub(crate) mod projects_prune;
 pub(crate) mod router;
+pub mod skills_api;
 pub(crate) use router::json_response;
 pub mod stats;
 pub mod stats_query;
