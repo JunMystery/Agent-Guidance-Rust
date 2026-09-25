@@ -104,26 +104,33 @@ pub fn sync_embedded_skills_to_disk() -> anyhow::Result<usize> {
 }
 
 pub fn load_all_skills(proj_path: &Path) -> Vec<SkillItem> {
-    let mut skills = Vec::new();
+    let tombstones = super::tombstone::load_tombstones();
 
-    // 1. Embedded skills
+    // 1. Embedded skills (filtered by tombstones)
+    let mut embedded = Vec::new();
     for path in list_embedded_skills() {
         if let Some(content) = get_embedded_skill(&path) {
             let name = path.split('/').next().unwrap_or(&path).to_string();
-
-            skills.push(SkillItem {
-                name,
-                relative_path: path.clone(),
-                source: SkillSource::Embedded,
-                content,
-            });
+            if !tombstones.contains(&name.to_lowercase()) {
+                embedded.push(SkillItem {
+                    name,
+                    relative_path: path.clone(),
+                    source: SkillSource::Embedded,
+                    content,
+                });
+            }
         }
     }
 
-    // 2. Scanned workspace local skills
+    // 2. Staged skills (override embedded skills with identical slug)
+    let staged = super::staging::scan_staging_skills();
+    let mut skills = super::staging::merge_with_precedence(embedded, staged, &tombstones);
+
+    // 3. Scanned workspace local skills
     let local_skills = scan_workspace_skills(proj_path);
     for local in local_skills {
-        if !skills.iter().any(|s| s.name == local.name) {
+        let key = local.name.to_lowercase();
+        if !tombstones.contains(&key) && !skills.iter().any(|s| s.name.eq_ignore_ascii_case(&local.name)) {
             skills.push(local);
         }
     }

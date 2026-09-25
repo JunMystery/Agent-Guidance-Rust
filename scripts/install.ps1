@@ -2,247 +2,145 @@
 <#
 .SYNOPSIS
     Installer for Agent Guidance Rust (Windows).
-.DESCRIPTION
-    Downloads or builds the agent-guidance binary and registers it with IDE clients.
-    Source: https://github.com/JunMystery/Agent-Guidance-Rust
 #>
-
 [CmdletBinding()]
-param()
+param(
+    [ValidateSet("Standalone", "Client", "Server", "1", "2", "3")][string]$Profile,
+    [string]$ServerUrl = "http://127.0.0.1:11998",
+    [string]$Bind = "0.0.0.0",
+    [int]$WorkerPort = 11998,
+    [int]$DashboardPort = 11997,
+    [string]$ApiKey = "",
+    [switch]$Uninstall,
+    [switch]$NonInteractive
+)
 
 $ErrorActionPreference = "Stop"
+if ((Get-Location).Path -like "*\system32*") { Set-Location $HOME }
 
-# Protection against CWD falling into System32 when invoked via CMD
-if ((Get-Location).Path -like "*\system32*") {
-    Set-Location $HOME
-}
-
-Write-Host ""
-Write-Host "+--------------------------------------------------------------+" -ForegroundColor Magenta
+Write-Host "`n+--------------------------------------------------------------+" -ForegroundColor Magenta
 Write-Host "|           Agent Guidance Rust (Windows)                      |" -ForegroundColor Magenta
-Write-Host "+--------------------------------------------------------------+" -ForegroundColor Magenta
-Write-Host ""
+Write-Host "+--------------------------------------------------------------+`n" -ForegroundColor Magenta
 
-Write-Host "What would you like to do?"
-Write-Host "  [1] Install / Update  (build latest Rust server + update dashboard)" -ForegroundColor Green
-Write-Host "  [2] Uninstall         (remove binary, data directory)" -ForegroundColor Red
-Write-Host ""
-$action = Read-Host "Choice [1]"
-if (-not $action) { $action = "1" }
-
-# -- Uninstall path ------------------------------------------------------------
-if ($action -eq "2") {
-    Write-Host ""
+function Perform-Uninstall {
     Write-Host "Uninstalling Agent Guidance..." -ForegroundColor Red
-
-    # Stop any running processes
+    try { schtasks /delete /tn "AgentGuidanceServer" /f 2>$null | Out-Null } catch {}
     Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 400
-
-    # Remove data directory
     if (Test-Path "$HOME\.agent-guidance") {
         Remove-Item -Recurse -Force "$HOME\.agent-guidance" -ErrorAction SilentlyContinue
         Write-Host "  OK Removed directory $HOME\.agent-guidance" -ForegroundColor Green
     }
-
-    # Remove binaries
     foreach ($bin in @("$HOME\.local\bin\agent-guidance.exe", "$HOME\.cargo\bin\agent-guidance.exe", "$env:LOCALAPPDATA\Programs\agent-guidance\bin\agent-guidance.exe")) {
-        if (Test-Path $bin) {
-            Remove-Item -Force $bin -ErrorAction SilentlyContinue
-        }
+        if (Test-Path $bin) { Remove-Item -Force $bin -ErrorAction SilentlyContinue }
     }
-
-    Write-Host ""
-    Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-    Write-Host "|         OK  Uninstallation finished!                        |" -ForegroundColor Green
-    Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-    Write-Host ""
+    Write-Host "`n+--------------------------------------------------------------+" -ForegroundColor Green
+    Write-Host "|         OK  Uninstallation finished!                         |" -ForegroundColor Green
+    Write-Host "+--------------------------------------------------------------+`n" -ForegroundColor Green
     exit 0
 }
 
-# -- Install / Update path -----------------------------------------------------
-Write-Host ""
-Write-Host "Stopping any running agent-guidance processes..." -ForegroundColor Yellow
+if ($Uninstall) { Perform-Uninstall }
+
+$action = "1"
+if (-not $NonInteractive -and -not $Profile) {
+    Write-Host "What would you like to do?"
+    Write-Host "  [1] Install / Update" -ForegroundColor Green
+    Write-Host "  [2] Uninstall" -ForegroundColor Red
+    $resp = Read-Host "Choice [1]"
+    if ($resp -eq "2") { Perform-Uninstall }
+}
+
+if (-not $Profile -and -not $NonInteractive) {
+    Write-Host "`nSelect installation profile:" -ForegroundColor White
+    Write-Host "  [1] Full Standalone       (Single binary with local Candle/ORT + SQLite FTS5)" -ForegroundColor Green
+    Write-Host "  [2] Lightweight Client    (Zero-ML ~15 MB RAM, forwards queries to Remote ML Worker)" -ForegroundColor Cyan
+    Write-Host "  [3] Dedicated Server Worker (Dedicated ML node, compiles binary registry, runs OS task)" -ForegroundColor Magenta
+    $pResp = Read-Host "Profile [1]"
+    $Profile = if ($pResp) { $pResp } else { "1" }
+} elseif (-not $Profile) {
+    $Profile = "1"
+}
+
 Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 500
+Start-Sleep -Milliseconds 400
 
-# -- Prepare binary output directory -------------------------------------------
-# Use %LOCALAPPDATA%\Programs\agent-guidance\bin to satisfy Windows AppLocker / WDAC policies
 $localBin = Join-Path $env:LOCALAPPDATA "Programs\agent-guidance\bin"
-if (-not (Test-Path $localBin)) {
-    New-Item -ItemType Directory -Path $localBin -Force | Out-Null
-}
-
-# Dedicated staging directory under user application data (avoids %TEMP% antivirus/EDR flags)
+if (-not (Test-Path $localBin)) { New-Item -ItemType Directory -Path $localBin -Force | Out-Null }
 $stagingDir = Join-Path $HOME ".agent-guidance\staging"
-if (-not (Test-Path $stagingDir)) {
-    New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
-}
-
-function Ensure-Cargo {
-    Write-Host "Checking Rust toolchain (cargo)..." -ForegroundColor White
-    if (-not (Get-Command "cargo" -ErrorAction SilentlyContinue) -and -not (Test-Path "$HOME\.cargo\bin\cargo.exe")) {
-        Write-Host "  Rust toolchain not found. Installing rustup..." -ForegroundColor Yellow
-        $rustupInit = Join-Path $stagingDir "rustup-init.exe"
-        Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
-        Start-Process -FilePath $rustupInit -ArgumentList "-y" -Wait
-        Remove-Item -Force $rustupInit -ErrorAction SilentlyContinue
-        $env:Path += ";$HOME\.cargo\bin"
-    } else {
-        $env:Path += ";$HOME\.cargo\bin"
-        Write-Host "  OK Found Cargo in PATH" -ForegroundColor Green
-    }
-}
-
-# -- Detect build source (local dev or remote clone) ---------------------------
-$buildDir = ""
-$scriptParent = if ($PSScriptRoot) { Join-Path $PSScriptRoot ".." } else { "" }
-
-if (Test-Path "Cargo.toml") {
-    $content = Get-Content "Cargo.toml" -Raw -ErrorAction SilentlyContinue
-    if ($content -match 'name\s*=\s*"agent-guidance"') {
-        $buildDir = (Get-Location).Path
-    }
-} elseif ($scriptParent -and (Test-Path (Join-Path $scriptParent "Cargo.toml"))) {
-    $content = Get-Content (Join-Path $scriptParent "Cargo.toml") -Raw -ErrorAction SilentlyContinue
-    if ($content -match 'name\s*=\s*"agent-guidance"') {
-        $buildDir = (Get-Item $scriptParent).FullName
-    }
-}
-
-# -- Build block helper --------------------------------------------------------
-function Build-AndInstall {
-    param([string]$SourceDir)
-
-    Write-Host ""
-    Write-Host "Building release binary (this embeds the latest dashboard HTML/JS)..." -ForegroundColor Cyan
-
-    Push-Location $SourceDir
-    try {
-        $env:RUSTFLAGS = "-A warnings"
-        $job = Start-Job -ScriptBlock {
-            param($dir)
-            Set-Location $dir
-            $env:RUSTFLAGS = "-A warnings"
-            cargo build --release --quiet 2>&1
-        } -ArgumentList $SourceDir
-
-        $anim = @("|", "/", "-", "\")
-        $i = 0
-        while ($job.State -eq "Running") {
-            $char = $anim[$i % $anim.Length]
-            Write-Host -NoNewline "`r  $char Compiling Rust server + embedding dashboard assets... "
-            Start-Sleep -Milliseconds 150
-            $i++
-        }
-        $jobOutput = Receive-Job $job -ErrorAction SilentlyContinue
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
-
-        $builtBin = Join-Path $SourceDir "target\release\agent-guidance.exe"
-        if (Test-Path $builtBin) {
-            Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 300
-            Copy-Item $builtBin "$localBin\agent-guidance.exe" -Force
-            Write-Host -NoNewline "`r  OK Compilation finished successfully!                          `n" -ForegroundColor Green
-        } else {
-            Write-Host -NoNewline "`r  FAIL Cargo build failed.                                       `n" -ForegroundColor Red
-            if ($jobOutput) { Write-Host $jobOutput }
-            Pop-Location
-            exit 1
-        }
-    } finally {
-        Pop-Location
-    }
-}
-
-# -- Install / Update binary (Prebuilt download with fallback to build) --------
-$repo = "JunMystery/Agent-Guidance-Rust"
-$assetName = "agent-guidance-windows-x86_64.zip"
-
-# Auto-detect the latest published release version from GitHub API
-try {
-    $latestMeta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -ErrorAction Stop
-    $version = $latestMeta.tag_name
-    Write-Host "  Latest release: $version" -ForegroundColor Gray
-} catch {
-    $version = "v1.7.6"
-    Write-Host "  Could not fetch latest release tag, defaulting to $version" -ForegroundColor Yellow
-}
-
-$url = "https://github.com/$repo/releases/download/$version/$assetName"
+if (-not (Test-Path $stagingDir)) { New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null }
 
 function Try-DownloadPrebuilt {
-    param([string]$DownloadUrl, [string]$Asset)
-    Write-Host ""
-    Write-Host "Attempting prebuilt binary installation ($Asset)..." -ForegroundColor Cyan
-    $tmpDir = Join-Path $stagingDir "ag-download-$(Get-Random)"
-    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
-    $zipPath = Join-Path $tmpDir $Asset
-
+    param([string]$Prof)
+    $repo = "JunMystery/Agent-Guidance-Rust"
     try {
-        Invoke-WebRequest -Uri $DownloadUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
-        if ((Test-Path $zipPath) -and ((Get-Item $zipPath).Length -gt 0)) {
-            Write-Host "  OK Extracting prebuilt release package..." -ForegroundColor Green
-            Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force -ErrorAction Stop
-            $extractedBin = Join-Path $tmpDir "agent-guidance.exe"
-            if (Test-Path $extractedBin) {
-                Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Milliseconds 300
-                Copy-Item $extractedBin "$localBin\agent-guidance.exe" -Force
-                Write-Host "  OK Installed prebuilt release binary!" -ForegroundColor Green
-                Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
-                return $true
+        $meta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -ErrorAction Stop
+        $version = $meta.tag_name
+    } catch { $version = "v1.8.0" }
+
+    $tag = switch ($Prof) { { $_ -in "Client", "2" } { "client" }; { $_ -in "Server", "3" } { "server" }; default { "standalone" } }
+    $candidates = @("agent-guidance-$tag-windows-x86_64.zip")
+    if ($tag -ne "standalone") { $candidates += "agent-guidance-standalone-windows-x86_64.zip" }
+    $candidates += "agent-guidance-windows-x86_64.zip"
+
+    $tmpDir = Join-Path $stagingDir "ag-dl-$(Get-Random)"
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+
+    foreach ($asset in $candidates) {
+        $url = "https://github.com/$repo/releases/download/$version/$asset"
+        $zipPath = Join-Path $tmpDir $asset
+        try {
+            Write-Host "  Probing release asset: $asset..." -ForegroundColor Gray
+            Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
+            if ((Test-Path $zipPath) -and ((Get-Item $zipPath).Length -gt 0)) {
+                Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force -ErrorAction Stop
+                $bin = Join-Path $tmpDir "agent-guidance.exe"
+                if (Test-Path $bin) {
+                    Copy-Item $bin "$localBin\agent-guidance.exe" -Force
+                    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+                    Write-Host "  OK Downloaded and installed $asset ($version)" -ForegroundColor Green
+                    return $true
+                }
             }
-        }
-    } catch {
-        Write-Host "  Prebuilt binary download not available or failed. ($_)" -ForegroundColor Yellow
+        } catch {}
     }
     Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
     return $false
 }
 
-$installedPrebuilt = $false
-if (-not $buildDir) {
-    $installedPrebuilt = Try-DownloadPrebuilt -DownloadUrl $url -Asset $assetName
+function Build-FromSource {
+    Write-Host "`nBuilding release binary from source..." -ForegroundColor Cyan
+    $sDir = ""
+    if (Test-Path "Cargo.toml") {
+        if ((Get-Content "Cargo.toml" -Raw -ErrorAction SilentlyContinue) -match 'name\s*=\s*"agent-guidance"') { $sDir = (Get-Location).Path }
+    }
+    if (-not $sDir) {
+        $sDir = Join-Path $HOME ".agent-guidance\src"
+        if (Test-Path (Join-Path $sDir "Cargo.toml")) {
+            Push-Location $sDir; try { git pull --depth 1 2>$null | Out-Null } finally { Pop-Location }
+        } else {
+            New-Item -ItemType Directory -Path $sDir -Force | Out-Null
+            git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$sDir" 2>$null | Out-Null
+        }
+    }
+    Push-Location $sDir
+    try {
+        $env:RUSTFLAGS = "-A warnings"
+        cargo build --release --quiet
+        Copy-Item (Join-Path $sDir "target\release\agent-guidance.exe") "$localBin\agent-guidance.exe" -Force
+        Write-Host "  OK Build successful!" -ForegroundColor Green
+    } finally { Pop-Location }
 }
 
-if (-not $installedPrebuilt) {
-    Ensure-Cargo
-    if ($buildDir) {
-        Write-Host ""
-        Write-Host "Building from local source: $buildDir" -ForegroundColor Cyan
-        Build-AndInstall -SourceDir $buildDir
-    } else {
-        Write-Host ""
-        Write-Host "Fetching latest source from GitHub and building..." -ForegroundColor Cyan
-        $globalSrc = Join-Path $HOME ".agent-guidance\src"
-
-        if (Test-Path (Join-Path $globalSrc "Cargo.toml")) {
-            Write-Host "  Pulling latest changes from origin/main..." -ForegroundColor Gray
-            Push-Location $globalSrc
-            try {
-                $null = git fetch --depth 1 origin main 2>$null
-                $null = git reset --hard origin/main 2>$null
-            } finally {
-                Pop-Location
-            }
-        } else {
-            if (-not (Test-Path $globalSrc)) {
-                New-Item -ItemType Directory -Path $globalSrc -Force | Out-Null
-            }
-            $null = git clone --depth 1 https://github.com/JunMystery/Agent-Guidance-Rust.git "$globalSrc" 2>$null
-        }
-
-        Build-AndInstall -SourceDir $globalSrc
-    }
+if (-not (Try-DownloadPrebuilt -Prof $Profile)) {
+    Write-Host "  Prebuilt download failed, compiling from source..." -ForegroundColor Yellow
+    Build-FromSource
 }
 
 function Merge-JsonMCPConfig {
     param([string]$Path, [string]$Bin, [string]$Key = "mcpServers", [bool]$WithStdio = $false)
     $parent = Split-Path -Parent $Path
-    if (-not (Test-Path $parent) -and (Test-Path (Split-Path -Parent $parent))) {
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    }
+    if (-not (Test-Path $parent) -and (Test-Path (Split-Path -Parent $parent))) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     if (Test-Path $parent) {
         try {
             $j = if (Test-Path $Path) { Get-Content $Path -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue } else { $null }
@@ -251,14 +149,15 @@ function Merge-JsonMCPConfig {
             $def = if ($WithStdio) { [PSCustomObject]@{ type = "stdio"; command = $Bin; args = @() } } else { [PSCustomObject]@{ command = $Bin; args = @() } }
             if ($j.$Key.PSObject.Properties["agent-guidance"]) { $j.$Key."agent-guidance" = $def } else { $j.$Key | Add-Member -NotePropertyName "agent-guidance" -NotePropertyValue $def }
             $j | ConvertTo-Json -Depth 10 | Set-Content $Path -Encoding UTF8
-        } catch { Write-Host "  Warning: Failed updating ${Path}: $_" -ForegroundColor Yellow }
+        } catch {}
     }
 }
 
 function Register-IDEMCP {
     param([string]$BinPath)
-    $escapedBin = $BinPath -replace '\\', '\\'
-    $payload = "{\`"name\`":\`"agent-guidance\`",\`"type\`":\`"stdio\`",\`"command\`":\`"$escapedBin\`",\`"args\`":[]}"
+    Write-Host "`nRegistering server with detected IDE clients..." -ForegroundColor Magenta
+    & $BinPath --setup
+    $payload = "{\`"name\`":\`"agent-guidance\`",\`"type\`":\`"stdio\`",\`"command\`":\`"$($BinPath -replace '\\','\\')\`",\`"args\`":[]}"
     foreach ($cmd in @("code", "code-insiders")) { if (Get-Command $cmd -ErrorAction SilentlyContinue) { try { & $cmd --add-mcp $payload 2>$null | Out-Null } catch {} } }
     foreach ($cmd in @("claude", "claude.cmd")) { if (Get-Command $cmd -ErrorAction SilentlyContinue) { try { & $cmd mcp add --scope user agent-guidance -- $BinPath 2>$null | Out-Null; break } catch {} } }
     foreach ($cmd in @("codex", "codex.cmd")) { if (Get-Command $cmd -ErrorAction SilentlyContinue) { try { & $cmd mcp add agent-guidance -- $BinPath 2>$null | Out-Null; break } catch {} } }
@@ -267,33 +166,60 @@ function Register-IDEMCP {
     Merge-JsonMCPConfig -Path (Join-Path $HOME ".claude.json") -Bin $BinPath -Key "mcpServers" -WithStdio $true
 }
 
-Write-Host "`nRegistering server with detected IDE clients..." -ForegroundColor Magenta
-& "$localBin\agent-guidance.exe" --setup
-Register-IDEMCP -BinPath "$localBin\agent-guidance.exe"
+$binPath = "$localBin\agent-guidance.exe"
+switch ($Profile) {
+    { $_ -in "Client", "2" } {
+        if (-not $NonInteractive) {
+            $inputUrl = Read-Host "Remote Worker Server URL [$ServerUrl]"
+            if ($inputUrl) { $ServerUrl = $inputUrl }
+        }
+        & $binPath --set-server $ServerUrl
+        Register-IDEMCP -BinPath $binPath
+        Write-Host "`nOK Lightweight Client configured! (Connected to $ServerUrl)" -ForegroundColor Green
+        & $binPath --stats
+    }
+    { $_ -in "Server", "3" } {
+        Write-Host "`nConfiguring Dedicated Server Worker..." -ForegroundColor Magenta
+        $stgSkills = Join-Path $HOME ".agent-guidance\staging\skills"
+        if (-not (Test-Path $stgSkills)) { New-Item -ItemType Directory -Path $stgSkills -Force | Out-Null }
+        $tomb = Join-Path $HOME ".agent-guidance\tombstones.json"
+        if (-not (Test-Path $tomb)) { Set-Content -Path $tomb -Value "[]" -Encoding UTF8 }
 
-# -- Configure CLI PATH & Cleanup ----------------------------------------------
-Write-Host "Configuring CLI environment PATH..." -ForegroundColor White
+        if (-not $NonInteractive) {
+            $inBind = Read-Host "Listen Address [$Bind]"; if ($inBind) { $Bind = $inBind }
+            $inWPort = Read-Host "ML Worker Port [$WorkerPort]"; if ($inWPort) { $WorkerPort = [int]$inWPort }
+            $inDPort = Read-Host "Dashboard Port [$DashboardPort]"; if ($inDPort) { $DashboardPort = [int]$inDPort }
+            $inKey = Read-Host "Optional Bearer API Key [$ApiKey]"; if ($inKey) { $ApiKey = $inKey }
+        }
+        $keyArg = if ($ApiKey) { " --api-key $ApiKey" } else { "" }
+        $taskCmd = "`"$binPath`" --server --bind $Bind --worker-port $WorkerPort --port $DashboardPort$keyArg"
+        try {
+            schtasks /create /tn "AgentGuidanceServer" /tr $taskCmd /sc onlogon /rl highest /f | Out-Null
+            schtasks /run /tn "AgentGuidanceServer" 2>$null | Out-Null
+            Write-Host "  OK Windows Task 'AgentGuidanceServer' created and started!" -ForegroundColor Green
+        } catch { Write-Host "  Warning: Failed creating scheduled task: $_" -ForegroundColor Yellow }
+
+        Write-Host "`nOK Dedicated Server Worker active!" -ForegroundColor Green
+        Write-Host "  Worker API:    http://${Bind}:${WorkerPort}" -ForegroundColor Gray
+        Write-Host "  Dashboard:     http://${Bind}:${DashboardPort}" -ForegroundColor Gray
+        Write-Host "  Client Setup:  agent-guidance --set-server http://<SERVER_IP>:${WorkerPort}`n" -ForegroundColor Cyan
+    }
+    default {
+        Register-IDEMCP -BinPath $binPath
+        Write-Host "`nOK Agent Guidance Standalone Installed!" -ForegroundColor Green
+    }
+}
+
 if ($env:Path -split ';' -notcontains $localBin) { $env:Path = "$localBin;$env:Path" }
 try {
     $uPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
     $uList = if ($uPath) { $uPath -split ';' | Where-Object { $_ } } else { @() }
     if ($uList -notcontains $localBin) {
         [Environment]::SetEnvironmentVariable("Path", $(if ($uPath) { "$localBin;$uPath" } else { $localBin }), [EnvironmentVariableTarget]::User)
-        Write-Host "  OK Added $localBin to persistent User PATH" -ForegroundColor Green
     }
-} catch { Write-Host "  Warning: Could not update persistent User PATH: $_" -ForegroundColor Yellow }
+} catch {}
 
-if (Test-Path $stagingDir) {
-    if (-not (Get-ChildItem $stagingDir -Force -ErrorAction SilentlyContinue)) {
-        Remove-Item -Force -Recurse $stagingDir -ErrorAction SilentlyContinue
-    }
-}
-
-Write-Host ""
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-Write-Host "|         Agent Guidance Installed / Updated!                  |" -ForegroundColor Green
+Write-Host "|         Agent Guidance Setup Complete!                       |" -ForegroundColor Green
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Green
-Write-Host "  Binary:       $localBin\agent-guidance.exe" -ForegroundColor Green
-Write-Host "  MCP Config:   Automatic across all detected IDE clients" -ForegroundColor DarkGray
-Write-Host "  Recommendation: Copy the corresponding rule and skill files into your IDE/CLI workspace for optimal MCP guidance." -ForegroundColor Cyan
-Write-Host ""
+Write-Host "  Binary: $binPath`n" -ForegroundColor Green

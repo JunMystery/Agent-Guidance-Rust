@@ -9,6 +9,8 @@ export const coreVi = {
   'nav.recent_calls': 'Cuộc Gọi Gần Đây',
   'nav.graph': '🕸️ Đồ Thị Kiến Trúc',
   'nav.logs': '⚠️ Nhật Ký & Chẩn Đoán',
+  'nav.skills': '📚 Quản Lý Skill',
+  'nav.settings': '⚙️ Cài Đặt & Máy Chủ',
 
   // Sidebar & Footer
   'sidebar.collapse': 'Thu gọn thanh bên (Ctrl+B)',

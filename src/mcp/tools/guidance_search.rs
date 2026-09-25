@@ -2,10 +2,11 @@ use serde_json::Value;
 
 use crate::catalog::language_detector::detect_language_fast;
 use crate::catalog::store::{SkillSource, load_all_skills};
+use crate::config::current_config;
 use crate::mcp::state::ServerState;
 use crate::ml::embeddings::hybrid_vector_search;
 use crate::ml::llm_selector::LLMSelector;
-use super::helpers::{detect_project_path, ensure_not_cancelled};
+use super::helpers::{detect_project_path, ensure_not_cancelled, truncate_chars};
 
 pub(crate) fn handle_list(arguments: &Value, state: &mut ServerState) -> Result<String, (i32, String)> {
     let proj_path_arg = arguments
@@ -83,14 +84,52 @@ pub(crate) fn handle_search(
         query_parts.join(" ")
     };
 
+    let cfg = current_config();
+    if cfg.server.is_remote() {
+        let client = crate::client::default_client();
+        match client.search_skills(&search_query, 6) {
+            Ok(remote_res) => {
+                let mut options = Vec::new();
+                let mut proposals = Vec::new();
+                let mut formatted = Vec::new();
+
+                for item in remote_res.skills {
+                    let desc = if !item.summary.is_empty() {
+                        item.summary
+                    } else if !item.intent.is_empty() {
+                        item.intent
+                    } else {
+                        item.title
+                    };
+                    let short_desc = if desc.chars().count() > 38 {
+                        let t = truncate_chars(&desc, 35).trim_end().to_string();
+                        format!("{}...", t)
+                    } else {
+                        desc
+                    };
+                    options.push(format!("{} - {}", item.name, short_desc));
+                    proposals.push((item.name.clone(), format!("remote://skills/{}", item.name), item.score));
+                    formatted.push(format!(
+                        "- {} [Remote ML Worker] (Score: {:.2})\n  Path: skills/{}/SKILL.md",
+                        item.name, item.score, item.name
+                    ));
+                }
+
+                state.pending_skill_proposals = proposals;
+                return format_search_output(&search_query, formatted, options, "Remote ML Worker (In-Memory AGV1)");
+            }
+            Err(e) => {
+                tracing::warn!("Remote skill search failed: {}; attempting fallback", e);
+            }
+        }
+    }
+
     let profile = detect_language_fast(&proj_path, &search_query);
     let all_skills = load_all_skills(&proj_path);
 
-    // Stage 1: 1st Stage Candidate Selection
     let stage1_results = hybrid_vector_search(&search_query, &all_skills, 20);
     ensure_not_cancelled(state)?;
 
-    // Stage 1.5: GraphRAG Context Gating (Max-Pooling Top-K Symbol/Chunk vectors)
     let stage1_5_results = crate::ml::skill_graphrag_gate::apply_graphrag_context_gating(
         &proj_path,
         &search_query,
@@ -99,12 +138,10 @@ pub(crate) fn handle_search(
     );
     ensure_not_cancelled(state)?;
 
-    // Stage 2: 2nd Stage Context & Intent Re-ranking
     let selector = LLMSelector::new();
     let reranked = selector.rerank(&search_query, stage1_5_results, &profile, 20);
     ensure_not_cancelled(state)?;
 
-    // Stage 2.5: Cross-Session Skill Analytics Contextual Boost
     let final_results = crate::ml::skill_analytics::apply_analytics_boost(reranked, &proj_path);
 
     let mut seen_names = std::collections::HashSet::new();
@@ -128,34 +165,6 @@ pub(crate) fn handle_search(
         })
         .collect();
 
-fn extract_description(content: &str) -> Option<String> {
-    let mut lines = content.lines();
-    while let Some(line) = lines.next() {
-        let t = line.trim();
-        if let Some(rest) = t.strip_prefix("description:") {
-            let mut val = rest.trim();
-            if val == ">" || val == "|" || val.is_empty() {
-                if let Some(next) = lines.next() {
-                    val = next.trim();
-                }
-            }
-            let cleaned = val.trim_matches(|c| matches!(c, '"' | '\'' | '`')).trim();
-            if !cleaned.is_empty() && cleaned != ">" && cleaned != "|" {
-                let normalized = cleaned.replace(['\u{2014}', '\u{2013}'], "-");
-                let first = normalized.split(". ").next().unwrap_or(&normalized).trim();
-                let short = if first.chars().count() > 38 {
-                    let truncated = crate::mcp::tools::helpers::truncate_chars(first, 35).trim_end();
-                    format!("{}...", truncated)
-                } else {
-                    first.to_string()
-                };
-                return Some(short);
-            }
-        }
-    }
-    None
-}
-
     let options: Vec<String> = deduped_results
         .iter()
         .map(|(_score, item)| {
@@ -169,6 +178,29 @@ fn extract_description(content: &str) -> Option<String> {
         })
         .collect();
 
+    let formatted_results: Vec<String> = deduped_results
+        .into_iter()
+        .map(|(score, item)| {
+            let source_tag = match &item.source {
+                SkillSource::Embedded => "[Embedded]".to_string(),
+                SkillSource::LocalWorkspace(path) => format!("[Local Workspace: {}]", path),
+            };
+            format!(
+                "- {} {} (Score: {:.2})\n  Path: {}",
+                item.name, source_tag, score, item.relative_path
+            )
+        })
+        .collect();
+
+    format_search_output(&search_query, formatted_results, options, "3-Stage Hybrid Vector & Cross-Encoder")
+}
+
+fn format_search_output(
+    query: &str,
+    formatted_results: Vec<String>,
+    options: Vec<String>,
+    engine_name: &str,
+) -> Result<String, (i32, String)> {
     let ask_question_example = serde_json::json!({
         "questions": [
             {
@@ -178,22 +210,6 @@ fn extract_description(content: &str) -> Option<String> {
             }
         ]
     });
-
-    let formatted_results: Vec<String> = deduped_results
-        .into_iter()
-        .map(|(score, item)| {
-            let source_tag = match &item.source {
-                SkillSource::Embedded => "[Embedded]".to_string(),
-                SkillSource::LocalWorkspace(path) => {
-                    format!("[Local Workspace: {}]", path)
-                }
-            };
-            format!(
-                "- {} {} (Score: {:.2})\n  Path: {}",
-                item.name, source_tag, score, item.relative_path
-            )
-        })
-        .collect();
 
     let next_step_prompt = if formatted_results.is_empty() {
         "-> No matching skills found. Proceed directly to task planning or codebase inspection (no skills need to be selected).".to_string()
@@ -211,12 +227,30 @@ fn extract_description(content: &str) -> Option<String> {
     };
 
     Ok(format!(
-        "# 3-Stage Skill Search Results for '{}'\n\nStage 1 (Candle BERT Vector Cosine Similarity) -> Stage 1.5 (GraphRAG Context Gating) -> Stage 2 (Cross-Encoder Re-ranking)\nMatches Found: {}\n\n{}\n\n{}",
-        search_query,
-        formatted_results.len(),
-        results_body,
-        next_step_prompt
+        "# Skill Search Results for '{}' [{}]\nMatches Found: {}\n\n{}\n\n{}",
+        query, engine_name, formatted_results.len(), results_body, next_step_prompt
     ))
+}
+
+fn extract_description(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("description:") {
+            let val = rest.trim().trim_matches(|c| matches!(c, '"' | '\'' | '`')).trim();
+            if !val.is_empty() && val != ">" && val != "|" {
+                let normalized = val.replace(['\u{2014}', '\u{2013}'], "-");
+                let first = normalized.split(". ").next().unwrap_or(&normalized).trim();
+                let short = if first.chars().count() > 38 {
+                    let truncated = truncate_chars(first, 35).trim_end();
+                    format!("{}...", truncated)
+                } else {
+                    first.to_string()
+                };
+                return Some(short);
+            }
+        }
+    }
+    None
 }
 
 pub(crate) fn handle_reindex(
@@ -229,7 +263,6 @@ pub(crate) fn handle_reindex(
         .unwrap_or(".");
     let proj_path = detect_project_path(proj_path_arg, state);
 
-    // Invalidate in-memory caches
     crate::ml::embeddings::cache::clear_passage_cache();
     crate::context::cache::invalidate_snapshot(&proj_path);
 
@@ -237,7 +270,6 @@ pub(crate) fn handle_reindex(
     let count = all_skills.len();
     let fp = crate::ml::embeddings::catalog_fingerprint(&all_skills);
 
-    // Warmup / embed if model available
     let model_status = if let Some(vecs) = crate::ml::embeddings::precomputed::load_precomputed_cache(&all_skills)
         .or_else(|| crate::ml::embeddings::load_passage_cache(&all_skills))
     {
@@ -246,17 +278,6 @@ pub(crate) fn handle_reindex(
             vecs.len(),
             vecs.first().map(|v| v.len()).unwrap_or(0)
         )
-    } else if all_skills.len() <= 64 {
-        if let Some(model) = crate::ml::embeddings::cache::try_cached_model() {
-            let vecs = crate::ml::embeddings::embed_skills_cache(&all_skills, &model);
-            format!(
-                "Computed embeddings for {} skills (dimension: {})",
-                vecs.len(),
-                vecs.first().map(|v| v.len()).unwrap_or(0)
-            )
-        } else {
-            "Metadata indexed (embeddings loaded on-demand)".to_string()
-        }
     } else {
         "Metadata indexed (embeddings loaded on-demand)".to_string()
     };

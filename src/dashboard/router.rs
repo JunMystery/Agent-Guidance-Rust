@@ -45,6 +45,12 @@ pub(crate) fn handle_dashboard_request(
         }
         "/api/graph" => graph::handle_api_graph(request, project_path),
         "/api/cleanup" => handle_api_cleanup(request),
+        "/api/skills/registry" => super::skills_api::handle_api_skills_registry(request),
+        "/api/skills/binary_stats" => super::skills_api::handle_api_skills_binary_stats(request),
+        "/api/skills/delete_bulk" => super::skills_api::handle_api_skills_delete_bulk(request),
+        "/api/skills/compile" => super::skills_api::handle_api_skills_compile(request),
+        "/api/config/server" => super::config_api::handle_api_server_config(request),
+        "/api/config/test" => super::config_api::handle_api_test_connection(request),
         "/api/logs" | "/api/logs/clear" => logs_api::handle_api_logs(request),
         "/health" => {
             let db_bytes = crate::mcp::db::get_db_size_bytes();
@@ -98,12 +104,15 @@ pub(crate) fn json_response(request: tiny_http::Request, status_code: u16, data:
         .iter()
         .find(|h| h.field.equiv("Origin"))
         .map(|h| h.value.as_str())
-        .filter(|o| o.starts_with("http://127.0.0.1") || o.starts_with("http://localhost"))
-        .unwrap_or("http://127.0.0.1:11997");
+        .unwrap_or("*");
     let header_cors = Header::from_bytes(&b"Access-Control-Allow-Origin"[..], origin_str.as_bytes()).unwrap();
+    let header_methods = Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, POST, OPTIONS"[..]).unwrap();
+    let header_headers = Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"Content-Type, Authorization"[..]).unwrap();
     let response = Response::from_string(body)
         .with_header(header_ct)
         .with_header(header_cors)
+        .with_header(header_methods)
+        .with_header(header_headers)
         .with_status_code(StatusCode(status_code));
     let _ = request.respond(response);
 }

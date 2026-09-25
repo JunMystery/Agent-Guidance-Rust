@@ -9,6 +9,8 @@ export const coreEn = {
   'nav.recent_calls': 'Recent Calls',
   'nav.graph': '🕸️ Architecture Graph',
   'nav.logs': '⚠️ Diagnostics',
+  'nav.skills': '📚 Skill Registry',
+  'nav.settings': '⚙️ Settings & Server',
 
   // Sidebar & Footer
   'sidebar.collapse': 'Collapse sidebar (Ctrl+B)',

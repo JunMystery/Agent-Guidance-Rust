@@ -10,6 +10,11 @@ Write-Host "|                   Uninstaller                                 |" -
 Write-Host "+--------------------------------------------------------------+" -ForegroundColor Red
 Write-Host ""
 
+try {
+    schtasks /delete /tn "AgentGuidanceServer" /f 2>$null | Out-Null
+    Write-Host "  OK Removed Windows Scheduled Task 'AgentGuidanceServer'" -ForegroundColor Green
+} catch {}
+
 cmd /c "taskkill /F /IM agent-guidance* >nul 2>&1"
 
 if (Get-Command "uv" -ErrorAction SilentlyContinue) {
@@ -21,8 +26,10 @@ if (Test-Path "$HOME\.agent-guidance") {
     Write-Host "  OK Completely removed directory $HOME\.agent-guidance" -ForegroundColor Green
 }
 
-if (Test-Path "$HOME\.local\bin\agent-guidance.exe") {
-    Remove-Item -Force "$HOME\.local\bin\agent-guidance.exe" -ErrorAction SilentlyContinue
+foreach ($bin in @("$HOME\.local\bin\agent-guidance.exe", "$HOME\.cargo\bin\agent-guidance.exe", "$env:LOCALAPPDATA\Programs\agent-guidance\bin\agent-guidance.exe")) {
+    if (Test-Path $bin) {
+        Remove-Item -Force $bin -ErrorAction SilentlyContinue
+    }
 }
 
 Write-Host ""

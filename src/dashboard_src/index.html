@@ -38,6 +38,8 @@
     <a role="tab" aria-selected="false" aria-controls="view-actions" id="tab-actions" data-view="actions"><span data-i18n="nav.actions">Actions Log</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-graph" id="tab-graph" data-view="graph"><span data-i18n="nav.graph">🕸️ Architecture Graph</span></a>
     <a role="tab" aria-selected="false" aria-controls="view-logs" id="tab-logs" data-view="logs"><span data-i18n="nav.logs">⚠️ Diagnostics</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-skills" id="tab-skills" data-view="skills"><span data-i18n="nav.skills">📚 Skill Registry</span></a>
+    <a role="tab" aria-selected="false" aria-controls="view-settings" id="tab-settings" data-view="settings"><span data-i18n="nav.settings">⚙️ Settings &amp; Server</span></a>
   </nav>
   <div class="sidebar-footer">
     <div style="margin-bottom:8px">
@@ -493,6 +495,95 @@
   <section id="view-graph" class="hidden" role="tabpanel" aria-labelledby="tab-graph">
   </section>
   <section id="view-logs" class="hidden" role="tabpanel" aria-labelledby="tab-logs">
+  </section>
+  <section id="view-skills" class="hidden" role="tabpanel" aria-labelledby="tab-skills">
+  </section>
+  <section id="view-settings" class="hidden" role="tabpanel" aria-labelledby="tab-settings">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="terminal-dot dot-red"></div>
+          <div class="terminal-dot dot-yellow"></div>
+          <div class="terminal-dot dot-green"></div>
+        </div>
+        <div class="terminal-title">Server &amp; Client Configuration</div>
+      </div>
+      <div class="terminal-body-raw" style="padding:20px;max-width:800px">
+        <div style="margin-bottom:20px">
+          <h3 style="margin:0 0 8px 0;font-size:16px">Remote ML Worker Connection</h3>
+          <p style="margin:0 0 16px 0;color:var(--text-secondary);font-size:13px">
+            Configure the central server hosting BERT embedding models and the vector skills database. The local client delegates ML queries over HTTP while running AST parsing locally.
+          </p>
+        </div>
+
+        <div style="display:grid;gap:16px;margin-bottom:24px">
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Execution Mode:</label>
+            <select id="setting-server-mode" style="width:100%;max-width:400px;padding:8px 10px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:13px">
+              <option value="remote">Remote ML Worker (Ultra-lightweight ~15 MB RAM client)</option>
+              <option value="local">Local Standalone (In-process models ~600 MB RAM)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Server Endpoint URL / Hostname:</label>
+            <input type="text" id="setting-server-url" placeholder="http://172.16.11.24:11998" style="width:100%;max-width:500px;padding:8px 10px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:13px;font-family:var(--font-mono)">
+            <span style="display:block;margin-top:4px;font-size:11px;color:var(--text-muted)">Accepts arbitrary IPs, hostnames, and custom ports. Default: http://127.0.0.1:11998</span>
+          </div>
+
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Bearer API Key / Secret Token (Optional):</label>
+            <div style="display:flex;gap:8px;max-width:500px">
+              <input type="password" id="setting-server-key" placeholder="Optional token if server binds to 0.0.0.0" style="flex:1;padding:8px 10px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:13px;font-family:var(--font-mono)">
+              <button id="btn-generate-token" type="button" class="btn-secondary" style="padding:6px 12px;font-size:12px;cursor:pointer" title="Generate random secure 256-bit token">🔑 Gen Token</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;max-width:500px">
+            <div>
+              <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Request Timeout (ms):</label>
+              <input type="number" id="setting-server-timeout" value="3500" style="width:100%;padding:8px 10px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Dashboard Port:</label>
+              <input type="number" id="setting-dashboard-port" value="11997" style="width:100%;padding:8px 10px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:13px">
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Network Bind Address:</label>
+            <select id="setting-server-bind" style="width:100%;max-width:300px;padding:8px 10px;border-radius:var(--border-radius-sm);background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);font-size:13px">
+              <option value="127.0.0.1">127.0.0.1 (Localhost Only)</option>
+              <option value="0.0.0.0">0.0.0.0 (All Interfaces / LAN)</option>
+            </select>
+          </div>
+
+          <div style="margin-top:8px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" id="setting-server-auto-ide" checked style="cursor:pointer">
+              <span>Automatically update IDE MCP configs (VS Code, Claude Code, Cursor, Windsurf, Zed) on save</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Client Connection Helper Card -->
+        <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;padding:14px;margin-bottom:20px">
+          <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:6px">Client Connection Helper (One-Click Setup)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">Run this command on any developer machine or terminal to connect to this server:</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <code id="cli-helper-command" style="flex:1;background:var(--bg-secondary);border:1px solid var(--border-color);padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:12px;color:#3b82f6;overflow-x:auto">agent-guidance --set-server http://127.0.0.1:11998</code>
+            <button id="btn-copy-cli-command" class="btn-secondary" style="padding:8px 14px;font-size:12px;cursor:pointer">📋 Copy</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:center">
+          <button id="btn-test-connection" class="btn-secondary" style="padding:8px 16px;cursor:pointer">🔌 Test Connection</button>
+          <button id="btn-save-server-config" class="btn-accent" style="padding:8px 16px;cursor:pointer">💾 Apply &amp; Auto-Configure</button>
+        </div>
+
+        <div id="test-connection-result" style="margin-top:16px"></div>
+      </div>
+    </div>
   </section>
 </main>
 

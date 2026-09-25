@@ -12,6 +12,16 @@ echo -e "${RED}${BOLD}║                   Uninstaller                         
 echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo -e ""
 
+if [ "$(uname -s)" = "Linux" ] && command -v systemctl &>/dev/null; then
+    systemctl --user stop agent-guidance 2>/dev/null || true
+    systemctl --user disable agent-guidance 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/agent-guidance.service" 2>/dev/null || true
+elif [ "$(uname -s)" = "Darwin" ]; then
+    plist="$HOME/Library/LaunchAgents/com.junmystery.agent-guidance.plist"
+    launchctl unload "$plist" 2>/dev/null || true
+    rm -f "$plist" 2>/dev/null || true
+fi
+
 killall agent-guidance agent-guidance-mcp &>/dev/null || true
 pkill -f agent-guidance &>/dev/null || true
 
@@ -25,6 +35,7 @@ if [ -d "$HOME/.agent-guidance" ]; then
 fi
 
 rm -f "$HOME/.local/bin/agent-guidance" "$HOME/.local/bin/agent-guidance-mcp" 2>/dev/null || true
+rm -f "$HOME/.cargo/bin/agent-guidance" 2>/dev/null || true
 
 echo -e ""
 echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${NC}"

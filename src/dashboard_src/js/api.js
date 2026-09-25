@@ -206,3 +206,63 @@ export async function clearLogs(level = 'all') {
   if (!res.ok) throw new Error('Failed to clear logs: ' + res.statusText);
   return res.json();
 }
+
+export async function fetchServerConfig() {
+  const resp = await fetch('/api/config/server');
+  if (!resp.ok) throw new Error('Failed to fetch server config: ' + resp.statusText);
+  return resp.json();
+}
+
+export async function saveServerConfig(payload) {
+  const resp = await fetch('/api/config/server', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) throw new Error('Failed to save server config: ' + resp.statusText);
+  return resp.json();
+}
+
+export async function testServerConnection(payload) {
+  const resp = await fetch('/api/config/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) throw new Error('Failed to test connection: ' + resp.statusText);
+  return resp.json();
+}
+
+export async function fetchSkillsRegistry() {
+  const resp = await fetch('/api/skills/registry');
+  if (!resp.ok) throw new Error('Failed to fetch skill registry: ' + resp.statusText);
+  return resp.json();
+}
+
+export async function fetchSkillsBinaryStats() {
+  const resp = await fetch('/api/skills/binary_stats');
+  if (!resp.ok) throw new Error('Failed to fetch binary stats: ' + resp.statusText);
+  return resp.json();
+}
+
+export async function deleteBulkSkills(names, purgeStaging = true) {
+  const resp = await fetch('/api/skills/delete_bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ names, purge_staging: purgeStaging }),
+  });
+  if (!resp.ok) throw new Error('Failed to delete skills: ' + resp.statusText);
+  return resp.json();
+}
+
+export async function compileSkillsBinary(force = false) {
+  const resp = await fetch('/api/skills/compile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force }),
+  });
+  if (!resp.ok) throw new Error('Failed to compile skills: ' + resp.statusText);
+  return resp.json();
+}
+
+

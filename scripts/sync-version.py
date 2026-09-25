@@ -74,11 +74,40 @@ def main():
     # 2. scripts/install.sh
     replace_in_file(
         root / "scripts" / "install.sh",
+        r'version="\$\{version:-v[^"]+\}"',
+        f'version="${{version:-{v_version}}}"'
+    )
+    replace_in_file(
+        root / "scripts" / "install.sh",
         r'VERSION="v[^"]+"',
         f'VERSION="{v_version}"'
     )
 
-    # 4. packaging/winget/JunMystery.AgentGuidance.locale.en-US.yaml
+    # 3. src/dashboard_src/package.json
+    replace_in_file(
+        root / "src" / "dashboard_src" / "package.json",
+        r'"version":\s*"[^"]+"',
+        f'"version": "{version}"'
+    )
+
+    # 4. build.rs Windows resource version
+    replace_in_file(
+        root / "build.rs",
+        r'version="\d+\.\d+\.\d+\.\d+"',
+        f'version="{version}.0"'
+    )
+    replace_in_file(
+        root / "build.rs",
+        r'res\.set\("FileVersion",\s*"[^"]+"\);',
+        f'res.set("FileVersion", "{version}.0");'
+    )
+    replace_in_file(
+        root / "build.rs",
+        r'res\.set\("ProductVersion",\s*"[^"]+"\);',
+        f'res.set("ProductVersion", "{version}.0");'
+    )
+
+    # 5. packaging/winget/JunMystery.AgentGuidance.locale.en-US.yaml
     replace_in_file(
         root / "packaging" / "winget" / "JunMystery.AgentGuidance.locale.en-US.yaml",
         r'PackageVersion:\s*\S+',

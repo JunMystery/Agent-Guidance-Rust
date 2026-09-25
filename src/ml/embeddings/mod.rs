@@ -1,6 +1,9 @@
 pub mod backend;
+pub mod binary_format;
 pub mod candle_bert;
 pub mod cache;
+pub mod compactor;
+pub mod compiler;
 pub mod device;
 pub mod gpu;
 pub mod model;

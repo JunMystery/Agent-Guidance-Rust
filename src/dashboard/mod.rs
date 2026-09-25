@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use tiny_http::Server;
 use tracing::info;
 
+pub mod config_api;
 pub mod graph;
 pub(crate) mod graph_contract;
 pub(crate) use graph_contract as graph_types;
@@ -17,6 +18,7 @@ pub mod projects;
 pub(crate) mod projects_path;
 pub(crate) mod projects_prune;
 pub(crate) mod router;
+pub mod skills_api;
 pub(crate) use router::json_response;
 pub mod stats;
 pub mod stats_query;
@@ -34,12 +36,17 @@ pub fn get_dashboard_port() -> u16 {
 }
 
 pub fn spawn_dashboard_background(port: u16, project_path: Option<String>) {
+    spawn_dashboard_background_bind("127.0.0.1", port, project_path);
+}
+
+pub fn spawn_dashboard_background_bind(bind_addr: &str, port: u16, project_path: Option<String>) {
     DASHBOARD_PORT.store(port, Ordering::SeqCst);
+    let bind_owned = bind_addr.to_string();
     let _ = std::thread::Builder::new()
         .name("dashboard-background".to_string())
         .spawn(move || {
-            if let Err(e) = run_dashboard_server(port, project_path) {
-                tracing::warn!("Dashboard background server could not bind or stopped on port {}: {}", port, e);
+            if let Err(e) = run_dashboard_server_bind(&bind_owned, port, project_path) {
+                tracing::warn!("Dashboard background server could not bind or stopped on {}:{}: {}", bind_owned, port, e);
             }
         });
 }
@@ -56,10 +63,14 @@ pub(crate) struct StatsCache {
 }
 
 pub fn run_dashboard_server(port: u16, project_path: Option<String>) -> Result<()> {
+    run_dashboard_server_bind("127.0.0.1", port, project_path)
+}
+
+pub fn run_dashboard_server_bind(bind_addr: &str, port: u16, project_path: Option<String>) -> Result<()> {
     DASHBOARD_PORT.store(port, Ordering::SeqCst);
     let proj_dir = project_path.unwrap_or_else(|| "all".to_string());
 
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("{}:{}", bind_addr, port);
     let server = Server::http(&addr)
         .map_err(|e| anyhow::anyhow!("Failed to bind server to {}: {}", addr, e))?;
     info!("Usage Dashboard server listening on http://{}", addr);

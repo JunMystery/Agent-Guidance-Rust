@@ -78,7 +78,13 @@ pub fn path_to_uri(path: &Path) -> String {
 pub fn uri_to_rel_path(uri: &str, proj_path: &Path) -> String {
     let raw = uri.strip_prefix("file:///").unwrap_or(uri);
     let decoded = raw.replace("%20", " ");
-    let target_path = Path::new(&decoded);
+    let target_buf;
+    let target_path = if !cfg!(windows) && !decoded.starts_with('/') {
+        target_buf = format!("/{}", decoded);
+        Path::new(&target_buf)
+    } else {
+        Path::new(&decoded)
+    };
 
     if let Ok(rel) = target_path.strip_prefix(proj_path) {
         return rel.to_string_lossy().replace('\\', "/");
