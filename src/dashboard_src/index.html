@@ -137,7 +137,14 @@
                 <span class="hud-scope-title" data-i18n="kpi.active_scope">ACTIVE SCOPE:</span>
               </div>
               <div class="hud-project-select-wrap">
-                <select id="header-project-selector" class="hud-project-select" aria-label="Filter dashboard by project" data-i18n-aria-label="kpi.filter_project_aria">
+                <div class="combobox-wrap" id="header-combobox-wrap">
+                  <input type="text" id="header-project-search" class="combobox-input font-mono" placeholder="Search or select project…" autocomplete="off" aria-label="Search and select project" data-i18n-placeholder="combobox.search_placeholder">
+                  <button type="button" id="header-combobox-arrow" class="combobox-arrow" title="Toggle project dropdown">▾</button>
+                  <div id="header-combobox-dropdown" class="combobox-dropdown hidden">
+                    <div id="header-combobox-options" class="combobox-options"></div>
+                  </div>
+                </div>
+                <select id="header-project-selector" class="hud-project-select hidden" aria-label="Filter dashboard by project" data-i18n-aria-label="kpi.filter_project_aria">
                   <option value="all" data-i18n="sidebar.all_projects_analytics">🌐 All Projects (Global Analytics)</option>
                 </select>
                 <div id="header-project-badge" class="header-project-badge"></div>
@@ -173,7 +180,7 @@
             <div class="hud-card hud-card-emerald flat-card">
               <div class="hud-card-header">
                 <span class="hud-card-title" data-i18n="kpi.graph_precision">Graph Precision</span>
-                <span id="out-precision-badge" class="hud-badge hud-badge-emerald font-mono">99.2%</span>
+                <span id="out-precision-badge" class="hud-badge hud-badge-emerald font-mono">--</span>
               </div>
               <div class="hud-kpi-val text-emerald" id="out-graph-precision">--</div>
               <div class="hud-card-footer" id="out-precision-sub">

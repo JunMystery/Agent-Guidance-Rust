@@ -55,6 +55,7 @@ The web dashboard is organized into 4 primary views accessible via the responsiv
   - Context reduction percentage (typically 30–50% savings).
   - Active IDE client sessions.
 - **Multi-Repository Project Root Resolution**: Automatic detection of project boundaries using `.agent-context/` or `.git/` anchors, ensuring nested folders within a repository map to the true project root.
+- **Tracked Project Searchable Combobox & Deletion**: Header combobox with real-time text query filtering, keyboard accessibility, and one-click project removal with `.agent-context` index pruning.
 - **Recent Activity Summary**: Quick-glance stream of recently executed tool actions and active workflow stages.
 
 ### 2. Actions Log
@@ -115,6 +116,7 @@ The embedded HTTP server exposes a complete REST API for programmatic telemetry 
 |---|---|---|
 | `GET` | `/api/stats` | Aggregated metrics (tool call counts, token savings, duration, active sessions). Accepts optional `?project=<path>`. |
 | `GET` | `/api/projects` | List of all registered repositories in `~/.agent-guidance/usage.db`, automatically resolved to their project roots. |
+| `POST` | `/api/projects/delete` | Remove a tracked project from registry and prune `.agent-context/` index. Body: `{ project_path: string, delete_index?: boolean }`. |
 | `POST` | `/api/projects/prune` | Remove stale, missing, or redundant child directory records from the registry. |
 | `GET` | `/api/graph` | Code graph data. Parameters: `project` (required), `view` (`symbols`, `files`, `file_functions`), `file` (relative path or `all` for `file_functions`). |
 | `POST` | `/api/cleanup` | Trigger database vacuuming, expired log pruning, and dead project cleanup. |

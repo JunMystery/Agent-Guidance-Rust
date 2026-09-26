@@ -43,6 +43,12 @@ pub(crate) fn handle_dashboard_request(
                 .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
             projects::handle_api_prune(request, &db_path);
         }
+        "/api/projects/delete" => {
+            let db_path = dirs::home_dir()
+                .map(|h| h.join(".agent-guidance").join("usage.db"))
+                .unwrap_or_else(|| std::path::PathBuf::from("usage.db"));
+            projects::handle_api_delete_project(request, &db_path, cache);
+        }
         "/api/graph" => graph::handle_api_graph(request, project_path),
         "/api/cleanup" => handle_api_cleanup(request),
         "/api/skills/registry" => super::skills_api::handle_api_skills_registry(request),

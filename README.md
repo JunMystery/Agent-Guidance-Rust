@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.8.0-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.8.1-blue.svg)](Cargo.toml)
 [![Rust](https://img.shields.io/badge/Language-Rust%202024-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
@@ -167,7 +167,7 @@ Agent Guidance forces autonomous agents to follow an enterprise engineering life
 
 ---
 
-## 🌐 Dual-Role Topology (v1.8.0)
+## 🌐 Dual-Role Topology (v1.8.1)
 
 Split your AI coding workloads to fit your development environment:
 

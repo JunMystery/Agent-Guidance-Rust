@@ -40,3 +40,13 @@ export function pollSpanFor(view) {
   if (view === 'top-skills') return 'skills-poll';
   return null;
 }
+
+export function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

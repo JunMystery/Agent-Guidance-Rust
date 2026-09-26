@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use super::json_response;
 pub use super::projects_path::{find_project_root, is_temp_project_path, normalize_project_path};
 pub use super::projects_prune::prune_missing_projects;
+pub use super::project_delete::{delete_tracked_project, handle_api_delete_project};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TrackedProject {

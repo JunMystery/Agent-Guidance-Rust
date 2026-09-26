@@ -89,9 +89,12 @@ function updateTimeframeSummary(tf) {
   setText('out-shielded-badge', '+' + multiplier + ' Density');
   setText('out-shielded-sub', t('kpi.shielded_sub', { avoided: fmtTokens(avoided), orig: fmtTokens(s.tokens_original || 0) }));
 
-  setText('out-graph-precision', '99.2%');
-  setText('out-precision-badge', 'Noise Filtered');
-  setText('out-precision-sub', t('kpi.precision_sub', { filtered: '99.2%', target: '300' }));
+  const precisionVal = s.graph_precision_pct !== undefined ? s.graph_precision_pct : s.savings_pct;
+  const hasPrecision = precisionVal !== undefined && (s.context_calls > 0 || s.tokens_original > 0);
+  const precisionStr = hasPrecision ? fmtPct(precisionVal) : '--';
+  setText('out-graph-precision', precisionStr);
+  setText('out-precision-badge', hasPrecision ? 'Noise Filtered' : 'Active');
+  setText('out-precision-sub', t('kpi.precision_sub', { filtered: hasPrecision ? precisionStr : '0.0%', target: '300' }));
 
   if (data.top_skills) {
     setText('out-skills-catalog', String(data.top_skills.length));

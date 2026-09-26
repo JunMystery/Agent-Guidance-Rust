@@ -1,8 +1,11 @@
 import { el } from './dom.js';
-import { fetchProjects, pruneProjects, setSelectedProject, triggerAutoCleanup, fetchData, fetchGraphData } from './api.js';
+import { fetchProjects, pruneProjects, deleteProject, setSelectedProject, getSelectedProject, triggerAutoCleanup, fetchData, fetchGraphData } from './api.js';
 import { renderGraphView } from './render/graphView.js';
 import { showConfirm, showAlert } from './dialog.js';
+import { createProjectCombobox } from './combobox.js';
 import { t } from './i18n/index.js';
+
+let headerCombobox = null;
 
 async function loadAndRenderGraph() {
   const data = await fetchGraphData({ view: 'files' });
@@ -20,10 +23,12 @@ export async function initProjectSelector() {
   const projects = await fetchProjects();
   const optionsHtml = [`<option value="all">${t('sidebar.all_projects_analytics')}</option>`];
   const seenPaths = new Set();
+  const uniqueProjects = [];
 
   projects.forEach(p => {
     if (p.path && !seenPaths.has(p.path)) {
       seenPaths.add(p.path);
+      uniqueProjects.push(p);
       const isMissing = p.status === 'missing';
       const label = `${p.name || p.path} ${isMissing ? `(${t('sidebar.missing')})` : ''}`.trim();
       optionsHtml.push(`<option value="${p.path}" ${isMissing ? 'style="color: #ffbd2e;"' : ''}>${label}</option>`);
@@ -37,6 +42,7 @@ export async function initProjectSelector() {
   const onProjectChange = (val) => {
     select.value = val;
     if (headerSelect) headerSelect.value = val;
+    if (headerCombobox) headerCombobox.setValue(val);
     setSelectedProject(val);
 
     const chosen = projects.find(p => p.path === val);
@@ -60,6 +66,49 @@ export async function initProjectSelector() {
     }
   };
 
+  const onProjectDelete = async (pPath, pName) => {
+    const ok = await showConfirm({
+      title: t('dialog.delete_project_title'),
+      message: t('dialog.delete_project_msg', { name: pName || pPath }),
+      subtext: t('dialog.delete_project_subtext'),
+      confirmText: t('dialog.delete_project_btn'),
+      cancelText: t('dialog.cancel'),
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    const res = await deleteProject(pPath, true);
+    await showAlert({
+      title: t('dialog.delete_project_title'),
+      message: res.message || t('dialog.delete_project_success', { name: pName || pPath }),
+      variant: res.success ? 'success' : 'danger',
+    });
+
+    if (getSelectedProject() === pPath) {
+      onProjectChange('all');
+    }
+    await initProjectSelector();
+    fetchData();
+  };
+
+  const inputEl = el('header-project-search');
+  const dropdownEl = el('header-combobox-dropdown');
+  const optionsEl = el('header-combobox-options');
+  const arrowEl = el('header-combobox-arrow');
+
+  if (inputEl && dropdownEl && optionsEl) {
+    headerCombobox = createProjectCombobox({
+      inputEl,
+      dropdownEl,
+      optionsEl,
+      arrowEl,
+      projects: uniqueProjects,
+      selectedVal: getSelectedProject() || 'all',
+      onSelect: onProjectChange,
+      onDelete: onProjectDelete,
+    });
+  }
+
   select.addEventListener('change', () => onProjectChange(select.value));
   if (headerSelect) {
     headerSelect.addEventListener('change', () => onProjectChange(headerSelect.value));
@@ -69,9 +118,7 @@ export async function initProjectSelector() {
   if (defaultProj && defaultProj !== '--') {
     const match = projects.find(p => p.path === defaultProj || p.name === defaultProj);
     if (match) {
-      select.value = match.path;
-      if (headerSelect) headerSelect.value = match.path;
-      setSelectedProject(match.path);
+      onProjectChange(match.path);
     }
   }
 
