@@ -17,6 +17,7 @@ pub mod logs_api;
 pub mod projects;
 pub(crate) mod projects_path;
 pub(crate) mod projects_prune;
+pub(crate) mod project_delete;
 pub(crate) mod router;
 pub mod skills_api;
 pub(crate) use router::json_response;

@@ -98,7 +98,7 @@ try_download() {
     elif command -v wget &>/dev/null; then
         version="$(wget -qO- "https://api.github.com/repos/${repo}/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
     fi
-    version="${version:-v1.8.0}"
+    version="${version:-v1.8.1}"
     local tmp_dir; tmp_dir="$(mktemp -d 2>/dev/null || echo "/tmp/ag-download-$$")"
     mkdir -p "$tmp_dir"
 

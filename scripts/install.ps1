@@ -5,7 +5,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("Standalone", "Client", "Server", "1", "2", "3")][string]$Profile,
+    [Alias("Profile", "Mode")][string]$InstallProfile = "",
     [string]$ServerUrl = "http://127.0.0.1:11998",
     [string]$Bind = "0.0.0.0",
     [int]$WorkerPort = 11998,
@@ -43,7 +43,7 @@ function Perform-Uninstall {
 if ($Uninstall) { Perform-Uninstall }
 
 $action = "1"
-if (-not $NonInteractive -and -not $Profile) {
+if (-not $NonInteractive -and -not $InstallProfile) {
     Write-Host "What would you like to do?"
     Write-Host "  [1] Install / Update" -ForegroundColor Green
     Write-Host "  [2] Uninstall" -ForegroundColor Red
@@ -51,15 +51,15 @@ if (-not $NonInteractive -and -not $Profile) {
     if ($resp -eq "2") { Perform-Uninstall }
 }
 
-if (-not $Profile -and -not $NonInteractive) {
+if (-not $InstallProfile -and -not $NonInteractive) {
     Write-Host "`nSelect installation profile:" -ForegroundColor White
     Write-Host "  [1] Full Standalone       (Single binary with local Candle/ORT + SQLite FTS5)" -ForegroundColor Green
     Write-Host "  [2] Lightweight Client    (Zero-ML ~15 MB RAM, forwards queries to Remote ML Worker)" -ForegroundColor Cyan
     Write-Host "  [3] Dedicated Server Worker (Dedicated ML node, compiles binary registry, runs OS task)" -ForegroundColor Magenta
     $pResp = Read-Host "Profile [1]"
-    $Profile = if ($pResp) { $pResp } else { "1" }
-} elseif (-not $Profile) {
-    $Profile = "1"
+    $InstallProfile = if ($pResp) { $pResp } else { "1" }
+} elseif (-not $InstallProfile) {
+    $InstallProfile = "1"
 }
 
 Get-Process -Name "agent-guidance" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -76,7 +76,7 @@ function Try-DownloadPrebuilt {
     try {
         $meta = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -ErrorAction Stop
         $version = $meta.tag_name
-    } catch { $version = "v1.8.0" }
+    } catch { $version = "v1.8.1" }
 
     $tag = switch ($Prof) { { $_ -in "Client", "2" } { "client" }; { $_ -in "Server", "3" } { "server" }; default { "standalone" } }
     $candidates = @("agent-guidance-$tag-windows-x86_64.zip")
@@ -132,7 +132,7 @@ function Build-FromSource {
     } finally { Pop-Location }
 }
 
-if (-not (Try-DownloadPrebuilt -Prof $Profile)) {
+if (-not (Try-DownloadPrebuilt -Prof $InstallProfile)) {
     Write-Host "  Prebuilt download failed, compiling from source..." -ForegroundColor Yellow
     Build-FromSource
 }
@@ -167,7 +167,7 @@ function Register-IDEMCP {
 }
 
 $binPath = "$localBin\agent-guidance.exe"
-switch ($Profile) {
+switch ($InstallProfile) {
     { $_ -in "Client", "2" } {
         if (-not $NonInteractive) {
             $inputUrl = Read-Host "Remote Worker Server URL [$ServerUrl]"

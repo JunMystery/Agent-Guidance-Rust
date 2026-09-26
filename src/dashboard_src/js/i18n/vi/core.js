@@ -103,6 +103,13 @@ export const coreVi = {
   'dialog.optimize_msg': 'Chạy dọn dẹp log định kỳ và hút chân không (vacuum) SQLite?',
   'dialog.optimize_subtext': 'Thu dọn các cuộc gọi công cụ hết hạn, dọn bảng và giải phóng dung lượng đĩa.',
   'dialog.optimize_btn': '⚡ Tối Ưu Ngay',
+  'dialog.delete_project_title': 'Gỡ Bỏ Dự Án',
+  'dialog.delete_project_msg': "Gỡ bỏ dự án '{name}' khỏi bảng điều khiển và xoá chỉ mục?",
+  'dialog.delete_project_subtext': 'Dự án sẽ được tự động thêm lại khi bạn mở và làm việc lại trên đó.',
+  'dialog.delete_project_btn': '🗑️ Gỡ Bỏ Dự Án',
+  'dialog.delete_project_success': "Đã gỡ dự án '{name}' khỏi bảng điều khiển.",
+  'combobox.search_placeholder': 'Tìm hoặc chọn dự án…',
+  'combobox.no_matches': 'Không tìm thấy dự án phù hợp',
 
   // Directory Browser
   'dir_browser.up_one_dir': '📁 .. (Lên một thư mục)',

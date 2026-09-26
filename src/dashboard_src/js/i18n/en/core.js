@@ -103,6 +103,13 @@ export const coreEn = {
   'dialog.optimize_msg': 'Run automated log cleanup and vacuum SQLite database?',
   'dialog.optimize_subtext': 'Prunes expired tool calls, vacuum tables, and reclaims disk space.',
   'dialog.optimize_btn': '⚡ Optimize Now',
+  'dialog.delete_project_title': 'Remove Project',
+  'dialog.delete_project_msg': "Remove project '{name}' from dashboard and delete its index?",
+  'dialog.delete_project_subtext': 'The project will be automatically re-added when you work on it again.',
+  'dialog.delete_project_btn': '🗑️ Remove Project',
+  'dialog.delete_project_success': "Project '{name}' removed from dashboard.",
+  'combobox.search_placeholder': 'Search or select project…',
+  'combobox.no_matches': 'No matching projects found',
 
   // Directory Browser
   'dir_browser.up_one_dir': '📁 .. (Up one directory)',

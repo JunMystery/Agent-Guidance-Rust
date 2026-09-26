@@ -136,14 +136,39 @@ pub fn query_timeframe_summary(conn: &Connection, cutoff: i64, is_proj: bool, p1
         ).unwrap_or((0, 0, 0))
     };
 
+    let (ctx_calls, ctx_orig, ctx_opt): (i64, i64, i64) = if is_proj {
+        conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0)
+             FROM tool_calls WHERE started_at >= ?1 AND tool_name = 'project_context' AND (project_path = ?2 COLLATE NOCASE OR project_path = ?3 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?2 COLLATE NOCASE OR rtrim(project_path, '/\\') = ?3 COLLATE NOCASE)",
+            params![cutoff, p1, p2],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        ).unwrap_or((0, 0, 0))
+    } else {
+        conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(tokens_original), 0), COALESCE(SUM(tokens_optimized), 0)
+             FROM tool_calls WHERE started_at >= ?1 AND tool_name = 'project_context'",
+            params![cutoff],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        ).unwrap_or((0, 0, 0))
+    };
+
     let skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?1", [cutoff], |r| r.get(0)).unwrap_or(0);
     let embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?1", [cutoff], |r| r.get(0)).unwrap_or(0);
     let saved = orig - opt;
     let pct = if orig > 0 { ((saved as f64 / orig as f64) * 1000.0).round() / 10.0 } else { 0.0 };
+    let graph_precision_pct = if ctx_orig > 0 {
+        (((ctx_orig - ctx_opt) as f64 / ctx_orig as f64) * 1000.0).round() / 10.0
+    } else if orig > 0 {
+        pct
+    } else {
+        0.0
+    };
 
     json!({
         "tool_calls": calls, "skills_loaded": skills, "embed_queries": embeds, "llm_queries": 0,
-        "tokens_original": orig, "tokens_optimized": opt, "token_savings": saved, "savings_pct": pct
+        "tokens_original": orig, "tokens_optimized": opt, "token_savings": saved, "savings_pct": pct,
+        "graph_precision_pct": graph_precision_pct, "context_calls": ctx_calls,
+        "context_tokens_orig": ctx_orig, "context_tokens_opt": ctx_opt
     })
 }
 
@@ -238,5 +263,36 @@ mod tests {
         assert_eq!(gov["edits_authorized"], 1);
         assert_eq!(gov["verifications_passed"], 1);
         assert_eq!(gov["stages_transitioned"], 1);
+    }
+
+    #[test]
+    fn test_query_timeframe_summary_graph_precision() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE tool_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tool_name TEXT NOT NULL,
+                operation TEXT,
+                started_at INTEGER NOT NULL,
+                duration_ms INTEGER,
+                tokens_original INTEGER DEFAULT 0,
+                tokens_optimized INTEGER DEFAULT 0,
+                error_message TEXT,
+                project_path TEXT,
+                target TEXT
+            )",
+            [],
+        ).unwrap();
+
+        let now = 1773187200;
+        conn.execute(
+            "INSERT INTO tool_calls (tool_name, operation, started_at, tokens_original, tokens_optimized)
+             VALUES ('project_context', 'read', ?1, 1000, 100)",
+            [now],
+        ).unwrap();
+
+        let res = query_timeframe_summary(&conn, now - 3600, false, "", "");
+        assert_eq!(res["context_calls"], 1);
+        assert_eq!(res["graph_precision_pct"], 90.0);
     }
 }

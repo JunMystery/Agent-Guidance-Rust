@@ -71,6 +71,19 @@ export async function pruneProjects() {
   }
 }
 
+export async function deleteProject(projectPath, deleteIndex = true) {
+  try {
+    const resp = await fetch('/api/projects/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: projectPath, delete_index: deleteIndex }),
+    });
+    return resp.json();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 export async function triggerAutoCleanup() {
   try {
     const resp = await fetch('/api/cleanup', { method: 'POST' });
