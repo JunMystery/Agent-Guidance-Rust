@@ -2245,6 +2245,8 @@ th[data-sort].sorted[aria-sort="ascending"]::after {
 }
 
 .hud-command-bar {
+    position: relative;
+    z-index: 100;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -2277,6 +2279,8 @@ th[data-sort].sorted[aria-sort="ascending"]::after {
 }
 
 .hud-project-select-wrap {
+    position: relative;
+    z-index: 100;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2881,6 +2885,7 @@ th[data-sort].sorted[aria-sort="ascending"]::after {
 /* Searchable Project Combobox */
 .combobox-wrap {
     position: relative;
+    z-index: 100;
     display: inline-flex;
     align-items: center;
     min-width: 250px;
