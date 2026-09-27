@@ -83,34 +83,13 @@ fn parse_query_params(query_str: &str) -> HashMap<String, String> {
             continue;
         }
         if let Some((k, v)) = pair.split_once('=') {
-            let decoded_val = urlencoding_decode(v);
+            let decoded_val = super::router::url_decode(v);
             params.insert(k.to_string(), decoded_val);
         } else {
             params.insert(pair.to_string(), "".to_string());
         }
     }
     params
-}
-
-fn urlencoding_decode(s: &str) -> String {
-    let mut res = String::with_capacity(s.len());
-    let mut bytes = s.bytes();
-    while let Some(b) = bytes.next() {
-        if b == b'+' {
-            res.push(' ');
-        } else if b == b'%' {
-            if let (Some(h1), Some(h2)) = (bytes.next(), bytes.next()) {
-                if let Ok(val) = u8::from_str_radix(std::str::from_utf8(&[h1, h2]).unwrap_or(""), 16) {
-                    res.push(val as char);
-                    continue;
-                }
-            }
-            res.push('%');
-        } else {
-            res.push(b as char);
-        }
-    }
-    res
 }
 
 fn json_response(request: Request, status_code: u16, data: &serde_json::Value) {

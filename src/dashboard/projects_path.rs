@@ -26,18 +26,35 @@ fn is_submodule_dir_name(p: &Path) -> bool {
 /// Finds the root project directory by looking upwards for `.agent-context` folder,
 /// or fallback VCS/manifest roots (.git, Cargo.toml, package.json, go.mod, pyproject.toml).
 pub fn find_project_root(path: &Path) -> PathBuf {
-    let abs_buf;
-    let base_path: &Path = if path.is_absolute() {
+    let raw_str = path.to_string_lossy();
+    let trimmed = raw_str.trim().trim_matches(['"', '\'']);
+    let unescaped_buf;
+    let clean_path: &Path = if trimmed.starts_with("file://") || trimmed.contains('%') {
+        let stripped = trimmed
+            .strip_prefix("file:///")
+            .or_else(|| trimmed.strip_prefix("file://"))
+            .unwrap_or(trimmed);
+        unescaped_buf = PathBuf::from(super::router::url_decode(stripped));
+        &unescaped_buf
+    } else if trimmed.len() != raw_str.len() {
+        unescaped_buf = PathBuf::from(trimmed);
+        &unescaped_buf
+    } else {
         path
+    };
+
+    let abs_buf;
+    let base_path: &Path = if clean_path.is_absolute() {
+        clean_path
     } else if let Ok(cwd) = std::env::current_dir() {
-        if path == Path::new(".") || path == Path::new("") {
+        if clean_path == Path::new(".") || clean_path == Path::new("") {
             abs_buf = cwd;
         } else {
-            abs_buf = cwd.join(path);
+            abs_buf = cwd.join(clean_path);
         }
         &abs_buf
     } else {
-        path
+        clean_path
     };
 
     let curr = if base_path.is_file() {

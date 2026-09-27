@@ -64,27 +64,8 @@ fn extract_query_param(url: &str, param: &str) -> Option<String> {
         let key = parts.next()?;
         if key == param {
             let val = parts.next().unwrap_or("");
-            return Some(url_decode(val));
+            return Some(super::router::url_decode(val));
         }
     }
     None
-}
-
-fn url_decode(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut bytes = s.bytes();
-    while let Some(b) = bytes.next() {
-        if b == b'%' {
-            let h1 = bytes.next().unwrap_or(b'0') as char;
-            let h2 = bytes.next().unwrap_or(b'0') as char;
-            if let Ok(hex) = u8::from_str_radix(&format!("{}{}", h1, h2), 16) {
-                result.push(hex as char);
-            }
-        } else if b == b'+' {
-            result.push(' ');
-        } else {
-            result.push(b as char);
-        }
-    }
-    result
 }

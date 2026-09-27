@@ -15,11 +15,7 @@ pub(crate) fn parse_graph_query(query_str: &str) -> GraphQueryParams {
     let (mut project, mut view, mut file) = (None, None, None);
     for pair in query_str.split('&') {
         if let Some((k, v)) = pair.split_once('=') {
-            let decoded = v
-                .replace("%20", " ")
-                .replace("%2F", "/")
-                .replace("%3A", ":")
-                .replace("%5C", "\\");
+            let decoded = super::router::url_decode(v);
             match k {
                 "project" => {
                     if !decoded.is_empty() && decoded != "all" {
@@ -78,7 +74,14 @@ pub(crate) fn handle_api_graph(request: tiny_http::Request, default_proj: &str) 
             return;
         }
     };
-    let path = Path::new(target_dir);
+    let clean_target = target_dir.trim().trim_matches(['"', '\'']);
+    let initial_path = Path::new(clean_target);
+    let resolved_root = crate::dashboard::projects_path::find_project_root(initial_path);
+    let path = if resolved_root.exists() {
+        &resolved_root
+    } else {
+        initial_path
+    };
 
     if params.view == "file_functions" && params.file.is_none() {
         json_response(

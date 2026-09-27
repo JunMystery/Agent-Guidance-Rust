@@ -179,3 +179,30 @@ fn handle_api_engine_refresh(request: tiny_http::Request, cache: &Arc<Mutex<Stat
         }),
     );
 }
+
+/// Decodes standard URL query string parameters, supporting percent-encoding (%XX),
+/// '+' as space, and UTF-8 multi-byte sequences.
+pub fn url_decode(s: &str) -> String {
+    let mut bytes = Vec::with_capacity(s.len());
+    let mut iter = s.as_bytes().iter().copied();
+    while let Some(b) = iter.next() {
+        if b == b'+' {
+            bytes.push(b' ');
+        } else if b == b'%' {
+            let h1 = iter.next().unwrap_or(b'0');
+            let h2 = iter.next().unwrap_or(b'0');
+            let d1 = (h1 as char).to_digit(16);
+            let d2 = (h2 as char).to_digit(16);
+            if let (Some(n1), Some(n2)) = (d1, d2) {
+                bytes.push(((n1 as u8) << 4) | (n2 as u8));
+            } else {
+                bytes.push(b'%');
+                bytes.push(h1);
+                bytes.push(h2);
+            }
+        } else {
+            bytes.push(b);
+        }
+    }
+    String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
+}

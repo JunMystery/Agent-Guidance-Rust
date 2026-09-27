@@ -27,7 +27,7 @@ Installers provide an interactive mode selector:
 
 **Windows (PowerShell):**
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -Command "iex (irm https://raw.githubusercontent.com/JunMystery/Agent-Guidance-Rust/main/scripts/install.ps1)"
 ```
 
 **Linux / macOS (Bash):**

@@ -31,6 +31,16 @@ fn test_parse_graph_query_explicit_project() {
     assert_eq!(q.project.as_deref(), Some("e:/my repo"));
     assert_eq!(q.view, "file_functions");
     assert_eq!(q.file.as_deref(), Some("src/main.rs"));
+
+    // URLSearchParams standard: space encoded as '+'
+    let q_plus = parse_graph_query("project=C%3A%5CMy+Projects%5Cagent-guidance&view=files");
+    assert_eq!(q_plus.project.as_deref(), Some("C:\\My Projects\\agent-guidance"));
+    assert_eq!(q_plus.view, "files");
+
+    // File parameter with spaces
+    let q_file_space = parse_graph_query("project=e%3A%2Fmy+repo&view=file_functions&file=src%2Fmy+file.rs");
+    assert_eq!(q_file_space.project.as_deref(), Some("e:/my repo"));
+    assert_eq!(q_file_space.file.as_deref(), Some("src/my file.rs"));
 }
 
 #[test]
