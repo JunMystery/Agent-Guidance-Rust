@@ -167,7 +167,7 @@ Agent Guidance forces autonomous agents to follow an enterprise engineering life
 
 ---
 
-## 🌐 Dual-Role Topology (v1.8.1)
+## 🌐 Dual-Role Topology (v1.8.2)
 
 Split your AI coding workloads to fit your development environment:
 

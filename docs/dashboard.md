@@ -50,10 +50,12 @@ The web dashboard is organized into 4 primary views accessible via the responsiv
 - **Agent Invocations & Latency Wave**: Dual-axis spline chart displaying hourly tool invocations (left Y-axis) correlated with average execution latency in milliseconds (right Y-axis), tracking activity against the user's system timezone across the past 24 hours.
 - **Executive Metric Cards & KPI Header**:
   - Total Operations / Tool Invocations executed across sessions.
-  - Ingestion Velocity (Saved vs. Ingestion tokens).
+  - Context Shielded (Avoided tokens vs. baseline density multiplier, strictly clamped $\ge 0$).
+  - Graph Precision (% AST noise filtered against the 300 LOC target cap, strictly clamped $\ge 0\%$).
   - Average execution latency (ms).
   - Context reduction percentage (typically 30–50% savings).
   - Active IDE client sessions.
+  - Automatic Database Self-Healing: Startup SQLite migration repairs any historical records to guarantee `tokens_original >= tokens_optimized`.
 - **Multi-Repository Project Root Resolution**: Automatic detection of project boundaries using `.agent-context/` or `.git/` anchors, ensuring nested folders within a repository map to the true project root.
 - **Tracked Project Searchable Combobox & Deletion**: Header combobox with real-time text query filtering, keyboard accessibility, and one-click project removal with `.agent-context` index pruning.
 - **Recent Activity Summary**: Quick-glance stream of recently executed tool actions and active workflow stages.

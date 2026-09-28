@@ -122,6 +122,14 @@ fn init_db_internal(db_path: &PathBuf) -> Result<()> {
 
     let _ = conn.execute("ALTER TABLE tool_calls ADD COLUMN project_path TEXT", []);
     let _ = conn.execute("ALTER TABLE tool_calls ADD COLUMN target TEXT", []);
+    let _ = conn.execute(
+        "UPDATE tool_calls SET tokens_original = tokens_optimized WHERE tokens_original < tokens_optimized",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE daily_summaries SET tokens_original = tokens_optimized WHERE tokens_original < tokens_optimized",
+        [],
+    );
 
     Ok(())
 }

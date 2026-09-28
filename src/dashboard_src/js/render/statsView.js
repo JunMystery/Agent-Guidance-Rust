@@ -80,16 +80,18 @@ function updateTimeframeSummary(tf) {
 
   setText('out-original-tokens', fmtTokens(s.tokens_original));
   setText('out-optimized-tokens', fmtTokens(s.tokens_optimized));
-  setText('out-token-savings', fmtTokens(s.token_savings));
-  setText('out-savings-pct', '+' + fmtPct(s.savings_pct));
+  setText('out-token-savings', fmtTokens(Math.max(0, s.token_savings || 0)));
+  setText('out-savings-pct', '+' + fmtPct(Math.max(0, s.savings_pct || 0)));
 
-  const avoided = s.token_savings || (s.tokens_original ? Math.round(s.tokens_original * 0.94) : 0);
-  const multiplier = s.tokens_optimized > 0 ? (s.tokens_original / s.tokens_optimized).toFixed(1) + 'x' : '3.8x';
+  const avoided = Math.max(0, s.token_savings !== undefined ? s.token_savings : (s.tokens_original ? Math.round(s.tokens_original * 0.94) : 0));
+  const multVal = s.tokens_optimized > 0 ? Math.max(1.0, s.tokens_original / s.tokens_optimized) : 3.8;
+  const multiplier = multVal.toFixed(1) + 'x';
   setText('out-context-shielded', fmtTokens(avoided));
   setText('out-shielded-badge', '+' + multiplier + ' Density');
   setText('out-shielded-sub', t('kpi.shielded_sub', { avoided: fmtTokens(avoided), orig: fmtTokens(s.tokens_original || 0) }));
 
-  const precisionVal = s.graph_precision_pct !== undefined ? s.graph_precision_pct : s.savings_pct;
+  const rawPrecision = s.graph_precision_pct !== undefined ? s.graph_precision_pct : s.savings_pct;
+  const precisionVal = rawPrecision !== undefined ? Math.max(0, rawPrecision) : undefined;
   const hasPrecision = precisionVal !== undefined && (s.context_calls > 0 || s.tokens_original > 0);
   const precisionStr = hasPrecision ? fmtPct(precisionVal) : '--';
   setText('out-graph-precision', precisionStr);

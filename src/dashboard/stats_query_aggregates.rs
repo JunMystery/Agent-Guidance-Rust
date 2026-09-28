@@ -154,14 +154,12 @@ pub fn query_timeframe_summary(conn: &Connection, cutoff: i64, is_proj: bool, p1
 
     let skills: i64 = conn.query_row("SELECT COUNT(*) FROM skill_loads WHERE loaded_at >= ?1", [cutoff], |r| r.get(0)).unwrap_or(0);
     let embeds: i64 = conn.query_row("SELECT COUNT(*) FROM embed_queries WHERE queried_at >= ?1", [cutoff], |r| r.get(0)).unwrap_or(0);
-    let saved = orig - opt;
-    let pct = if orig > 0 { ((saved as f64 / orig as f64) * 1000.0).round() / 10.0 } else { 0.0 };
+    let saved = (orig - opt).max(0);
+    let pct = if orig > 0 { (((saved as f64 / orig as f64) * 1000.0).round() / 10.0).max(0.0) } else { 0.0 };
     let graph_precision_pct = if ctx_orig > 0 {
-        (((ctx_orig - ctx_opt) as f64 / ctx_orig as f64) * 1000.0).round() / 10.0
-    } else if orig > 0 {
-        pct
+        ((((ctx_orig - ctx_opt).max(0) as f64 / ctx_orig as f64) * 1000.0).round() / 10.0).max(0.0)
     } else {
-        0.0
+        pct
     };
 
     json!({
