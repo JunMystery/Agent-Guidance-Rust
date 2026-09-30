@@ -102,11 +102,73 @@ impl Tray for LinuxTray {
 }
 
 pub fn run_linux_tray(port: u16) {
-    let tray = LinuxTray { port };
-    let service = TrayService::new(tray);
-    let _handle = service.spawn();
+    let mut backoff = std::time::Duration::from_secs(2);
 
     loop {
-        std::thread::park();
+        let start = std::time::Instant::now();
+        let tray = LinuxTray { port };
+        let service = TrayService::new(tray);
+
+        let run_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            service.run()
+        }));
+
+        match run_result {
+            Ok(Ok(())) => {
+                tracing::info!("Linux system tray service stopped cleanly");
+                break;
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("Linux system tray D-Bus service exited: {e}; retrying in {backoff:?}");
+            }
+            Err(panic_err) => {
+                let panic_msg = if let Some(s) = panic_err.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_err.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic".to_string()
+                };
+                tracing::warn!(
+                    "Linux system tray caught panic: {panic_msg}; retrying in {backoff:?}"
+                );
+            }
+        }
+
+        std::thread::sleep(backoff);
+        if start.elapsed() > std::time::Duration::from_secs(30) {
+            backoff = std::time::Duration::from_secs(2);
+        } else {
+            backoff = (backoff * 2).min(std::time::Duration::from_secs(60));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_linux_tray_metadata() {
+        let tray = LinuxTray { port: 8080 };
+        assert_eq!(tray.id(), "agent-guidance-mcp");
+        assert_eq!(tray.title(), "Agent Guidance (MCP)");
+        assert_eq!(tray.icon_name(), "agent-guidance");
+
+        let tip = tray.tool_tip();
+        assert_eq!(tip.title, "Agent Guidance (MCP)");
+        assert_eq!(tip.description, "Running in background");
+
+        let menu = tray.menu();
+        assert_eq!(menu.len(), 4);
+
+        let icons = tray.icon_pixmap();
+        assert_eq!(icons.len(), 1);
+        assert!(icons[0].width > 0);
+        assert!(icons[0].height > 0);
+        assert_eq!(
+            icons[0].data.len(),
+            (icons[0].width * icons[0].height * 4) as usize
+        );
     }
 }
