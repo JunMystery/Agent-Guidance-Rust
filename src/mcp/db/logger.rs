@@ -47,11 +47,24 @@ where
     }
 }
 
-fn maybe_prune(conn: &Connection, now: i64) {
+fn maybe_prune(now: i64) {
     let last = LAST_PRUNE_SECS.load(Ordering::Relaxed);
     if now - last > 3600 {
-        LAST_PRUNE_SECS.store(now, Ordering::Relaxed);
-        let _ = super::cleanup::run_auto_cleanup(conn, super::cleanup::DEFAULT_RETENTION_DAYS);
+        if LAST_PRUNE_SECS.compare_exchange(last, now, Ordering::SeqCst, Ordering::Relaxed).is_ok() {
+            let db_path = super::get_db_path();
+            std::thread::Builder::new()
+                .name("ag-db-pruner".to_string())
+                .spawn(move || {
+                    if let Ok(conn) = Connection::open_with_flags(
+                        &db_path,
+                        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
+                    ) {
+                        let _ = conn.busy_timeout(std::time::Duration::from_millis(2000));
+                        let _ = super::cleanup::run_auto_cleanup(&conn, super::cleanup::DEFAULT_RETENTION_DAYS);
+                    }
+                })
+                .ok();
+        }
     }
 }
 
@@ -126,7 +139,7 @@ pub fn log_tool_call(
         .filter(|s| !s.is_empty() && !crate::dashboard::projects::is_temp_project_path(s));
 
     with_db(|conn| {
-        maybe_prune(conn, now);
+        maybe_prune(now);
 
         conn.execute(
             "INSERT INTO tool_calls (tool_name, operation, started_at, duration_ms, tokens_original, tokens_optimized, error_message, project_path, target)
@@ -184,7 +197,7 @@ pub fn log_skill_load(skill_id: &str) {
     let day_str = get_today_string(now);
 
     with_db(|conn| {
-        maybe_prune(conn, now);
+        maybe_prune(now);
         conn.execute(
             "INSERT INTO skill_loads (skill_id, loaded_at) VALUES (?, ?)",
             params![skill_id, now],
@@ -202,7 +215,7 @@ pub fn log_embed_query(query: &str) {
     let day_str = get_today_string(now);
 
     with_db(|conn| {
-        maybe_prune(conn, now);
+        maybe_prune(now);
         conn.execute(
             "INSERT INTO embed_queries (query_text, queried_at) VALUES (?, ?)",
             params![query, now],

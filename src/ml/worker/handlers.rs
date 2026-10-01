@@ -161,18 +161,24 @@ fn slice_sections_neural(content: &str, task: &str, top_k: usize) -> Result<Stri
     let mut scored: Vec<(f32, &crate::catalog::slicing::MarkdownSection)> = Vec::with_capacity(sections.len());
     for (i, sec) in sections.iter().enumerate() {
         if let Some(s_vec) = sec_embeddings.get(i) {
-            let sim = crate::ml::embeddings::device::cosine_similarity(&query_vec, s_vec);
+            let sim = crate::ml::embeddings::device::dot_similarity(&query_vec, s_vec);
             scored.push((sim, sec));
         }
     }
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    let sliced = scored
-        .into_iter()
-        .take(top_k)
-        .map(|(score, s)| format!("#### {} (Relevance: {:.2})\n{}", s.title, score, crate::optimizer::compressor::compress_markdown(&s.content)))
-        .collect::<Vec<_>>()
-        .join("\n\n---\n\n");
+    let mut acc = Vec::new();
+    let mut token_acc = 0;
+    for (_score, s) in scored.into_iter().take(top_k) {
+        let comp = crate::optimizer::compressor::compress_markdown(&s.content);
+        let toks = crate::optimizer::compressor::estimate_tokens(&comp, false);
+        if !acc.is_empty() && token_acc + toks > 800 {
+            break;
+        }
+        token_acc += toks;
+        acc.push(format!("#### {}\n{}", s.title, comp));
+    }
+    let sliced = acc.join("\n\n---\n\n");
 
     Ok(sliced)
 }

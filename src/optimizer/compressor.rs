@@ -10,20 +10,43 @@ pub fn estimate_tokens(text: &str, is_code: bool) -> usize {
 }
 
 pub fn compress_markdown(content: &str) -> String {
-    let re_comments = RE_COMMENTS
-        .get_or_init(|| Regex::new(r"(?s)<!--.*?-->").expect("Invalid comment regex"));
-    let re_badges = RE_BADGES.get_or_init(|| {
-        Regex::new(r"!\[.*?\]\(https://img\.shields\.io/.*?\)|!\[.*?\]\(https://badge.*?\)\s*")
-            .expect("Invalid badge regex")
-    });
+    let has_comments = content.contains("<!--");
+    let has_badges = content.contains("shields.io") || content.contains("badge");
 
-    let stripped = re_comments.replace_all(content, "");
-    let stripped_badges = re_badges.replace_all(&stripped, "");
+    let stripped = if has_comments {
+        let re_comments = RE_COMMENTS.get_or_init(|| {
+            Regex::new(r"(?s)<!--.*?-->").expect("Invalid comment regex")
+        });
+        re_comments.replace_all(content, "")
+    } else {
+        std::borrow::Cow::Borrowed(content)
+    };
+
+    let stripped_badges = if has_badges {
+        let re_badges = RE_BADGES.get_or_init(|| {
+            Regex::new(r"!\[.*?\]\(https://img\.shields\.io/.*?\)|!\[.*?\]\(https://badge.*?\)\s*")
+                .expect("Invalid badge regex")
+        });
+        re_badges.replace_all(&stripped, "")
+    } else {
+        stripped
+    };
 
     let mut lines = Vec::new();
     let mut blank_count = 0;
+    let mut in_code_block = false;
     for line in stripped_badges.lines() {
         let trimmed = line.trim_end();
+        if trimmed.starts_with("```") {
+            in_code_block = !in_code_block;
+            blank_count = 0;
+            lines.push(trimmed);
+            continue;
+        }
+        if in_code_block {
+            lines.push(line);
+            continue;
+        }
         if trimmed.is_empty() {
             blank_count += 1;
             if blank_count <= 1 {
@@ -50,11 +73,19 @@ mod tests {
 
     #[test]
     fn test_compress_markdown() {
-        let md = "# Title\n\n<!-- comment -->\n\n\n\nBody text";
+        let md = "# Title\n\n\n\n\n\nBody text";
         let compressed = compress_markdown(md);
         assert!(!compressed.contains("comment"));
         assert!(!compressed.contains("shields.io"));
         assert!(compressed.contains("# Title"));
         assert!(compressed.contains("Body text"));
+    }
+
+    #[test]
+    fn test_compress_markdown_preserves_code_blocks() {
+        let md = "# Title\n\n```rust\nfn foo() {\n\n\n    let x = 1;\n}\n```\n\n\n\nTrailing";
+        let compressed = compress_markdown(md);
+        assert!(compressed.contains("fn foo() {\n\n\n    let x = 1;\n}"));
+        assert!(!compressed.contains("\n\n\nTrailing"));
     }
 }

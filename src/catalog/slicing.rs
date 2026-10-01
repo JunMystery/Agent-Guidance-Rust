@@ -60,9 +60,24 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
         .map(|s| s.to_string())
         .collect();
 
+    let accumulate_sections = |secs: &[&MarkdownSection]| -> String {
+        let mut acc = Vec::new();
+        let mut token_acc = 0;
+        for s in secs {
+            let comp = compress_markdown(&s.content);
+            let toks = crate::optimizer::compressor::estimate_tokens(&comp, false);
+            if !acc.is_empty() && token_acc + toks > 800 {
+                break;
+            }
+            token_acc += toks;
+            acc.push(format!("#### {}\n{}", s.title, comp));
+        }
+        acc.join("\n\n---\n\n")
+    };
+
     if keywords.is_empty() {
-        let compressed = sections.iter().take(top_k).map(|s| format!("#### {}\n{}", s.title, compress_markdown(&s.content))).collect::<Vec<_>>().join("\n\n---\n\n");
-        return compressed;
+        let borrowed: Vec<&MarkdownSection> = sections.iter().take(top_k).collect();
+        return accumulate_sections(&borrowed);
     }
 
     let mut scored: Vec<(f32, &MarkdownSection)> = Vec::new();
@@ -70,10 +85,6 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
         let title_lower = sec.title.to_lowercase();
         let content_lower = sec.content.to_lowercase();
         let mut score = 0.0f32;
-
-        if title_lower.contains("overview") || title_lower.contains("quick start") || title_lower.contains("key rules") {
-            score += 0.5;
-        }
 
         for kw in &keywords {
             if title_lower.contains(kw) {
@@ -92,19 +103,11 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
     if scored.is_empty() {
-        sections
-            .iter()
-            .take(top_k)
-            .map(|s| format!("#### {}\n{}", s.title, compress_markdown(&s.content)))
-            .collect::<Vec<_>>()
-            .join("\n\n---\n\n")
+        let borrowed: Vec<&MarkdownSection> = sections.iter().take(top_k).collect();
+        accumulate_sections(&borrowed)
     } else {
-        scored
-            .into_iter()
-            .take(top_k)
-            .map(|(score, s)| format!("#### {} (Relevance: {:.1})\n{}", s.title, score, compress_markdown(&s.content)))
-            .collect::<Vec<_>>()
-            .join("\n\n---\n\n")
+        let borrowed: Vec<&MarkdownSection> = scored.into_iter().take(top_k).map(|(_, s)| s).collect();
+        accumulate_sections(&borrowed)
     }
 }
 
@@ -138,7 +141,6 @@ pub fn get_language_safety_rules(profile: &ProjectLanguageProfile) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
 
     #[test]
     fn test_language_safety_rules() {
@@ -159,5 +161,13 @@ mod tests {
         let md = "# Overview\nThis is general overview\n\n## Section A\nDetails about domain usecases\n\n## Section B\nDetails about database migrations";
         let sliced = slice_skill_markdown(md, "domain usecases", 2);
         assert!(sliced.contains("Section A") || sliced.contains("Overview") || sliced.contains("usecases"));
+    }
+
+    #[test]
+    fn test_slice_skill_markdown_budget_and_scoring() {
+        let md = "# Overview\nLots of boilerplate overview...\n\n## Core Logic\nSpecific query target here.\n\n## Another Section\nOther text.";
+        let sliced = slice_skill_markdown(md, "target", 1);
+        assert!(sliced.contains("Core Logic"));
+        assert!(!sliced.contains("Relevance:"));
     }
 }

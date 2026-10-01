@@ -132,36 +132,7 @@ where
         }
     }
 
-    // 3. Vector Symbol Signatures
-    if candidate_hits.is_empty() {
-        if let Some(qv) = embed_fn(query) {
-            if let Ok(vec_syms) = db.vector_search_symbols(&qv, limit * 2, 0.60) {
-                if !vec_syms.is_empty() {
-                    primary_source = "symbol_vector";
-                    for v in vec_syms {
-                        let score = calculate_hit_score(
-                            &v.file_path,
-                            v.score as f64,
-                            query,
-                            intent,
-                            ubiquitous_factor,
-                        );
-                        candidate_hits.push(RankedResult {
-                            path: v.file_path,
-                            name: v.name,
-                            line: v.start_line,
-                            end_line: None,
-                            score,
-                            source: "symbol_vector",
-                            snippet: None,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // 4. Content FTS5
+    // 3. Content FTS5 with BM25 ranking (Fast lexical fallback before neural embedding)
     if candidate_hits.is_empty() {
         let content_res = db.search_content_fts(query, limit * 2)
             .or_else(|_| Ok(Vec::new()))
@@ -195,29 +166,56 @@ where
         }
     }
 
-    // 5. RAG Vector Content Chunks
+    // 4. Neural Semantic Vector Fallback (Symbol Signatures)
     if candidate_hits.is_empty() {
         if let Some(qv) = embed_fn(query) {
-            if let Ok(chunks) = db.vector_search_chunks(&qv, limit * 2, 0.55) {
-                if !chunks.is_empty() {
-                    primary_source = "content_vector";
-                    for c in chunks {
+            if let Ok(vec_syms) = db.vector_search_symbols(&qv, limit * 2, 0.60) {
+                if !vec_syms.is_empty() {
+                    primary_source = "symbol_vector";
+                    for v in vec_syms {
                         let score = calculate_hit_score(
-                            &c.file_path,
-                            c.score as f64,
+                            &v.file_path,
+                            v.score as f64,
                             query,
                             intent,
                             ubiquitous_factor,
                         );
                         candidate_hits.push(RankedResult {
-                            path: c.file_path,
-                            name: format!("L{}-{}", c.start_line, c.end_line),
-                            line: c.start_line,
-                            end_line: Some(c.end_line),
+                            path: v.file_path,
+                            name: v.name,
+                            line: v.start_line,
+                            end_line: None,
                             score,
-                            source: "content_vector",
+                            source: "symbol_vector",
                             snippet: None,
                         });
+                    }
+                }
+            }
+
+            // 5. Neural Semantic Vector Fallback (Content Chunks)
+            if candidate_hits.is_empty() {
+                if let Ok(chunks) = db.vector_search_chunks(&qv, limit * 2, 0.55) {
+                    if !chunks.is_empty() {
+                        primary_source = "content_vector";
+                        for c in chunks {
+                            let score = calculate_hit_score(
+                                &c.file_path,
+                                c.score as f64,
+                                query,
+                                intent,
+                                ubiquitous_factor,
+                            );
+                            candidate_hits.push(RankedResult {
+                                path: c.file_path,
+                                name: format!("L{}-{}", c.start_line, c.end_line),
+                                line: c.start_line,
+                                end_line: Some(c.end_line),
+                                score,
+                                source: "content_vector",
+                                snippet: None,
+                            });
+                        }
                     }
                 }
             }

@@ -2,7 +2,7 @@ use crate::catalog::store::SkillItem;
 use rayon::prelude::*;
 pub use super::cross_encoder::cached_cross_encoder;
 
-const MAX_CROSS_ENCODER_CANDIDATES: usize = 8;
+const MAX_CROSS_ENCODER_CANDIDATES: usize = 4;
 
 pub struct LLMSelector;
 
@@ -117,6 +117,21 @@ impl LLMSelector {
             .take(MAX_CROSS_ENCODER_CANDIDATES)
             .cloned()
             .collect();
+
+        // High-confidence fast path: skip CPU cross-encoder when top vector match is decisive
+        if !bounded_candidates.is_empty() {
+            let top_score = bounded_candidates[0].0;
+            let second_score = bounded_candidates.get(1).map(|c| c.0).unwrap_or(0.0);
+            if bounded_candidates.len() == 1 || top_score >= 0.92 || (top_score >= 0.88 && (top_score - second_score) >= 0.12) {
+                let filtered: Vec<(f32, SkillItem)> = bounded_candidates
+                    .into_iter()
+                    .filter(|(prob, _)| *prob >= 0.65)
+                    .take(limit)
+                    .collect();
+                return filtered;
+            }
+        }
+
         let cross_encoder = super::cross_encoder::try_cached_cross_encoder();
         let mut scored: Vec<(f32, SkillItem)> = crate::ml::inference_pool().install(|| {
             bounded_candidates

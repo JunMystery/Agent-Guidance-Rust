@@ -67,11 +67,9 @@ pub(crate) fn handle_read(
             if (view_mode == "skeleton" || (total_lines > 300 && target_symbol.is_none() && !has_range && view_mode != "full")) && !is_exempt {
                 let skeleton = crate::optimizer::skeleton::generate_code_skeleton(&content, &resolved_subpath);
                 return format!(
-                    "# AST Structural Skeleton: `{}` (Total Lines: {})\n\n> **Token Saver Mode**: Function bodies collapsed to line ranges.\n\n```\n{}\n```\n\n---\n**Next Step**: Pass `target_symbol=\"<fn_or_struct_name>\"` or `start_line` / `end_line` to `project_context(operation=\"read\", relative_path=\"{}\")` to view complete body implementation.",
-                    target_path,
-                    total_lines,
+                    "```\n{}\n```\n[ag: AST Structural Skeleton ({} lines) | Token Saver Mode: use target_symbol or line range for full body]",
                     skeleton,
-                    target_path
+                    total_lines
                 );
             }
 
@@ -81,14 +79,11 @@ pub(crate) fn handle_read(
             }) {
                 if let Some(slice) = crate::optimizer::skeleton::generate_zoom_slice(&content, &resolved_subpath, symbol) {
                     return format!(
-                        "# AST Semantic Context Slice (Zoom Read): `{}` (Focus: `{}`)\n\n> **Zoom Read Optimization**: Preserved 100% type, struct & import context while folding {} sibling function bodies.\n> **Token Savings**: ~{}% reduction (from {} lines down to {} lines).\n\n```\n{}\n```",
-                        target_path,
+                        "```\n{}\n```\n[ag: Zoom Read (focus: {}) | {} folded functions, ~{}% token reduction]",
+                        slice.sliced_content,
                         symbol,
                         slice.folded_functions_count,
-                        slice.savings_percent,
-                        slice.original_lines,
-                        slice.sliced_lines,
-                        slice.sliced_content
+                        slice.savings_percent
                     );
                 }
             }

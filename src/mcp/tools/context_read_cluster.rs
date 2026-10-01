@@ -74,14 +74,13 @@ pub(crate) fn handle_cluster_read(
                 if total_lines > 300 && !is_exempt {
                     let skeleton = crate::optimizer::skeleton::generate_code_skeleton(&content, &clean_path);
                     sections.push(format!(
-                        "### [{}/{}] File: `{}` (Lines 1-{} of {})\n\n> **Notice (300 LOC Exceeded)**: Large file collapsed to AST Structural Skeleton to conserve context. Use `target_symbol` for full function body.\n\n```{}\n{}\n```",
+                        "### [{}/{}] File: `{}`\n```{}\n{}\n```\n[ag: AST Structural Skeleton ({} lines) | Token Saver Mode: use target_symbol or line range for full body]",
                         idx + 1,
                         max_files,
                         clean_path,
-                        skeleton.lines().count(),
-                        total_lines,
                         lang,
-                        skeleton
+                        skeleton,
+                        total_lines
                     ));
                 } else {
                     let rendered = if show_line_numbers {

@@ -2,6 +2,43 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.8.4] - 2026-10-01
+
+### ⚡ MCP Tool Output Compression & Surgical Patch Safety
+- **Fenced Code Block Preservation (`src/optimizer/compressor.rs`)**:
+  - Guaranteed byte-exact preservation of whitespace, indentation, and blank lines inside markdown code blocks (` ``` `).
+  - Prevents line-number shifts and whitespace corruption during agent file edits with `replace_file_content`.
+- **AST Skeletonizer Zero-Fluff Formatting (`src/mcp/tools/context_read.rs`, `context_read_cluster.rs`)**:
+  - Replaced multi-line promotional blockquotes and ASCII banners with a clean single-line status trailer:
+    `[ag: AST Structural Skeleton ({total_lines} lines) | Token Saver Mode: use target_symbol or line range for full body]`.
+  - Streamlined Zoom Read and cluster read outputs to maximize token efficiency for agent reasoning.
+- **Target-Matched Section & Skill Slicing (`src/catalog/slicing.rs`, `src/mcp/tools/guidance_docs.rs`)**:
+  - Enforced an ~800 token (~3,200 chars) budget cap across documentation sections.
+  - Removed artificial score bias for generic overview headers; technical keyword matches take priority.
+  - Stripped relevance score noise from section headers, returning clean `#### {title}` markdown.
+  - Extended `handle_get` to accept task/query context and return surgical section slices.
+
+### 🧠 Embed ML Subsystem Zero-Alloc & Vector Math Acceleration
+- **Zero-Allocation Tokenizer Execution (`src/ml/embeddings/quantized.rs`, `candle_bert.rs`)**:
+  - Pre-configured truncation parameters once during model loading (`load_from_dir` / `load_or_download`).
+  - Completely eliminated per-batch and per-call `tokenizer.clone()` heap allocations, passing `&self.tokenizer` directly to inference.
+- **Single-Pass SIMD Vector Math (`src/ml/embeddings/device.rs`)**:
+  - Optimized `cosine_similarity` from 3 separate iterator passes down to a single interleaved cache-friendly loop with a single `sqrt()` call.
+  - Added inline `dot_similarity` fast-path for unit-normalized vectors (norm = 1.0).
+- **ML Worker Parity (`src/ml/worker/handlers.rs`)**:
+  - Upgraded `slice_sections_neural` with `dot_similarity` scoring, ~800 token budget capping, and clean header formatting.
+
+### 🏎️ Search & Dashboard Latency Optimizations
+- **KPI Metric Accuracy (`src/dashboard_src/js/render/chart/kpi.js`)**:
+  - Fixed call-weighted average latency calculation (`sum(avg_duration * calls) / totalCalls`) in dashboard KPI widgets.
+- **Search Cascade Reordering (`src/context/search/mod.rs`)**:
+  - Prioritized SQLite Content FTS5 (BM25) before neural vector queries; computed query embeddings once and shared across symbol and chunk tables.
+- **Cross-Encoder Early Exit (`src/ml/llm_selector.rs`)**:
+  - Reduced candidate count to 4 and added high-confidence early-exit bypass to skip CPU cross-encoder when top hit score >= 0.88 with 0.12 lead.
+- **Decoupled Housekeeping (`src/mcp/db/logger.rs`, `src/mcp/tools/helpers.rs`)**:
+  - Decoupled DB log pruning to background thread `ag-db-pruner`.
+  - Optimized `ensure_indexed` polling from 50ms to 10ms slices.
+
 ## [1.7.5] - 2026-09-23
 
 ### 📊 Dynamic Phase Cadence & Multi-Stage Lifecycle Recognition

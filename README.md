@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.8.1-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.8.4-blue.svg)](Cargo.toml)
 [![Rust](https://img.shields.io/badge/Language-Rust%202024-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
@@ -52,7 +52,7 @@ cargo build --release
 | :--- | :--- | :--- |
 | **Code Structure & Modularity** | AI writes sprawling 800–1,500 LOC monolithic files, mixing database queries directly into UI components. | **Enforced 300 LOC Hard Cap** & upfront pattern blueprints (**Clean Architecture**, **Layered**, **Package-by-Feature**). Files are decomposed from line 1. |
 | **Container & File Naming** | Creates messy junk-drawer files (`utils.ts`, `services.py`, `helpers.go`). | **40 Compound Plural Suffixes Blocked** (`COMPOUND_FILE_NAME_PROHIBITED`). Every file must strictly observe Single Responsibility. |
-| **Context Window & Tokens** | Dumps full files and 500-line markdown skills into prompt, exhausting context windows and triggering hallucinations. | **Surgical Section-Level RAG Slicing**: Delivers only the top 2–3 relevant sections (~350 tokens, **~80% token savings**) using Candle BERT vector ranking. |
+| **Context Window & Tokens** | Dumps full files and 500-line markdown skills into prompt, exhausting context windows and triggering hallucinations. | **Surgical Section-Level RAG Slicing & AST Skeletonizer**: Delivers only top relevant sections (~350–800 tokens, **~80% token savings**) and collapses >300 LOC files into clean AST signatures while strictly preserving code block indentation and line numbers for diff tools. |
 | **Codebase Onboarding** | AI reads files sequentially, taking dozens of turns to guess relationships and losing track of dependencies. | **10-Second Hierarchical GraphRAG**: Instant macro community outline (Level 0/1/2) and 1-hop caller/callee bundling under 250 LOC. |
 | **Test & Fix Cycles** | Enters infinite repair loops, repeatedly making blind edits that break adjacent modules. | **Fix Circuit Breaker**: Trips automatically after 3 consecutive failed attempts, rolling back snapshots and requesting human intervention. |
 | **Deployment Topology** | Heavy local Python/ML dependencies consume 1GB+ RAM, slowing down developer laptops. | **Dual-Role Topology**: Lightweight Client runs in **~15MB RAM**, delegating heavy neural vector workloads to a dedicated Remote ML Worker. |

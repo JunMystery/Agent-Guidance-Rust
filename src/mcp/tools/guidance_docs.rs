@@ -26,22 +26,37 @@ pub(crate) fn handle_get(
         crate::mcp::db::log_skill_load(id);
     }
 
+    let task_context = arguments
+        .get("task")
+        .or_else(|| arguments.get("query"))
+        .or_else(|| arguments.get("context"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let format_skill = |content: &str| -> String {
+        if !task_context.is_empty() {
+            slice_skill_markdown(content, task_context, 3)
+        } else {
+            compress_markdown(content)
+        }
+    };
+
     let cfg = crate::config::current_config();
     if cfg.server.is_remote() {
         let client = crate::client::default_client();
         let clean_id = crate::mcp::tools::skills::clean_skill_identifier(id);
-        if let Ok(slice) = client.slice_skill(&clean_id, "") {
+        if let Ok(slice) = client.slice_skill(&clean_id, task_context) {
             if !slice.content.is_empty() {
-                return Ok(compress_markdown(&slice.content));
+                return Ok(format_skill(&slice.content));
             }
         }
     }
 
     if let Some(content) = get_embedded_skill(id) {
-        Ok(compress_markdown(&content))
+        Ok(format_skill(&content))
     } else if let Ok(full_path) = validate_path(&proj_path, id) {
         if let Ok(content) = std::fs::read_to_string(&full_path) {
-            Ok(compress_markdown(&content))
+            Ok(format_skill(&content))
         } else {
             Ok(format!("Skill asset not found: {}", id))
         }
@@ -79,8 +94,8 @@ pub(crate) fn handle_docs(
                         Err(_) => format!("*Documentation content for {}*", hit.name),
                     };
                     docs_sections.push(format!(
-                        "### Doc Skill: {} [Remote ML Worker] (Score: {:.2})\nPath: skills/{}/SKILL.md\n\n{}",
-                        hit.name, hit.score, hit.name, slice
+                        "### Doc Skill: {}\nPath: skills/{}/SKILL.md\n\n{}",
+                        hit.name, hit.name, slice
                     ));
                 }
                 if !docs_sections.is_empty() {
@@ -111,7 +126,7 @@ pub(crate) fn handle_docs(
         ))
     } else {
         let mut docs_sections = Vec::new();
-        for (score, item) in reranked {
+        for (_score, item) in reranked {
             let raw_content = get_embedded_skill(&item.relative_path)
                 .or_else(|| {
                     validate_path(&proj_path, &item.relative_path)
@@ -123,8 +138,8 @@ pub(crate) fn handle_docs(
                 // Surgical slicing extracts top relevant sections, saving ~75% tokens
                 let sliced = slice_skill_markdown(&content, search_term, 3);
                 docs_sections.push(format!(
-                    "### Doc Skill: {} (Score: {:.2})\nPath: {}\n\n{}",
-                    item.name, score, item.relative_path, sliced
+                    "### Doc Skill: {}\nPath: {}\n\n{}",
+                    item.name, item.relative_path, sliced
                 ));
             }
         }

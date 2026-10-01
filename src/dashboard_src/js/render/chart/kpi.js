@@ -5,9 +5,9 @@ import { t } from '../../i18n/index.js';
 
 export function buildKpi(tot, hours = []) {
   const totalCalls = hours.reduce((m, h) => m + (h.calls || 0), 0) || (tot.tool_calls || 0);
-  const activeHours = hours.filter(h => (h.calls || 0) > 0);
-  const avgLatency = activeHours.length
-    ? Math.round(activeHours.reduce((m, h) => m + (h.avg_duration_ms || 0), 0) / activeHours.length)
+  const totalDurationMs = hours.reduce((m, h) => m + ((h.avg_duration_ms || 0) * (h.calls || 0)), 0);
+  const avgLatency = totalCalls > 0
+    ? Math.round(totalDurationMs / totalCalls)
     : 0;
   const peakCalls = hours.reduce((m, h) => Math.max(m, h.calls || 0), 0);
   const opt = tot.tokens_optimized || hours.reduce((m, h) => m + (h.tokens_optimized || h.optimized || 0), 0);

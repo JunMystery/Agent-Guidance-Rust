@@ -36,8 +36,14 @@ impl CandleBertInner {
         )
         .map_err(|e| anyhow::anyhow!("Failed to parse model config JSON: {}", e))?;
 
-        let tokenizer = Tokenizer::from_file(tokenizer_filename)
+        let mut tokenizer = Tokenizer::from_file(tokenizer_filename)
             .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
+        tokenizer
+            .with_truncation(Some(tokenizers::TruncationParams {
+                max_length: 512,
+                ..Default::default()
+            }))
+            .map_err(|e| anyhow::anyhow!("Tokenizer truncation config error: {}", e))?;
 
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
@@ -71,16 +77,8 @@ impl CandleBertInner {
             _ => text.to_string(),
         };
 
-        let mut tokenizer = self.tokenizer.clone();
-        tokenizer
-            .with_padding(None)
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: 512,
-                ..Default::default()
-            }))
-            .map_err(|e| anyhow::anyhow!("Tokenizer truncation error: {}", e))?;
-
-        let encoding = tokenizer
+        let encoding = self
+            .tokenizer
             .encode(formatted, true)
             .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
 
@@ -121,14 +119,6 @@ impl CandleBertInner {
         let chunk_size = if batch_size == 0 { 32 } else { batch_size };
         let mut results = Vec::with_capacity(texts.len());
 
-        let mut tokenizer = self.tokenizer.clone();
-        tokenizer
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: 512,
-                ..Default::default()
-            }))
-            .map_err(|e| anyhow::anyhow!("Tokenizer truncation config error: {}", e))?;
-
         for chunk in texts.chunks(chunk_size) {
             let formatted_chunk: Vec<String> = chunk
                 .iter()
@@ -139,7 +129,8 @@ impl CandleBertInner {
                 })
                 .collect();
 
-            let encodings = tokenizer
+            let encodings = self
+                .tokenizer
                 .encode_batch(formatted_chunk, true)
                 .map_err(|e| anyhow::anyhow!("Batch tokenization failed: {}", e))?;
 

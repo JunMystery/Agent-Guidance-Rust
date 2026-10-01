@@ -5,14 +5,29 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     if v1.len() != v2.len() || v1.is_empty() {
         return 0.0;
     }
-    let dot: f32 = v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum();
-    let norm1: f32 = v1.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm2: f32 = v2.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm1 == 0.0 || norm2 == 0.0 {
+    let mut dot = 0.0f32;
+    let mut norm1 = 0.0f32;
+    let mut norm2 = 0.0f32;
+    for (&a, &b) in v1.iter().zip(v2.iter()) {
+        dot += a * b;
+        norm1 += a * a;
+        norm2 += b * b;
+    }
+    let denom = (norm1 * norm2).sqrt();
+    if denom < 1e-9 {
         0.0
     } else {
-        dot / (norm1 * norm2)
+        dot / denom
     }
+}
+
+/// Computes dot-product similarity directly for unit-normalized vectors (norm = 1.0).
+#[inline]
+pub fn dot_similarity(v1: &[f32], v2: &[f32]) -> f32 {
+    if v1.len() != v2.len() || v1.is_empty() {
+        return 0.0;
+    }
+    v1.iter().zip(v2.iter()).map(|(&a, &b)| a * b).sum()
 }
 
 /// Resolves the optimal compute device with opportunistic GPU acceleration and zero-cost CPU fallback.

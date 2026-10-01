@@ -28,8 +28,14 @@ impl OnnxQuantizedModel {
             anyhow::bail!("Tokenizer missing at {:?}", tokenizer_path);
         }
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| anyhow::anyhow!("Tokenizer load error: {}", e))?;
+        tokenizer
+            .with_truncation(Some(tokenizers::TruncationParams {
+                max_length: 512,
+                ..Default::default()
+            }))
+            .map_err(|e| anyhow::anyhow!("Tokenizer truncation error: {}", e))?;
 
         let (provider, prov_name) = detect_optimal_provider();
         let builder = ort::session::Session::builder()
@@ -104,14 +110,6 @@ impl OnnxQuantizedModel {
         let chunk_size = if batch_size == 0 { 32 } else { batch_size };
         let mut results = Vec::with_capacity(texts.len());
 
-        let mut tokenizer = self.tokenizer.clone();
-        tokenizer
-            .with_truncation(Some(tokenizers::TruncationParams {
-                max_length: 512,
-                ..Default::default()
-            }))
-            .map_err(|e| anyhow::anyhow!("Tokenizer truncation error: {}", e))?;
-
         for chunk in texts.chunks(chunk_size) {
             let formatted_chunk: Vec<String> = chunk
                 .iter()
@@ -122,7 +120,8 @@ impl OnnxQuantizedModel {
                 })
                 .collect();
 
-            let encodings = tokenizer
+            let encodings = self
+                .tokenizer
                 .encode_batch(formatted_chunk, true)
                 .map_err(|e| anyhow::anyhow!("Batch tokenization error: {}", e))?;
 
