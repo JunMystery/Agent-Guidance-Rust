@@ -31,6 +31,7 @@ impl EmbeddingBackend {
         }
     }
 
+    #[allow(dead_code)]
     pub fn device_name(&self) -> &'static str {
         match self {
             Self::OnnxInt8(onnx) => onnx.device_name(),
@@ -38,6 +39,7 @@ impl EmbeddingBackend {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_quantized(&self) -> bool {
         match self {
             Self::OnnxInt8(onnx) => onnx.is_quantized,

@@ -12,6 +12,7 @@ mod context {
     pub mod hnsw;
     pub mod db;
     pub mod scanner;
+    pub mod exclusion;
 }
 
 #[path = "../src/optimizer"]

@@ -80,31 +80,6 @@ impl CodeGraphDb {
         Ok(edges)
     }
 
-    pub fn list_all_semantic_edges(&self, limit: usize) -> Result<Vec<SemanticEdge>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, source_symbol, target_symbol, relation_type, description, confidence, created_by, created_at
-             FROM semantic_edges
-             ORDER BY created_at DESC LIMIT ?1",
-        )?;
-        let rows = stmt.query_map(params![limit as i64], |row| {
-            Ok(SemanticEdge {
-                id: row.get(0)?,
-                source_symbol: row.get(1)?,
-                target_symbol: row.get(2)?,
-                relation_type: row.get(3)?,
-                description: row.get(4)?,
-                confidence: row.get(5)?,
-                created_by: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })?;
-        let mut edges = Vec::new();
-        for r in rows {
-            edges.push(r?);
-        }
-        Ok(edges)
-    }
-
     pub fn upsert_domain_summary(
         &self,
         module_path: &str,

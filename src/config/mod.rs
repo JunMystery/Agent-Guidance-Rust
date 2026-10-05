@@ -6,7 +6,6 @@ pub mod watcher;
 mod tests;
 
 pub use schema::*;
-pub use store::*;
 pub use watcher::*;
 
 use std::sync::Arc;

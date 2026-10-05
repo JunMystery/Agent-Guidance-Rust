@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::time::Instant;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tracing::info;
 
 use super::binary_format::{SkillRecord, SkillsBinary, VectorBinary};

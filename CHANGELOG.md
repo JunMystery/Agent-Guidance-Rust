@@ -2,6 +2,45 @@
 
 All notable changes to Agent Guidance Rust MCP Server will be documented in this file.
 
+## [1.8.5] - 2026-10-05
+
+### 🛡️ Project Root Detection & Git Boundary Protection
+- **Git Repository Boundary Anchor (`src/dashboard/projects_path.rs`)**:
+  - Bound Priority 1 search by the nearest `.git` anchor to prevent ascending beyond the repository root when stray `.agent-context` directories exist in parent directories.
+  - Outermost `.agent-context` resolution preserved within the enclosing repository boundaries for monorepo setups.
+  - Added unit test `test_find_project_root_bounded_by_git`.
+
+### 🧹 Dead Code Elimination & Compiler Lint Cleanliness
+- **Crate-Wide Lint Cleanup (`src/main.rs`, codebase)**:
+  - Removed `#![allow(dead_code, unused_imports)]` from `src/main.rs`.
+  - Removed ~156 unused imports and unreferenced functions across 45 files, scoping test and platform utilities behind `#[cfg(test)]` or targeted `#[allow(dead_code)]`.
+  - Added missing `pub mod exclusion;` module declaration to `benches/performance.rs`.
+  - Achieved 0 warnings across `cargo check --all-targets` and `cargo check --benches`.
+
+### 🧩 MCP Tool Test Suite Modularization (< 300 LOC)
+- **Monolith Test Split (`src/mcp/`)**:
+  - Decomposed monolithic `src/mcp/tools_tests.rs` (1,355 LOC) into targeted modular test files strictly adhering to the < 300 LOC hard cap:
+    - `src/mcp/tools_arch_tests.rs` (167 LOC)
+    - `src/mcp/tools_gate_tests.rs` (259 LOC)
+    - `src/mcp/tools_context_tests.rs` (252 LOC)
+    - `src/mcp/tools_context_tree_tests.rs` (78 LOC)
+    - `src/mcp/tools_guidance_tests.rs` (206 LOC)
+    - `src/mcp/tools_skills_select_tests.rs` (121 LOC)
+    - `src/mcp/tools_session_tests.rs` (216 LOC)
+    - Consolidated path traversal and detection tests into `src/mcp/tools_path_tests.rs` (140 LOC).
+  - Preserved 100% test coverage with all 324 unit tests passing.
+
+### 🎨 Dashboard Stylesheet Modularization
+- **Modular CSS Domain Sheets (`src/dashboard_src/css/`, `src/dashboard/router.rs`)**:
+  - Split 3,027-line `dashboard.css` into 6 domain-scoped stylesheets under `src/dashboard_src/css/` (`variables.css`, `layout.css`, `charts.css`, `components.css`, `actions.css`, `hud.css`) imported via `dashboard.css`.
+  - Added `/css/*` asset route to tiny_http router in `src/dashboard/router.rs`.
+  - Added asset embed unit test `test_dashboard_css_assets_embedded` in `src/dashboard/mod.rs`.
+
+### 📖 CLI Help & Documentation Synchronization
+- **CLI Options Parity (`src/main.rs`, `docs/ARCHITECTURE.md`)**:
+  - Synced `--help` usage output with all handled CLI flags (`--reindex`, `--build-manifest`, `--session-start`, `--re-gate`, `--daemon`, `--proxy`).
+  - Updated `docs/ARCHITECTURE.md` module maps (`cli/`, `client/`, `config/`, `dashboard/`, `mcp/db/`, `ml/worker/`), Linux and macOS system tray paths, and CLI flags reference table.
+
 ## [1.8.4] - 2026-10-01
 
 ### ⚡ MCP Tool Output Compression & Surgical Patch Safety

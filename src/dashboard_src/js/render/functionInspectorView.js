@@ -30,6 +30,9 @@ export function renderFunctionInspector(container, node, edges = [], allNodes = 
   // Outgoing callees (calls where source is this function)
   const outgoing = edges.filter(e => e.source === node.id);
 
+  const inCount = incoming.length || (node.inDeg ?? node.in_degree ?? 0);
+  const outCount = outgoing.length || (node.outDeg ?? node.out_degree ?? 0);
+
   const nodeMap = new Map(allNodes.map(n => [n.id, n]));
 
   container.innerHTML = `
@@ -63,12 +66,12 @@ export function renderFunctionInspector(container, node, edges = [], allNodes = 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;">
       <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px;">
         <div style="font-size: 10px; color: #94a3b8;">${t('graph.external_incoming')}</div>
-        <div style="font-size: 15px; font-weight: 700; color: #a855f7;">${incoming.length}</div>
+        <div style="font-size: 15px; font-weight: 700; color: #a855f7;">${inCount}</div>
         <div style="font-size: 9px; color: #64748b;">${t('graph.callers_label')}</div>
       </div>
       <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px;">
         <div style="font-size: 10px; color: #94a3b8;">${t('graph.external_outgoing')}</div>
-        <div style="font-size: 15px; font-weight: 700; color: #10b981;">${outgoing.length}</div>
+        <div style="font-size: 15px; font-weight: 700; color: #10b981;">${outCount}</div>
         <div style="font-size: 9px; color: #64748b;">${t('graph.callees_label')}</div>
       </div>
     </div>

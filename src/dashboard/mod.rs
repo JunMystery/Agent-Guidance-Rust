@@ -9,7 +9,6 @@ use tracing::info;
 pub mod config_api;
 pub mod graph;
 pub(crate) mod graph_contract;
-pub(crate) use graph_contract as graph_types;
 pub(crate) mod graph_file_query;
 pub(crate) mod graph_function_query;
 pub(crate) mod graph_query;
@@ -145,5 +144,15 @@ mod tests {
         let png = include_bytes!("../../docs/images/logo.png");
         assert!(!ico.is_empty());
         assert!(!png.is_empty());
+    }
+
+    #[test]
+    fn test_dashboard_css_assets_embedded() {
+        let root_css = DashboardAssets::get("dashboard.css");
+        assert!(root_css.is_some());
+        let var_css = DashboardAssets::get("css/variables.css");
+        assert!(var_css.is_some());
+        let hud_css = DashboardAssets::get("css/hud.css");
+        assert!(hud_css.is_some());
     }
 }

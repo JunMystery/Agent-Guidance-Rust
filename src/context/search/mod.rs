@@ -6,16 +6,16 @@ pub mod scorer;
 
 pub use idf::{
     analyze_query_terms, compute_query_downweight_factor, TermDocFreq,
-    UBIQUITOUS_PENALTY_MULTIPLIER, UBIQUITOUS_TECH_KEYWORDS,
 };
 pub use intent::{
-    classify_intent, is_guidance_path, is_test_path, is_utility_path, SearchIntent,
+    classify_intent, SearchIntent,
 };
 pub use scorer::{calculate_hit_score, sort_and_dedup_results, RankedResult};
 
 use crate::context::db::CodeGraphDb;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SearchExecutionResult {
     pub results: Vec<RankedResult>,
     pub intent: SearchIntent,

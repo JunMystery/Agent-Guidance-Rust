@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::cmp::Ordering;
 
 pub(crate) fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {

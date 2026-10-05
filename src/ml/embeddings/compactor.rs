@@ -2,8 +2,10 @@ use std::collections::HashSet;
 use anyhow::{Context, Result};
 use tracing::info;
 
-use super::binary_format::{SkillRecord, SkillsBinary, VectorBinary};
-use super::precomputed::{cache_dir, skills_bin_path, vectors_path};
+use super::binary_format::{SkillsBinary, VectorBinary};
+#[cfg(test)]
+use super::binary_format::SkillRecord;
+use super::precomputed::{skills_bin_path, vectors_path};
 use crate::catalog::checksum::{compute_catalog_hash, load_manifest, save_manifest};
 use crate::catalog::staging::purge_staging_skill;
 use crate::catalog::tombstone::add_tombstones;

@@ -169,9 +169,14 @@ export function initFunctionDrilldownCanvas(canvasId, targetFile, rawNodes = [],
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.fillText(n.label || n.id, n.x, n.y + n.radius + 4);
 
+      const inD = n.inDeg ?? n.in_degree ?? 0;
+      const outD = n.outDeg ?? n.out_degree ?? 0;
+      ctx.font = '500 9px monospace'; ctx.fillStyle = '#64748b';
+      ctx.fillText(`In:${inD} Out:${outD}`, n.x, n.y + n.radius + 16);
+
       if ((!n.isInternal || isAllMode) && n.file) {
         ctx.font = '500 9px monospace'; ctx.fillStyle = '#a855f7';
-        ctx.fillText(`[${n.file.split(/[/\\]/).pop()}]`, n.x, n.y + n.radius + 17);
+        ctx.fillText(`[${n.file.split(/[/\\]/).pop()}]`, n.x, n.y + n.radius + 27);
       }
       ctx.restore();
     });

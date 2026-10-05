@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct SearchRequest {
     pub query: String,
     pub max_results: Option<usize>,

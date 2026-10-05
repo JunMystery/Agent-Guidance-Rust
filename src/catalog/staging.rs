@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use super::store::scanner::scan_skill_dir_recursive;
 use super::store::{SkillItem, SkillSource};
-use super::tombstone::load_tombstones;
 
 pub fn staging_dir() -> PathBuf {
     dirs::home_dir()

@@ -1,5 +1,6 @@
 //! ONNX Runtime Engine Abstraction with Fallback Support
-//!
+#![allow(dead_code)]
+
 //! Provides ultra-low-latency ML inference using `ort` (ONNX Runtime)
 //! for Stage 1 text embeddings (`multilingual-e5-small`) and Stage 2
 //! cross-encoder reranking (`ms-marco-MiniLM-L-6-v2`).

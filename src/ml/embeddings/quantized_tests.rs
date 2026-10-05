@@ -1,4 +1,3 @@
-use super::backend::EmbeddingBackend;
 use super::providers::{ExecutionProvider, detect_optimal_provider};
 use super::quantized::OnnxQuantizedModel;
 

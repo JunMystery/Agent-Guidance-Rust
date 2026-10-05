@@ -43,6 +43,7 @@ impl GpuSkillMatrix {
 }
 
 /// Batch cosine similarity across targets on GPU / CPU Tensor engine
+#[allow(dead_code)]
 pub fn gpu_batch_cosine_similarity(query: &[f32], targets: &[Vec<f32>], device: &Device) -> Result<Vec<f32>> {
     if targets.is_empty() {
         return Ok(Vec::new());

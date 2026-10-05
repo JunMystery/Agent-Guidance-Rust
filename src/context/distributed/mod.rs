@@ -4,7 +4,8 @@
 
 pub mod snapshot;
 
-pub use snapshot::{export_graph_snapshot, import_graph_snapshot};
+#[cfg(test)]
+pub use snapshot::*;
 
 #[cfg(test)]
 mod tests;

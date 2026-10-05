@@ -1,4 +1,4 @@
-use super::cache::{ensure_cache_tables, get_cached_remote_stats, get_cached_slice, save_cached_remote_stats, save_cached_slice};
+use super::cache::ensure_cache_tables;
 use super::http::RemoteMlClient;
 use super::types::*;
 use crate::config::ServerConfig;

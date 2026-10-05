@@ -11,6 +11,7 @@ use tracing::info;
 
 use super::providers::{ExecutionProvider, configure_session_builder, detect_optimal_provider};
 
+#[allow(dead_code)]
 pub struct OnnxQuantizedModel {
     session: Mutex<ort::session::Session>,
     tokenizer: Tokenizer,

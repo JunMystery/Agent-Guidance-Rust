@@ -22,11 +22,9 @@ pub mod lifecycle;
 
 pub use proxy::try_proxy_mode;
 pub use handler::handle_mcp_lines;
-pub use server::daemon_main;
-pub use lock::{acquire_daemon_lock, DaemonLock};
+pub use lock::acquire_daemon_lock;
 pub use spawn::ensure_daemon_running;
-pub use ide_detector::{count_running_ide_processes, has_running_ide_processes, is_ide_process_name};
-pub use lifecycle::monitor_client_lifecycle;
+pub use ide_detector::has_running_ide_processes;
 
 pub static ACTIVE_CLIENTS: AtomicUsize = AtomicUsize::new(0);
 pub static CLIENT_NOTIFY: LazyLock<Notify> = LazyLock::new(Notify::new);

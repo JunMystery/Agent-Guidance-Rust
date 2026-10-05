@@ -98,6 +98,7 @@ pub(crate) fn handle_api_graph(request: tiny_http::Request, default_proj: &str) 
     }
 }
 
+#[cfg(test)]
 pub fn query_graph_data(project_path: &Path) -> Result<serde_json::Value> {
     query_graph_data_with_view(project_path, "symbols", None)
 }

@@ -1,11 +1,12 @@
 //! Graph snapshot export and import with integrity verification.
+#![allow(dead_code)]
 
 use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 use std::fs;
 use std::hash::{DefaultHasher, Hasher};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use crate::context::db::CodeGraphDb;
 
 /// Computes a deterministic checksum of a file on disk.

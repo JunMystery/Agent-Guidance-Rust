@@ -64,10 +64,12 @@ impl EmbeddingModel {
         })
     }
 
+    #[allow(dead_code)]
     pub fn device_name(&self) -> &'static str {
         self.backend.device_name()
     }
 
+    #[allow(dead_code)]
     pub fn is_quantized(&self) -> bool {
         self.backend.is_quantized()
     }

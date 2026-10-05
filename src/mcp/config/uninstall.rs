@@ -2,11 +2,10 @@ use anyhow::Result;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::info;
 
 use crate::mcp::templates::*;
 
-use super::rules::{remove_global_rules, remove_skills_enforcer};
+use super::rules_cleaner::{remove_global_rules, remove_skills_enforcer};
 
 pub fn run_uninstall() -> Result<()> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home dir"))?;

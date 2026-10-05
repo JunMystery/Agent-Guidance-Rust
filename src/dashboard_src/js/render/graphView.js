@@ -170,6 +170,19 @@ export function renderGraphView(data) {
     fileList = initFileContainerList(el('graph-symbol-list-container'), nodes, onSelectFileNode, onDrilldown);
 
   } else if (activeMode === 'file_functions') {
+    const inDeg = new Map(), outDeg = new Map();
+    edges.forEach(e => {
+      outDeg.set(e.source, (outDeg.get(e.source) || 0) + 1);
+      inDeg.set(e.target, (inDeg.get(e.target) || 0) + 1);
+    });
+    nodes.forEach(n => {
+      n.inDeg = inDeg.get(n.id) ?? n.in_degree ?? 0;
+      n.outDeg = outDeg.get(n.id) ?? n.out_degree ?? 0;
+      n.deg = n.inDeg + n.outDeg;
+    });
+    const hubThreshold = computeHubThreshold(nodes);
+    nodes.forEach(n => { n.isHub = n.deg >= hubThreshold; });
+
     let symbolList = null;
     const onJumpFn = (targetId) => {
       if (activeCanvas) activeCanvas.selectNode(targetId);

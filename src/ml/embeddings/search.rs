@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 use crate::catalog::store::SkillItem;
-use super::cache::{cached_model, embed_skills_cache, GPU_SKILL_MATRIX};
+use super::cache::{embed_skills_cache, GPU_SKILL_MATRIX};
 use super::precomputed::catalog_fingerprint;
 
 pub fn hybrid_vector_search(

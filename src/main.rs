@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 use anyhow::Result;
 use std::env;
 use tracing::info;
@@ -18,9 +16,6 @@ mod optimizer;
 
 use mcp::config::{run_setup, run_uninstall, run_upgrade, run_verify_setup};
 use ml::embeddings::generate_precomputed_cache;
-
-#[cfg(not(unix))]
-use daemon::handle_mcp_lines;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -72,7 +67,13 @@ async fn main() -> Result<()> {
         println!("  --prune-missing     Prune deleted/moved projects from usage tracking registry");
         println!("  --cleanup           Auto-clean expired logs, prune dead projects, and vacuum DB");
         println!("  --retention-days <N> Retention window in days for detail logs (default: 7)");
+        println!("  --reindex           Reindex code graph and update GraphRAG communities for project");
         println!("  --reindex-skills    Precompute and build rich semantic vector index for all skills");
+        println!("  --build-manifest    Build semantic skill index manifest without embedding computation");
+        println!("  --session-start     Initialize session, pass priority gate, and output status JSON");
+        println!("  --re-gate           Alias for --session-start");
+        println!("  --daemon, --force-daemon  Run in shared background daemon mode");
+        println!("  --proxy, --force-client   Run in client proxy mode connecting to existing daemon");
         println!("  --uninstall         Remove MCP server configurations from all IDE clients");
         println!("  --help, -h          Print this help message");
         println!();

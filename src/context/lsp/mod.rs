@@ -9,11 +9,14 @@ pub mod protocol;
 mod tests;
 
 pub use client::LspClient;
-pub use detect::{detect_lsp_server, is_command_available, LspServerConfig};
+pub use detect::detect_lsp_server;
 pub use protocol::{
-    decode_message, encode_message, line_from_lsp, line_to_lsp, path_to_uri, uri_to_rel_path,
-    LspLocation, LspPosition, LspRange,
+    line_from_lsp, line_to_lsp, path_to_uri, uri_to_rel_path,
+    LspLocation,
 };
+
+#[cfg(test)]
+pub use protocol::{decode_message, encode_message};
 
 use std::path::Path;
 

@@ -1,6 +1,6 @@
 use serde_json::Value;
+#[cfg(test)]
 pub use serde_json::json;
-pub use std::path::Path;
 use tracing::info;
 
 use crate::mcp::state::ServerState;
@@ -221,8 +221,32 @@ fn handle_tool_call_internal(
 }
 
 #[cfg(test)]
-#[path = "../tools_tests.rs"]
-mod tests;
+#[path = "../tools_arch_tests.rs"]
+mod arch_tests;
+
+#[cfg(test)]
+#[path = "../tools_gate_tests.rs"]
+mod gate_tests;
+
+#[cfg(test)]
+#[path = "../tools_context_tests.rs"]
+mod context_tests;
+
+#[cfg(test)]
+#[path = "../tools_context_tree_tests.rs"]
+mod context_tree_tests;
+
+#[cfg(test)]
+#[path = "../tools_guidance_tests.rs"]
+mod guidance_tests;
+
+#[cfg(test)]
+#[path = "../tools_skills_select_tests.rs"]
+mod skills_select_tests;
+
+#[cfg(test)]
+#[path = "../tools_session_tests.rs"]
+mod session_tests;
 
 #[cfg(test)]
 #[path = "../tools_read_tests.rs"]

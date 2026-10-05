@@ -6,7 +6,7 @@ pub mod cycle_detector;
 pub mod orphan_scanner;
 
 pub use cycle_detector::detect_file_cycles;
-pub use orphan_scanner::{OrphanSymbol, detect_orphan_symbols};
+pub use orphan_scanner::detect_orphan_symbols;
 
 #[cfg(test)]
 mod tests;

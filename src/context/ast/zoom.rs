@@ -6,6 +6,7 @@ use super::types::{AstLanguage, AstSymbol};
 use super::engine::AstEngine;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ZoomSliceResult {
     pub sliced_content: String,
     pub original_lines: usize,

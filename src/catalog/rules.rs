@@ -51,8 +51,3 @@ pub fn get_phase_rules(phase: &str) -> &'static str {
         }
     }
 }
-
-/// Formats the targeted rules when skills are selected/loaded.
-pub fn format_skill_load_rules() -> &'static str {
-    get_phase_rules("build")
-}

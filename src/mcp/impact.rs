@@ -1,6 +1,5 @@
-use anyhow::Result;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tracing::info;
 
 use crate::context::db::CodeGraphDb;
@@ -13,6 +12,7 @@ pub enum RiskLevel {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RiskAssessment {
     pub risk_level: RiskLevel,
     pub dependent_count: usize,
@@ -114,7 +114,7 @@ pub fn ensure_agent_context_gitignored(proj_path: &Path) {
 }
 
 pub use super::snapshots::{
-    cleanup_stale_snapshots, clear_all_snapshots, create_file_snapshot, get_session_snapshot_dir,
+    create_file_snapshot,
     restore_session_snapshots,
 };
 

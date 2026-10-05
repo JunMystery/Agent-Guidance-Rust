@@ -6,7 +6,6 @@ pub mod types;
 mod tests;
 
 pub use http::*;
-pub use types::*;
 
 use crate::config::current_config;
 

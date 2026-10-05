@@ -6,6 +6,7 @@ use super::CodeGraphDb;
 use super::sanitize_fts5_query;
 
 impl CodeGraphDb {
+    #[cfg(test)]
     pub fn get_file_content_hash(&self, path: &str) -> Result<Option<String>> {
         let mut stmt = self.conn.prepare("SELECT content_hash FROM files WHERE path = ?")?;
         let mut rows = stmt.query(params![path])?;
@@ -90,6 +91,7 @@ impl CodeGraphDb {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[cfg(test)]
     pub fn insert_symbol(
         &self, id: &str, name: &str, kind: &str, file_path: &str,
         parent: Option<&str>, start_line: usize, end_line: usize, signature: Option<&str>,
@@ -111,6 +113,7 @@ impl CodeGraphDb {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn insert_edge(&self, source_id: &str, target_id: &str, edge_type: &str, weight: f64) -> Result<()> {
         self.insert_edge_full(source_id, target_id, edge_type, weight, 1.0, "symbol", None)
     }
@@ -266,16 +269,5 @@ impl CodeGraphDb {
             params![passage_hash, bytes, model_version, now],
         )?;
         Ok(())
-    }
-
-    /// Get all content hashes of existing chunks for a file
-    pub fn get_file_chunk_hashes(&self, file_path: &str) -> Result<std::collections::HashSet<String>> {
-        let mut stmt = self.conn.prepare("SELECT content_hash FROM content_chunks WHERE file_path = ?")?;
-        let rows = stmt.query_map(params![file_path], |row| row.get::<_, String>(0))?;
-        let mut hashes = std::collections::HashSet::new();
-        for r in rows {
-            hashes.insert(r?);
-        }
-        Ok(hashes)
     }
 }

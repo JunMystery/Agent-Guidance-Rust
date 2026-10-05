@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, AsyncRead, AsyncWrite, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 use tracing::{error, info};
@@ -10,7 +10,6 @@ use tracing::{error, info};
 use crate::mcp::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::mcp::router::handle_request;
 use crate::mcp::state::ServerState;
-use super::ACTIVE_CLIENTS;
 
 const MAX_REQUEST_WORKERS: usize = 32;
 static REQUEST_WORKERS: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();

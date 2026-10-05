@@ -6,23 +6,6 @@ use tracing::info;
 use crate::mcp::state::ServerState;
 use super::{LearningItem, parse_learnings_file, handoff_file_path};
 
-pub fn get_recent_learnings(proj_path: &Path, limit: usize) -> Vec<String> {
-    let items = parse_learnings_file(proj_path);
-    items
-        .into_iter()
-        .rev()
-        .take(limit)
-        .map(|i| {
-            let cat_label = if i.is_pinned {
-                format!("PINNED:{}", i.category)
-            } else {
-                i.category
-            };
-            format!("- [{}] {}", cat_label, i.content)
-        })
-        .collect()
-}
-
 /// Matches category keywords when ML embeddings are offline.
 pub fn match_category_keywords(items: &[LearningItem], task: &str, limit: usize) -> Vec<String> {
     let task_lower = task.to_lowercase();

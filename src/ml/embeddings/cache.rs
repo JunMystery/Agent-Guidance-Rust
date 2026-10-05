@@ -44,6 +44,7 @@ pub fn store_passage_cache(vectors: Vec<Vec<f32>>, skills: &[SkillItem]) {
     }
 }
 
+#[allow(dead_code)]
 pub fn is_warmup_complete() -> bool {
     WARMUP_DONE
         .get_or_init(|| AtomicBool::new(false))

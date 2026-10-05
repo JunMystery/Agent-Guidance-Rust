@@ -1,7 +1,9 @@
 use anyhow::Result;
 use std::env;
 use std::process::{Command, Stdio};
-use tracing::{info, warn};
+use tracing::info;
+#[cfg(windows)]
+use tracing::warn;
 
 /// Spawns the agent-guidance daemon as a completely detached background process,
 /// fully decoupled from the launching IDE's process tree and Job Object.

@@ -1,6 +1,6 @@
 pub mod cleanup;
 pub mod logger;
-pub use cleanup::{CleanupSummary, run_auto_cleanup};
+pub use cleanup::run_auto_cleanup;
 pub use logger::{log_embed_query, log_skill_load, log_tool_call};
 
 use anyhow::Result;

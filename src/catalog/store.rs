@@ -88,21 +88,6 @@ pub fn get_embedded_skill(path: &str) -> Option<String> {
     None
 }
 
-pub fn get_skills_target_dir() -> std::path::PathBuf {
-    if cfg!(test) {
-        return std::env::temp_dir()
-            .join(format!("agent-guidance-skills-test-{}", std::process::id()));
-    }
-    dirs::home_dir()
-        .map(|h| h.join(".agent-guidance").join("skills"))
-        .unwrap_or_else(|| std::path::PathBuf::from(".agent-guidance-skills"))
-}
-
-/// Skills are embedded directly into the binary; no disk copy required.
-pub fn sync_embedded_skills_to_disk() -> anyhow::Result<usize> {
-    Ok(0)
-}
-
 pub fn load_all_skills(proj_path: &Path) -> Vec<SkillItem> {
     let tombstones = super::tombstone::load_tombstones();
 

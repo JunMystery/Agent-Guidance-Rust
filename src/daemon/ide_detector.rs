@@ -52,7 +52,7 @@ pub fn is_ide_process_name(name: &str) -> bool {
     false
 }
 
-/// Refreshes the system process table and counts how many IDE processes are active.
+#[cfg(test)]
 pub fn count_running_ide_processes(sys: &mut System) -> usize {
     sys.refresh_processes();
     sys.processes()

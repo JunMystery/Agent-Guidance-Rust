@@ -1,8 +1,7 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 use super::state::WorkerState;
 use super::types::*;
-use crate::catalog::checksum::load_manifest;
 use crate::catalog::slicing::slice_skill_markdown;
 use crate::catalog::tombstone::load_tombstones;
 use crate::ml::embeddings::cache::cached_model;

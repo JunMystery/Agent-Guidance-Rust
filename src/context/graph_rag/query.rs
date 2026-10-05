@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::path::Path;
 use super::community::{CommunityHierarchy, CommunityLevel};
 use crate::context::db::CodeGraphDb;
 

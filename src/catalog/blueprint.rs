@@ -1,4 +1,5 @@
 use std::path::Path;
+#[cfg(test)]
 use crate::catalog::store::SkillItem;
 use crate::context::db::CodeGraphDb;
 
@@ -191,6 +192,7 @@ pub fn format_decomposition_guidance(rel_path: &str, loc: usize, arch_pattern: &
 }
 
 /// Synthesizes top recommended skills into an actionable, unified step-by-step checklist.
+#[cfg(test)]
 pub fn generate_skill_recipe(skills: &[(f32, SkillItem)], task: &str) -> String {
     if skills.is_empty() {
         return "1. Review project standards and verify architectural boundaries.\n2. Implement targeted modifications respecting the 300 LOC limit.\n3. Run automated tests to verify behavior.".to_string();

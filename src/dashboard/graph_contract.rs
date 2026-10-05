@@ -72,6 +72,10 @@ pub struct FunctionGraphNode {
     pub is_external: bool,
     pub scope: String,
     pub deg: usize,
+    #[serde(default)]
+    pub in_degree: usize,
+    #[serde(default)]
+    pub out_degree: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

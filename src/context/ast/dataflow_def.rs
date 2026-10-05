@@ -29,16 +29,3 @@ pub struct CallArgDetail {
     /// Flow classification: "direct_param", "intermediate_var", "field_access", "return_val"
     pub flow_type: String,
 }
-
-/// A resolved or candidate data flow edge connecting a caller variable to a callee argument.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DataFlowRecord {
-    pub caller_symbol_id: String,
-    pub callee_symbol_id: String,
-    pub source_variable: String,
-    pub target_parameter: String,
-    pub arg_index: usize,
-    pub call_line: usize,
-    pub flow_type: String,
-    pub confidence: f64,
-}

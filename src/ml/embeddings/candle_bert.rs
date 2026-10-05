@@ -62,6 +62,7 @@ impl CandleBertInner {
         })
     }
 
+    #[allow(dead_code)]
     pub fn device_name(&self) -> &'static str {
         match self.device {
             Device::Cpu => "Candle CPU",

@@ -168,6 +168,7 @@ impl CodeGraphDb {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SymbolSearchResult {
     pub name: String,
     pub kind: String,

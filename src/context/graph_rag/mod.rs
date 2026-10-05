@@ -12,13 +12,13 @@ pub mod query;
 pub mod reusability;
 pub mod subgraph_bundle;
 
-pub use community::{Community, CommunityHierarchy, CommunityLevel, CommunitySummary, GraphEdge, GraphEntity};
+pub use community::{CommunityHierarchy, CommunityLevel, GraphEdge, GraphEntity};
 pub use jit_sync::ensure_fresh_graph;
-pub use mermaid::{generate_architecture_mermaid, generate_blast_radius_mermaid};
-pub use neighborhood::{fetch_symbol_neighborhood, NeighborNode, SymbolNeighborhood};
 pub use query::{GraphRagQueryMode, QueryResult};
-pub use reusability::{format_reusable_report, is_shared_path, ReusableSymbol, SemanticClonePair};
-pub use subgraph_bundle::{build_subgraph_bundle, SubgraphBundle, SubgraphCallee, SubgraphCaller, SubgraphTarget};
+pub use subgraph_bundle::build_subgraph_bundle;
+
+#[cfg(test)]
+pub use neighborhood::fetch_symbol_neighborhood;
 
 use crate::context::db::CodeGraphDb;
 

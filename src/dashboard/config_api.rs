@@ -1,12 +1,10 @@
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::env;
-use std::time::Duration;
 use tiny_http::Request;
 
 use crate::client::RemoteMlClient;
-use crate::config::{AppConfig, ConfigWatcher, ServerConfig, current_config};
+use crate::config::{ConfigWatcher, ServerConfig, current_config};
 use crate::mcp::config::run_setup;
 
 #[derive(Deserialize)]

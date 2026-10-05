@@ -22,6 +22,7 @@ impl ExecutionProvider {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_gpu(&self) -> bool {
         matches!(self, Self::DirectML { .. } | Self::Cuda { .. })
     }

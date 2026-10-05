@@ -15,6 +15,18 @@ The codebase strictly enforces Clean Architecture and a mandatory **< 300 LOC ha
 ```
 src/
 ├── main.rs            # Binary entrypoint — CLI flags, auto-detects daemon/proxy mode
+├── cli/               # CLI Command Handlers & Interactive Wizards (< 300 LOC each)
+│   ├── cleanup.rs     # Prune dead projects, vacuum usage.db, rotate old logs
+│   ├── setup_server.rs# Interactive CLI wizard for remote ML worker setup
+│   └── mod.rs
+├── client/            # Remote ML Worker Client (< 300 LOC each)
+│   ├── http.rs        # HTTP agent for remote embeddings & cross-encoder reranking
+│   ├── types.rs       # Remote API request & response models
+│   └── mod.rs
+├── config/            # Centralized Configuration Subsystem (< 300 LOC each)
+│   ├── store.rs       # TOML configuration loading and persistence (~/.agent-guidance/config.toml)
+│   ├── watcher.rs     # Threaded watcher for real-time config updates
+│   └── mod.rs
 ├── daemon/            # Singleton Daemon & IPC Subsystem (< 300 LOC each)
 │   ├── lifecycle.rs   # Ref-counted client connection tracking, 60s cooldown timer
 │   ├── ide_detector.rs# Process scanner for 26 IDEs (prevents premature teardown)
@@ -63,15 +75,17 @@ src/
 │   ├── state/         # ServerState, stage state machine, 31-keyword multi-lingual approval
 │   ├── tools/         # 6 core tool dispatchers (pipeline, skills, guidance, context, gate, continuity)
 │   ├── fingerprint.rs # Security provenance, pure-Rust SHA-256 digest, platform digital signature detection
-│   ├── db.rs          # SQLite usage.db telemetry logging & daily aggregations
+│   ├── db/            # SQLite usage.db telemetry logging & daily aggregations
 │   └── mod.rs
 ├── ml/                # Machine Learning & Vector Search Engine
 │   ├── embeddings/    # Candle BERT (multilingual-e5-small) + cached passage vectors
+│   ├── worker/        # Remote ML worker HTTP daemon and endpoint handlers
 │   ├── cross_encoder.rs# MiniLM cross-encoder reranker
 │   └── mod.rs
 └── optimizer/         # Token Optimization Engine
     ├── compressor.rs  # Language-aware token compressor & whitespace stripper
     ├── skeleton.rs    # AST code skeletonizer (folds function bodies to line ranges)
+    ├── skeleton_slice.rs# Unified semantic zoom slicing and AST pruning
     └── mod.rs
 ```
 
@@ -315,7 +329,7 @@ project_context(search, query)
 
 ## Database & Metrics Subsystem (`usage.db`)
 
-Every MCP tool invocation, skill activation, and ML vector search is logged to `~/.agent-guidance/usage.db` via `src/mcp/db.rs` using a process & thread mutex guard (`DB_MUTEX`).
+Every MCP tool invocation, skill activation, and ML vector search is logged to `~/.agent-guidance/usage.db` via `src/mcp/db/` using a process & thread mutex guard (`DB_MUTEX`).
 
 ### Database Schema
 
@@ -332,7 +346,7 @@ Every MCP tool invocation, skill activation, and ML vector search is logged to `
 - **50-Item View Capping**: All list queries (`recent_actions`, `tool_breakdown`, `top_skills`, `embed_recent`) are hard-capped to `LIMIT 50`.
 
 ### Multi-Timeframe Dashboard Aggregations
-The dashboard server (`src/dashboard.rs`) aggregates metrics dynamically across 4 standard timeframes:
+The dashboard server (`src/dashboard/`) aggregates metrics dynamically across 4 standard timeframes:
 - **`past_24h`**: Sum of active 24-hour raw event logs (`WHERE started_at >= cutoff_24h`).
 - **`last_7d`**: Aggregated sum from `daily_summaries` (`WHERE day >= cutoff_7d`).
 - **`last_30d`**: Aggregated sum from `daily_summaries` (`WHERE day >= cutoff_30d`).
@@ -364,13 +378,13 @@ The MCP daemon is fully decoupled from the launching IDE process to ensure zero 
 - **Active IDE Detection Engine (`ide_detector.rs`)**: Scans OS process table via `sysinfo` for all major IDE binaries (VS Code, Cursor, Antigravity, Windsurf, Claude Desktop, Trae, Zed, JetBrains suite, Visual Studio).
 - **Graceful Multi-Client Lifecycle (`lifecycle.rs`)**: If `ACTIVE_CLIENTS` drops to 0, the daemon queries `has_running_ide_processes()`. As long as ANY IDE remains active, the daemon stays alive indefinitely. When 0 IDEs remain, a 60-second cooldown buffer runs; if an IDE is reopened during cooldown, shutdown is immediately cancelled.
 
-### Cross-Platform System Tray (`tray.rs`, `tray_windows.rs`, `tray_unix.rs`)
+### Cross-Platform System Tray (`tray.rs`, `tray_windows.rs`, `tray_linux.rs`, `tray_macos.rs`)
 A native system tray icon runs in a dedicated background thread:
 - **Windows (`tray_windows.rs`)**:
   - Implements native Win32 `Shell_NotifyIconW`, hidden message pump window, and `TrackPopupMenu`.
   - **Desktop Session Attachment**: Automatically bridges thread context to `"Default"` interactive desktop via `OpenDesktopW` and `SetThreadDesktop`, ensuring tray visibility even when spawned from IDE sandboxed desktop stations (`exebox-...`).
-- **macOS & Linux (`tray_unix.rs`)**:
-  - macOS uses Cocoa `NSStatusBar` native menus.
+- **Linux (`tray_linux.rs`) & macOS (`tray_macos.rs`)**:
+  - macOS uses Cocoa `NSStatusBar` native menus via `tray-item`.
   - Linux uses pure Rust D-Bus `StatusNotifierItem` via `ksni` (zero C library dependency, eliminating `libdbus`/`libappindicator` system package requirements).
   - Gracefully disables in headless environments (`DISPLAY` / `WAYLAND_DISPLAY` missing).
 - **Application Icon Embedding**:
@@ -389,10 +403,7 @@ A native system tray icon runs in a dedicated background thread:
 
 ```bash
 agent-guidance --setup
-  ├─ configure_mcp_clients() → register in IDE configs
-  ├─ configure_global_rules() → append AGENTS.md rules
-  ├─ configure_workspace_rules() → append tagged blocks to .cursorrules, etc.
-  ├─ configure_skills_enforcer() → write SKILL.md to skill dirs
+  ├─ configure_mcp_clients() → register in IDE configs (VS Code, Cursor, Claude, etc.)
   └─ download_models() → pre-cache BERT + cross-encoder from HuggingFace
 ```
 
@@ -400,24 +411,40 @@ agent-guidance --setup
 
 | Flag | Action |
 |---|---|
-| `--setup` | Register MCP clients + pre-download models + sync skills |
-| `--upgrade` | Download & install latest release package from GitHub |
-| `--self-update` | Alias for --upgrade |
-| `--session-start` | Pass priority gate (for hooks) |
-| `--re-gate` | Re-pass priority gate (subagent recovery) |
-| `--uninstall` | Remove all registrations + rules |
-| `--force-daemon` | Start as daemon (skip auto-detect) |
-| `--force-client` | Connect as proxy (fail if no daemon) |
-| `--dashboard` | Start HTTP usage dashboard |
-| `--project-path` | Specify project root for --session-start |
+| `--setup` | Register MCP clients in all IDE configs and pre-download ML models |
+| `--verify-setup` | Verify MCP configuration paths across all IDE clients |
+| `--upgrade`, `--self-update` | Download & install latest release package from GitHub |
+| `--fingerprint`, `--verify-signature` | Print binary provenance, SHA-256 hash, and signature report |
+| `--dashboard` | Start real-time HTTP usage dashboard (default: http://127.0.0.1:11997) |
+| `--port`, `--dashboard-port <PORT>` | Custom dashboard port (default: 11997) |
+| `--project <PATH>` | Filter dashboard or operations to a specific project path or name |
+| `--server` | Start remote ML worker daemon (default: http://127.0.0.1:11998) |
+| `--worker-port <PORT>` | Custom ML worker port (default: 11998) |
+| `--bind <ADDR>` | Network bind address for remote worker (e.g. 0.0.0.0 or 127.0.0.1) |
+| `--api-key <KEY>` | Bearer authentication token for remote ML worker |
+| `--setup-server` | Interactive CLI setup wizard for remote ML worker |
+| `--set-server <URL>` | Configure remote ML worker endpoint (or 'local' for standalone) |
+| `--test-server` | Test connection and ping latency to remote ML worker |
+| `--stats`, `--status` | Display client mode, system telemetry, and remote skill stats |
+| `--prune-missing` | Prune deleted/moved projects from usage tracking registry |
+| `--cleanup` | Auto-clean expired logs, prune dead projects, and vacuum DB |
+| `--retention-days <N>` | Retention window in days for detail logs (default: 7) |
+| `--reindex` | Reindex code graph and update GraphRAG communities for project |
+| `--reindex-skills` | Precompute and build rich semantic vector index for all skills |
+| `--build-manifest` | Build semantic skill index manifest without embedding computation |
+| `--session-start`, `--re-gate` | Pass priority gate and initialize session (for hooks) |
+| `--daemon`, `--force-daemon` | Start as background shared daemon (skip auto-detect) |
+| `--proxy`, `--force-client` | Connect as proxy client to existing daemon |
+| `--uninstall` | Remove MCP server configurations from all IDE clients |
+| `--help`, `-h` | Print CLI help message |
 
 ### Uninstall
 
 ```bash
 agent-guidance --uninstall
   ├─ remove_mcp_clients() → delete from IDE configs
-  ├─ remove_global_rules() → strip tagged blocks
-  └─ remove_workspace_rules() → strip tagged blocks
+  └─ remove_global_rules() / remove_skills_enforcer() → clean legacy tagged blocks
+```
 ```
 
 All rule/skill sections use HTML-comment tags (`<!-- agent-guidance:start -->` / `<!-- agent-guidance:end -->`) for reliable find-and-replace.

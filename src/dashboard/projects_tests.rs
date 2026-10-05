@@ -211,3 +211,26 @@ fn test_is_temp_project_path_trailing_slashes() {
         assert!(is_temp_project_path(&h2));
     }
 }
+
+#[test]
+fn test_find_project_root_bounded_by_git() {
+    let temp_dir = std::env::temp_dir().join("test_agent_ctx_bounded_git");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    let outer = temp_dir.join("outer");
+    let outer_ctx = outer.join(".agent-context");
+    let repo = outer.join("repo");
+    let repo_git = repo.join(".git");
+    let repo_ctx = repo.join(".agent-context");
+    let repo_src = repo.join("src");
+
+    std::fs::create_dir_all(&outer_ctx).unwrap();
+    std::fs::create_dir_all(&repo_git).unwrap();
+    std::fs::create_dir_all(&repo_ctx).unwrap();
+    std::fs::create_dir_all(&repo_src).unwrap();
+
+    let resolved = find_project_root(&repo_src);
+    assert_eq!(resolved, repo);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

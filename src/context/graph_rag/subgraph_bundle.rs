@@ -5,6 +5,7 @@ use super::bundle_snippet_extractor::{build_safe_path, extract_call_site, extrac
 use crate::context::db::CodeGraphDb;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SubgraphTarget {
     pub id: String,
     pub name: String,
@@ -26,6 +27,7 @@ pub struct SubgraphCaller {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SubgraphCallee {
     pub symbol_name: String,
     pub file_path: String,

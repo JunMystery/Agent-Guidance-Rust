@@ -1,5 +1,4 @@
 // AST & Regex Symbol / Edge / Chunk Parsers
-use super::compute_hash;
 
 #[derive(Debug, Clone)]
 pub struct ExtractedSymbol {
@@ -207,7 +206,6 @@ fn extract_name_after(line: &str, prefixes: &[&str], kind: &'static str) -> Opti
 }
 
 // Re-export edge extraction decomposed into edge_parser module
-pub use super::edge_parser::extract_edges_from_content;
 
 /// Chunk content into overlapping sliding windows (e.g. 50 lines with 10 overlap)
 pub fn chunk_code_content(

@@ -85,6 +85,10 @@ pub fn find_project_root(path: &Path) -> PathBuf {
         if check_agent.join(".agent-context").is_dir() && !is_submodule_dir_name(&check_agent) {
             best_agent_root = Some(check_agent.clone());
         }
+        // Never escape the enclosing git repo: stray markers above it must not win.
+        if check_agent.join(".git").exists() {
+            break;
+        }
         if !check_agent.pop() {
             break;
         }

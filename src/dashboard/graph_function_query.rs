@@ -27,6 +27,7 @@ fn make_node(id: String, name: String, kind: String, file: String, s: usize, e: 
         id: id.clone(), label: name.clone(), name, kind, file_path: file.clone(), file,
         start_line: s, end_line: e, loc: e.saturating_sub(s) + 1,
         is_external: ext, scope: scope.to_string(), deg: 0,
+        in_degree: 0, out_degree: 0,
     }
 }
 
@@ -62,12 +63,19 @@ pub fn query_file_functions_data(conn: &Connection, project_path: &Path, target_
                 weight: r.weight, confidence: r.conf, call_line: r.call_line, origin: "ast".to_string(), dashed: false,
             });
         }
-        let mut deg_map: HashMap<String, usize> = HashMap::new();
+        let mut in_map: HashMap<String, usize> = HashMap::new();
+        let mut out_map: HashMap<String, usize> = HashMap::new();
         for e in &edges {
-            *deg_map.entry(e.source.clone()).or_default() += 1;
-            *deg_map.entry(e.target.clone()).or_default() += 1;
+            *out_map.entry(e.source.clone()).or_default() += 1;
+            *in_map.entry(e.target.clone()).or_default() += 1;
         }
-        for (id, node) in node_map.iter_mut() { node.deg = deg_map.get(id).copied().unwrap_or(0); }
+        for (id, node) in node_map.iter_mut() {
+            let in_d = in_map.get(id).copied().unwrap_or(0);
+            let out_d = out_map.get(id).copied().unwrap_or(0);
+            node.in_degree = in_d;
+            node.out_degree = out_d;
+            node.deg = in_d + out_d;
+        }
         let mut nodes: Vec<FunctionGraphNode> = node_map.into_values().collect();
         nodes.sort_by(|a, b| a.file_path.cmp(&b.file_path).then_with(|| a.start_line.cmp(&b.start_line)));
 
@@ -130,13 +138,26 @@ pub fn query_file_functions_data(conn: &Connection, project_path: &Path, target_
         });
     }
 
-    let mut deg_map: HashMap<String, usize> = HashMap::new();
+    let mut in_map: HashMap<String, usize> = HashMap::new();
+    let mut out_map: HashMap<String, usize> = HashMap::new();
     for e in &edges {
-        *deg_map.entry(e.source.clone()).or_default() += 1;
-        *deg_map.entry(e.target.clone()).or_default() += 1;
+        *out_map.entry(e.source.clone()).or_default() += 1;
+        *in_map.entry(e.target.clone()).or_default() += 1;
     }
-    for (id, node) in internal_nodes.iter_mut() { node.deg = deg_map.get(id).copied().unwrap_or(0); }
-    for (id, node) in external_nodes.iter_mut() { node.deg = deg_map.get(id).copied().unwrap_or(0); }
+    for (id, node) in internal_nodes.iter_mut() {
+        let in_d = in_map.get(id).copied().unwrap_or(0);
+        let out_d = out_map.get(id).copied().unwrap_or(0);
+        node.in_degree = in_d;
+        node.out_degree = out_d;
+        node.deg = in_d + out_d;
+    }
+    for (id, node) in external_nodes.iter_mut() {
+        let in_d = in_map.get(id).copied().unwrap_or(0);
+        let out_d = out_map.get(id).copied().unwrap_or(0);
+        node.in_degree = in_d;
+        node.out_degree = out_d;
+        node.deg = in_d + out_d;
+    }
 
     let mut nodes: Vec<FunctionGraphNode> = internal_nodes.into_values().collect();
     nodes.sort_by_key(|n| n.start_line);

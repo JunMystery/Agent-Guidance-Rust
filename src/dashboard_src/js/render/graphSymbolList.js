@@ -148,7 +148,7 @@ export function initGraphSymbolList(container, nodes, onSelectNode) {
             <span style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: #f1f5f9; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(n.label)}</span>
           </div>
           <div style="font-size: 9px; color: #64748b;">
-            ${t('symbol_list.meta', { loc: n.loc || '--', deg: n.deg || 0, inDeg: n.inDeg || 0, outDeg: n.outDeg || 0 })}
+            ${t('symbol_list.meta', { loc: n.loc || '--', deg: n.deg || 0, inDeg: n.inDeg ?? n.in_degree ?? 0, outDeg: n.outDeg ?? n.out_degree ?? 0 })}
           </div>
         </div>
         ${n.isHub ? `<span style="font-size: 9px; color: #f59e0b; background: #f59e0b20; border: 1px solid #f59e0b40; padding: 1px 4px; border-radius: 3px; white-space: nowrap; font-weight: 600;">${t('symbol_list.hub_badge')}</span>` : ''}

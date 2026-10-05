@@ -1,8 +1,6 @@
 use anyhow::Result;
-use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::info;
 
 use crate::mcp::templates::*;
 

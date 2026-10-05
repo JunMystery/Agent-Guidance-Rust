@@ -1,7 +1,6 @@
 use anyhow::Result;
 use rusqlite::{params, Connection, OpenFlags};
 use serde_json::json;
-use std::io::Read;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 

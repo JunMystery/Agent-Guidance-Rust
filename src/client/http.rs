@@ -18,10 +18,6 @@ pub struct RemoteMlClient {
 }
 
 impl RemoteMlClient {
-    pub fn config(&self) -> &ServerConfig {
-        &self.config
-    }
-
     pub fn new(config: &ServerConfig) -> Self {
         let timeout = Duration::from_millis(config.timeout_ms);
         let agent = AgentBuilder::new().timeout(timeout).build();
@@ -187,33 +183,5 @@ impl RemoteMlClient {
         }
 
         Ok(slice_res)
-    }
-
-    pub async fn check_health_async(&self) -> Result<(ServerHealthResponse, Duration)> {
-        let client = self.clone();
-        tokio::task::spawn_blocking(move || client.check_health())
-            .await
-            .map_err(|e| anyhow!("Task execution error: {}", e))?
-    }
-
-    pub async fn get_skill_stats_async(&self) -> Result<SkillStatsResponse> {
-        let client = self.clone();
-        tokio::task::spawn_blocking(move || client.get_skill_stats())
-            .await
-            .map_err(|e| anyhow!("Task execution error: {}", e))?
-    }
-
-    pub async fn search_skills_async(&self, query: String, max_results: usize) -> Result<SkillSearchResponse> {
-        let client = self.clone();
-        tokio::task::spawn_blocking(move || client.search_skills(&query, max_results))
-            .await
-            .map_err(|e| anyhow!("Task execution error: {}", e))?
-    }
-
-    pub async fn slice_skill_async(&self, skill_name: String, prompt: String) -> Result<SkillSliceResponse> {
-        let client = self.clone();
-        tokio::task::spawn_blocking(move || client.slice_skill(&skill_name, &prompt))
-            .await
-            .map_err(|e| anyhow!("Task execution error: {}", e))?
     }
 }

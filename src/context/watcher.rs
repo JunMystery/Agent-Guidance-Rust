@@ -8,6 +8,7 @@ use crate::context::indexer::IncrementalIndexer;
 /// Registry of active watchers — 1 per project
 static WATCHERS: OnceLock<Mutex<HashMap<PathBuf, WatcherHandle>>> = OnceLock::new();
 
+#[allow(dead_code)]
 struct WatcherHandle {
     started_at: Instant,
     active: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -108,6 +109,7 @@ fn watcher_loop(project_path: PathBuf, active: std::sync::Arc<std::sync::atomic:
     }
 }
 
+#[cfg(test)]
 pub fn is_relevant_path(project_root: &Path, path: &Path) -> bool {
     let rel = match path.strip_prefix(project_root) {
         Ok(r) => r.to_string_lossy().to_string(),

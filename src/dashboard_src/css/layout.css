@@ -1,0 +1,288 @@
+/* ============================================================
+   Terminal MVC style Layout from JunMystery.github.io
+   ============================================================ */
+.term-session {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.term-commands {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Syntax elements */
+.term-prompt {
+    color: var(--accent-orange);
+    font-weight: 700;
+}
+
+.term-fn {
+    color: #50fa7b;
+}
+
+.term-kw {
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.term-type {
+    color: var(--accent-purple);
+}
+
+.term-str {
+    color: var(--accent-secondary);
+}
+
+.term-cmt {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Command cards with left border accent */
+.term-cmd-block {
+    position: relative;
+    padding: 0.75rem 0 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--accent-primary);
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+    background: var(--bg-primary);
+    transition: var(--transition);
+}
+
+.term-cmd-block:last-child {
+    margin-bottom: 0;
+}
+
+.term-cmd-block:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(3px);
+}
+
+.term-cmd-block[data-cmd="status"]     { border-left-color: var(--accent-primary); }
+.term-cmd-block[data-cmd="totals"]     { border-left-color: var(--accent-purple); }
+.term-cmd-block[data-cmd="savings"]    { border-left-color: var(--accent-secondary); }
+
+.term-cmd-header {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
+}
+
+.term-cmd-output {
+    padding-left: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.term-output-line {
+    display: flex;
+    margin-bottom: 0.25rem;
+}
+
+.term-output-label {
+    color: var(--text-secondary);
+    width: 150px;
+    flex-shrink: 0;
+}
+
+.term-output-val {
+    color: var(--text-primary);
+}
+
+/* Neofetch Sysinfo Panel */
+.term-sysinfo {
+    flex-shrink: 0;
+    width: 280px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    background: var(--bg-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.sysinfo-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.sysinfo-body {
+    padding: 0.8rem 1rem;
+}
+
+.sysinfo-row {
+    display: flex;
+    gap: 0.5rem;
+    line-height: 1.8;
+}
+
+.sysinfo-key {
+    color: var(--accent-primary);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.sysinfo-val {
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.sysinfo-divider {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 0.6rem 0;
+    opacity: 0.4;
+}
+
+/* ASCII logo wrapper */
+.sysinfo-logo {
+    color: var(--accent-purple);
+    font-size: 9px;
+    line-height: 1.2;
+    margin-bottom: 10px;
+    white-space: pre;
+    font-family: var(--font-mono);
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-family: var(--font-mono);
+}
+
+th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+td {
+    padding: 12px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+tr:hover td {
+    background: var(--bg-tertiary);
+}
+
+.badge {
+    padding: 2px 8px;
+    border-radius: var(--border-radius-sm);
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    font-family: var(--font-mono);
+}
+
+.badge.green {
+    background: rgba(63, 185, 80, 0.1);
+    color: var(--accent-secondary);
+    border-color: rgba(63, 185, 80, 0.3);
+}
+
+.badge.red {
+    background: rgba(255, 51, 51, 0.1);
+    color: #ff3333;
+    border-color: rgba(255, 51, 51, 0.3);
+}
+
+.embed-recent-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.embed-recent-section h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.embed-recent-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.embed-recent-table th {
+    text-align: left;
+    padding: 6px 8px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+.embed-recent-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Token bars list */
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-family: var(--font-mono);
+}
+
+.bar-label {
+    width: 180px;
+    font-size: 12px;
+    text-align: right;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-track {
+    flex: 1;
+    height: 20px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    overflow: hidden;
+    display: flex;
+}
+
+.bar-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    border-radius: var(--border-radius-sm);
+    transition: width .3s;
+}
+
+.bar-fill.opt {
+    background: var(--accent-secondary);
+}
+
+.bar-num {
+    width: 70px;
+    font-size: 12px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    font-weight: 500;
+}
+

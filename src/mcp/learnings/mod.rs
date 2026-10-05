@@ -5,10 +5,12 @@ use tracing::info;
 
 pub mod matching;
 pub use matching::{
-    compute_line_delta, generate_session_diff_summary,
-    get_recent_learnings, get_semantic_relevant_learnings,
-    match_category_keywords, write_handoff_summary,
+    generate_session_diff_summary, get_semantic_relevant_learnings, write_handoff_summary,
 };
+
+#[cfg(test)]
+pub use matching::{compute_line_delta, match_category_keywords};
+#[cfg(test)]
 pub use crate::mcp::state::ServerState;
 
 const MAX_LEARNINGS_FIFO: usize = 30;

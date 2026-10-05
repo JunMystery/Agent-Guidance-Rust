@@ -33,10 +33,6 @@ impl ConfigWatcher {
         self.rx.borrow().clone()
     }
 
-    pub fn subscribe(&self) -> watch::Receiver<Arc<AppConfig>> {
-        self.rx.clone()
-    }
-
     pub fn update(&self, new_config: AppConfig) -> anyhow::Result<()> {
         save_config(&new_config)?;
         let arc_config = Arc::new(new_config);

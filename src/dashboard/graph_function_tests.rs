@@ -12,9 +12,9 @@ fn test_internal_functions_retrieval() {
     let internal: Vec<_> = res.nodes.iter().filter(|n| !n.is_external).collect();
     assert_eq!(internal.len(), 3);
 
-    assert!(internal.iter().any(|n| n.name == "handle_request" && n.scope == "internal"));
-    assert!(internal.iter().any(|n| n.name == "validate_input" && n.scope == "internal"));
-    assert!(internal.iter().any(|n| n.name == "ReqContext" && n.kind == "struct"));
+    assert!(internal.iter().any(|n| n.name == "handle_request" && n.scope == "internal" && n.in_degree == 1 && n.out_degree == 2));
+    assert!(internal.iter().any(|n| n.name == "validate_input" && n.scope == "internal" && n.in_degree == 1 && n.out_degree == 1));
+    assert!(internal.iter().any(|n| n.name == "ReqContext" && n.kind == "struct" && n.in_degree == 0 && n.out_degree == 0));
 }
 
 #[test]

@@ -7,12 +7,6 @@ pub struct ProjectLanguageProfile {
     pub secondary_tech: HashSet<String>,
 }
 
-impl ProjectLanguageProfile {
-    pub fn is_empty(&self) -> bool {
-        self.primary_languages.is_empty() && self.secondary_tech.is_empty()
-    }
-}
-
 pub fn detect_language_profile(files: &[FileEntry], task_prompt: &str) -> ProjectLanguageProfile {
     let mut ext_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 

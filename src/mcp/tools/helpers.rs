@@ -288,6 +288,7 @@ pub fn truncate_chars(s: &str, max_chars: usize) -> &str {
 }
 
 /// Truncate string to at most `max_bytes` without splitting UTF-8 char boundaries.
+#[allow(dead_code)]
 pub fn truncate_bytes_safe(s: &str, max_bytes: usize) -> &str {
     if max_bytes >= s.len() {
         return s;

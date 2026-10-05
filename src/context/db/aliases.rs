@@ -118,21 +118,7 @@ impl CodeGraphDb {
         Ok(())
     }
 
-    pub fn bump_alias(&self, alias_term: &str, resolved_path: &str) -> Result<()> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
-        self.conn.execute(
-            "UPDATE aliases 
-             SET hit_count = hit_count + 1, last_used_at = ?1 
-             WHERE alias_term = ?2 AND resolved_path = ?3",
-            params![now, alias_term.trim(), resolved_path.trim()],
-        )?;
-        Ok(())
-    }
-
+    #[cfg(test)]
     pub fn decay_aliases(&self) -> Result<usize> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)

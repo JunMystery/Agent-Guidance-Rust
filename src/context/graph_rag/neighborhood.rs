@@ -4,6 +4,7 @@ use crate::context::db::CodeGraphDb;
 use super::community::CommunityHierarchy;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct NeighborNode {
     pub id: String,
     pub name: String,
@@ -15,6 +16,7 @@ pub struct NeighborNode {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SymbolNeighborhood {
     pub target_id: String,
     pub name: String,

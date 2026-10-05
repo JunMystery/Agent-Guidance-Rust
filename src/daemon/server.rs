@@ -1,9 +1,9 @@
-use std::sync::atomic::Ordering;
-use std::time::Duration;
 use tracing::{error, info};
+#[cfg(windows)]
+use std::time::Duration;
 
 use super::{
-    ACTIVE_CLIENTS, CLIENT_NOTIFY, acquire_daemon_lock, client_connected, client_disconnected,
+    acquire_daemon_lock, client_connected, client_disconnected,
 };
 use super::handler::handle_mcp_lines;
 

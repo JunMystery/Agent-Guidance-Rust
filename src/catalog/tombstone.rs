@@ -49,22 +49,6 @@ where
     Ok(added)
 }
 
-pub fn remove_tombstone(slug: &str) -> anyhow::Result<bool> {
-    let mut current = load_tombstones();
-    let norm = slug.trim().to_lowercase();
-    if current.remove(&norm) {
-        save_tombstones(&current)?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
-
-pub fn is_tombstoned(slug: &str) -> bool {
-    let current = load_tombstones();
-    current.contains(&slug.trim().to_lowercase())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,9 +20,8 @@ pub mod invalidator;
 pub mod parsers;
 pub mod resolver;
 pub use edge_parser::extract_edges_from_content;
-pub use invalidator::{FileInvalidationReport, invalidate_and_sync_file, is_file_dirty, sync_dirty_files};
 pub use parsers::{
-    CodeChunk, ExtractedEdge, ExtractedSymbol, chunk_code_content,
+    chunk_code_content,
     extract_symbols_from_content,
 };
 

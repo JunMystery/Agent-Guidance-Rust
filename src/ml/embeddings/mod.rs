@@ -13,22 +13,24 @@ pub mod providers;
 pub mod quantized;
 pub mod search;
 
-pub use candle_core::Device;
-pub use crate::catalog::store::SkillItem;
-pub use backend::EmbeddingBackend;
-pub use device::{cosine_similarity, resolve_optimal_device};
-pub use gpu::{GpuSkillMatrix, eager_vram_warmup, gpu_batch_cosine_similarity};
-pub use model::EmbeddingModel;
-pub use providers::{ExecutionProvider, detect_optimal_provider};
-pub use quantized::OnnxQuantizedModel;
+pub use device::cosine_similarity;
+pub use gpu::eager_vram_warmup;
 pub use cache::{
-    cached_model, clear_passage_cache, embed_skills_cache, is_warmup_complete,
-    mark_warmup_complete, spawn_background_auto_warmup, try_cached_model, warmup_cache,
+    spawn_background_auto_warmup, try_cached_model,
 };
 pub use precomputed::{
-    catalog_fingerprint, generate_precomputed_cache, load_passage_cache, save_passage_cache,
+    catalog_fingerprint, generate_precomputed_cache, load_passage_cache,
 };
 pub use search::hybrid_vector_search;
+
+#[cfg(test)]
+pub use candle_core::Device;
+#[cfg(test)]
+pub use device::resolve_optimal_device;
+#[cfg(test)]
+pub use gpu::{GpuSkillMatrix, gpu_batch_cosine_similarity};
+#[cfg(test)]
+pub use cache::{cached_model, is_warmup_complete};
 
 #[cfg(test)]
 #[path = "../embeddings_tests.rs"]

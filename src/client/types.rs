@@ -49,18 +49,6 @@ fn default_max_results() -> Option<usize> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SkillHit {
-    pub name: String,
-    pub score: f32,
-    #[serde(default)]
-    pub title: String,
-    #[serde(default)]
-    pub intent: String,
-    #[serde(default)]
-    pub sections: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SkillSearchHit {
     pub name: String,
     pub score: f32,

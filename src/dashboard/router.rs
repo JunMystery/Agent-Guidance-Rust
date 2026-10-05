@@ -81,6 +81,15 @@ pub(crate) fn handle_dashboard_request(
                 "application/javascript; charset=utf-8",
             );
         }
+        _ if path.starts_with("/css/") => {
+            let rel = path.trim_start_matches("/css/");
+            let asset_path = format!("css/{}", rel);
+            serve_asset(
+                request,
+                &asset_path,
+                "text/css; charset=utf-8",
+            );
+        }
         _ => json_response(request, 404, &json!({"error": "Not found"})),
     }
 }

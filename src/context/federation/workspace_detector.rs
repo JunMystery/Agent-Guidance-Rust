@@ -1,6 +1,6 @@
 //! Automatic monorepo package and multi-workspace detection.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use crate::context::multi_project::LinkedProject;
 
 /// Auto-discovers workspace packages (Cargo, npm/pnpm, Go) under `root`.

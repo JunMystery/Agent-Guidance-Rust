@@ -74,12 +74,6 @@ impl CommunityHierarchy {
         self.communities.iter().filter(|c| c.level == level).collect()
     }
 
-    pub fn find_community_for_entity(&self, entity_id: &str) -> Option<&Community> {
-        self.communities
-            .iter()
-            .find(|c| c.member_entity_ids.iter().any(|id| id == entity_id))
-    }
-
     pub fn find_community_for_file(&self, file_path: &str) -> Option<&Community> {
         let clean = file_path.replace('\\', "/");
         self.communities

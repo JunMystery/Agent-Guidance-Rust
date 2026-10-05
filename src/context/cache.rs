@@ -1,4 +1,3 @@
-use crate::catalog::store::{SkillItem, load_all_skills};
 use crate::context::scanner::{FileEntry, scan_project};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -9,7 +8,6 @@ const CACHE_TTL: Duration = Duration::from_secs(60);
 
 pub struct ProjectSnapshot {
     pub files: Arc<Vec<FileEntry>>,
-    pub skills: Arc<Vec<SkillItem>>,
 }
 
 struct CacheEntry {
@@ -58,7 +56,6 @@ pub fn project_snapshot(root: &Path) -> Arc<ProjectSnapshot> {
 
     let snapshot = Arc::new(ProjectSnapshot {
         files: Arc::new(scan_project(&canonical_root, 8)),
-        skills: Arc::new(load_all_skills(&canonical_root)),
     });
 
     if let Ok(mut guard) = cache.lock() {

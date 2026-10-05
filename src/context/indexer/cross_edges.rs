@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use anyhow::Result;
 use rusqlite::{params, Connection};
@@ -14,6 +14,7 @@ const GENERIC_VERBS: &[&str] = &[
 ];
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct SymbolMeta {
     pub id: String,
     pub name: String,

@@ -52,13 +52,3 @@ pub fn run_worker_server(bind_addr: &str, port: u16, api_key: String) -> Result<
     }
     Ok(())
 }
-
-pub fn spawn_worker_background(bind_addr: String, port: u16, api_key: String) {
-    let _ = std::thread::Builder::new()
-        .name("ml-worker-background".to_string())
-        .spawn(move || {
-            if let Err(e) = run_worker_server(&bind_addr, port, api_key) {
-                tracing::warn!("ML Worker background server exited: {}", e);
-            }
-        });
-}

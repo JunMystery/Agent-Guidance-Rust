@@ -13,12 +13,10 @@ pub mod types;
 pub mod walker;
 pub mod zoom;
 
-pub use dataflow_def::{CallArgDetail, DataFlowRecord, FormalParam};
 pub use dataflow_walker::extract_dataflow;
 pub use engine::AstEngine;
-pub use trait_def::{TraitBinding, TraitSpec};
 pub use trait_walker::extract_trait_bindings;
-pub use types::{AstCall, AstLanguage, AstSymbol};
+pub use types::AstLanguage;
 pub use zoom::ZoomSliceResult;
 
 #[cfg(test)]

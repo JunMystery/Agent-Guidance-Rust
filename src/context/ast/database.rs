@@ -13,10 +13,6 @@ static SQL_REFERENCES_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)references\s+([a-zA-Z0-9_"]+)\s*\("#).unwrap()
 });
 
-static SQL_JOIN_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)(?:join|from)\s+([a-zA-Z0-9_"]+)"#).unwrap()
-});
-
 // Prisma Regexes
 static PRISMA_MODEL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^\s*(model|enum|datasource|generator)\s+([A-Za-z0-9_]+)\s*\{"#).unwrap()

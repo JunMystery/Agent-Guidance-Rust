@@ -233,17 +233,6 @@ pub fn clear_mcp_logs(db_path: &PathBuf, level_filter: Option<&str>) -> Result<u
     Ok(deleted)
 }
 
-pub fn prune_expired_mcp_logs(db_path: &PathBuf, retention_days: u32) -> Result<usize> {
-    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let s = 86_400i64;
-    let deleted = conn.execute(
-        "DELETE FROM mcp_logs WHERE (level = 'CRASH' AND timestamp < ?1) OR (level = 'ERROR' AND timestamp < ?2) OR (level = 'WARN' AND timestamp < ?3) OR (level = 'INFO' AND timestamp < ?4)",
-        params![now - (retention_days.max(30) as i64 * s), now - (retention_days.max(14) as i64 * s), now - (retention_days.min(7) as i64 * s), now - (retention_days.min(3) as i64 * s)],
-    )?;
-    Ok(deleted)
-}
-
 fn format_timestamp(ts: i64) -> String {
     let diff = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0) - ts;
     if diff < 60 { format!("{}s ago", diff.max(0)) }

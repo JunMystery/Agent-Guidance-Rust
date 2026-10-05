@@ -13,6 +13,7 @@ pub const UBIQUITOUS_THRESHOLD_RATIO: f64 = 0.30;
 pub const UBIQUITOUS_PENALTY_MULTIPLIER: f64 = 0.25;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TermDocFreq {
     pub term: String,
     pub doc_count: usize,
