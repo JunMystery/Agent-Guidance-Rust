@@ -42,9 +42,9 @@ task_pipeline(task="Add JWT auth to Express API", project_path="E:/Github/MyApp"
 
 ### 2. `select_skills` -- Inject Selected Skills
 
-Confirm which proposed or catalog skills to load into the active conversation context. Injects token-optimized markdown with fast passage slicing and dynamic token measurement. Pass skill names (e.g. `['android-clean-architecture']`), or pass an empty array `[]` to skip all.
+Confirm which proposed or catalog skills to load into the active conversation context. Injects token-optimized markdown with smart passage preservation and dynamic token measurement. Standard skills under 250 LOC preserve their full compressed content without destructive slicing, while larger reference skills receive vector-ranked section slices (up to 5 sections, ~80% token savings) with YAML frontmatter and hollow parent headers filtered out. Pass skill names (e.g. `['android-clean-architecture']`), or pass an empty array `[]` to skip all.
 
-In **Remote Client Mode**, `select_skills` transparently forwards the active task from `task_pipeline` to the Remote ML Worker (`POST /api/skills/slice`), receiving vector-ranked surgical section slices (30–60 lines, ~350 tokens) to slash token consumption by ~80% with local SQLite LRU caching in `usage.db`.
+In **Remote Client Mode**, `select_skills` transparently forwards the active task from `task_pipeline` to the Remote ML Worker (`POST /api/skills/slice`), receiving vector-ranked surgical section slices with local SQLite LRU caching in `usage.db`.
 
 ```python
 select_skills(

@@ -112,7 +112,7 @@ pub(crate) fn handle(
             if resolved_content.is_none() {
                 if let Some((canonical_name, content, tag_str)) = resolve_skill(raw_req, &proposals, &all_skills, &proj_path) {
                     let processed = if !task_to_use.is_empty() && !content.is_empty() {
-                        crate::catalog::slicing::slice_skill_markdown(&content, task_to_use, 3)
+                        crate::catalog::slicing::slice_skill_markdown(&content, task_to_use, 5)
                     } else if !content.is_empty() {
                         compress_markdown(&content)
                     } else {

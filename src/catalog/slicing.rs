@@ -7,31 +7,69 @@ pub struct MarkdownSection {
     pub content: String,
 }
 
+/// Strips YAML frontmatter (`---\n...\n---`) from the beginning of markdown content.
+pub fn strip_yaml_frontmatter(md: &str) -> &str {
+    let trimmed = md.trim_start();
+    if let Some(after_first) = trimmed.strip_prefix("---") {
+        for (idx, _) in after_first.match_indices("---") {
+            let before = &after_first[..idx];
+            let after = &after_first[idx + 3..];
+            let valid_before = before.ends_with('\n') || before.ends_with("\r\n") || idx == 0;
+            let valid_after = after.starts_with('\n') || after.starts_with("\r\n") || after.is_empty();
+            if valid_before && valid_after {
+                return after.trim_start_matches(|c| c == '\r' || c == '\n');
+            }
+        }
+    }
+    md
+}
+
 /// Splits a Markdown document into logical sections based on headers (`#`, `##`, `###`).
 pub fn split_markdown_into_sections(md: &str) -> Vec<MarkdownSection> {
+    let clean_md = strip_yaml_frontmatter(md);
     let mut sections = Vec::new();
-    let mut current_title = "Overview".to_string();
-    let mut current_lines = Vec::new();
+    let mut current_title = String::new();
+    let mut current_lines: Vec<&str> = Vec::new();
 
-    for line in md.lines() {
+    for line in clean_md.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("# ") || trimmed.starts_with("## ") || trimmed.starts_with("### ") {
-            if !current_lines.is_empty() {
+            let has_content = current_lines.iter().any(|l| !l.trim().is_empty());
+            let header_text = trimmed.trim_start_matches('#').trim().to_string();
+
+            if has_content {
+                let title = if current_title.is_empty() {
+                    "Overview".to_string()
+                } else {
+                    current_title
+                };
                 sections.push(MarkdownSection {
-                    title: current_title.clone(),
+                    title,
                     content: current_lines.join("\n"),
                 });
                 current_lines.clear();
+                current_title = header_text;
+            } else {
+                current_lines.clear();
+                if current_title.is_empty() {
+                    current_title = header_text;
+                } else {
+                    current_title = format!("{} - {}", current_title, header_text);
+                }
             }
-            current_title = trimmed.trim_start_matches('#').trim().to_string();
         } else {
             current_lines.push(line);
         }
     }
 
-    if !current_lines.is_empty() {
+    if current_lines.iter().any(|l| !l.trim().is_empty()) {
+        let title = if current_title.is_empty() {
+            "Overview".to_string()
+        } else {
+            current_title
+        };
         sections.push(MarkdownSection {
-            title: current_title,
+            title,
             content: current_lines.join("\n"),
         });
     }
@@ -42,13 +80,22 @@ pub fn split_markdown_into_sections(md: &str) -> Vec<MarkdownSection> {
 /// Slices a raw Markdown skill document by task context using fast token-overlap and title relevance scoring.
 /// Returns the top-k most relevant sections compressed to minimize token consumption (< 1ms).
 pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
-    if task.trim().is_empty() {
-        return compress_markdown(raw_md);
+    let clean_md = strip_yaml_frontmatter(raw_md);
+
+    // If skill is compact (<= 250 LOC), preserve full instructions without destructive slicing.
+    if clean_md.lines().count() <= 250 || task.trim().is_empty() {
+        return compress_markdown(clean_md);
     }
 
-    let sections = split_markdown_into_sections(raw_md);
-    if sections.len() <= top_k {
-        return compress_markdown(raw_md);
+    let sections: Vec<MarkdownSection> = split_markdown_into_sections(clean_md)
+        .into_iter()
+        .filter(|s| !s.content.trim().is_empty())
+        .collect();
+
+    let effective_top_k = top_k.max(5);
+
+    if sections.len() <= effective_top_k {
+        return compress_markdown(clean_md);
     }
 
     // Extract significant keywords from task (len >= 3, excluding common stop words)
@@ -76,7 +123,7 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
     };
 
     if keywords.is_empty() {
-        let borrowed: Vec<&MarkdownSection> = sections.iter().take(top_k).collect();
+        let borrowed: Vec<&MarkdownSection> = sections.iter().take(effective_top_k).collect();
         return accumulate_sections(&borrowed);
     }
 
@@ -85,6 +132,10 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
         let title_lower = sec.title.to_lowercase();
         let content_lower = sec.content.to_lowercase();
         let mut score = 0.0f32;
+
+        if title_lower.contains("overview") || title_lower.contains("quick start") || title_lower.contains("key rules") {
+            score += 0.5;
+        }
 
         for kw in &keywords {
             if title_lower.contains(kw) {
@@ -103,10 +154,10 @@ pub fn slice_skill_markdown(raw_md: &str, task: &str, top_k: usize) -> String {
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
     if scored.is_empty() {
-        let borrowed: Vec<&MarkdownSection> = sections.iter().take(top_k).collect();
+        let borrowed: Vec<&MarkdownSection> = sections.iter().take(effective_top_k).collect();
         accumulate_sections(&borrowed)
     } else {
-        let borrowed: Vec<&MarkdownSection> = scored.into_iter().take(top_k).map(|(_, s)| s).collect();
+        let borrowed: Vec<&MarkdownSection> = scored.into_iter().take(effective_top_k).map(|(_, s)| s).collect();
         accumulate_sections(&borrowed)
     }
 }
@@ -169,5 +220,33 @@ mod tests {
         let sliced = slice_skill_markdown(md, "target", 1);
         assert!(sliced.contains("Core Logic"));
         assert!(!sliced.contains("Relevance:"));
+    }
+
+    #[test]
+    fn test_strip_yaml_frontmatter() {
+        let raw = "---\nname: my-skill\ndescription: A test skill\n---\n# Real Title\nBody content";
+        let stripped = strip_yaml_frontmatter(raw);
+        assert_eq!(stripped, "# Real Title\nBody content");
+
+        let no_frontmatter = "# Just Title\nBody";
+        assert_eq!(strip_yaml_frontmatter(no_frontmatter), no_frontmatter);
+    }
+
+    #[test]
+    fn test_no_hollow_sections() {
+        let md = "---\nname: test\n---\n# Parent\n\n## Child\nChild body text";
+        let sections = split_markdown_into_sections(md);
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].title, "Parent - Child");
+        assert!(sections[0].content.contains("Child body text"));
+    }
+
+    #[test]
+    fn test_compact_skill_preserves_full_content() {
+        let md = "---\nname: inc\n---\n# Incremental Implementation\n\n## Overview\nBuild slices.\n\n## Rules\nRule 0: Simplicity.";
+        let result = slice_skill_markdown(md, "implement feature", 2);
+        assert!(result.contains("Build slices."));
+        assert!(result.contains("Rule 0: Simplicity."));
+        assert!(!result.contains("name: inc"));
     }
 }

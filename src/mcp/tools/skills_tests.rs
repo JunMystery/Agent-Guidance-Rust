@@ -196,3 +196,24 @@ fn test_guidance_search_no_skill_when_no_action_matches() {
     assert!(!text.contains("ask_question"), "Should not ask question when no skills match: {}", text);
     assert!(state.pending_skill_proposals.is_empty(), "pending_skill_proposals should be empty");
 }
+
+#[test]
+fn test_select_skills_incremental_implementation_delivers_instructions() {
+    let mut state = ServerState::new();
+    let res = handle_tool_call(
+        "select_skills",
+        json!({
+            "skills": ["incremental-implementation"],
+            "user_confirmed": true,
+            "task": "implement feature across multiple files"
+        }),
+        &mut state,
+    );
+    assert!(res.is_ok(), "select_skills failed: {:?}", res);
+    let text = res.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("### Skill: incremental-implementation"));
+    assert!(text.contains("Rule 0: Simplicity First"), "Must contain rule 0: {}", text);
+    assert!(text.contains("The Increment Cycle"), "Must contain increment cycle: {}", text);
+    assert!(text.contains("Increment Checklist"), "Must contain increment checklist: {}", text);
+    assert!(!text.contains("#### Incremental Implementation\n---"), "Must not have hollow header");
+}

@@ -1,6 +1,6 @@
 # 🦀 Agent Guidance MCP Server
 
-[![Version](https://img.shields.io/badge/Version-v1.8.5-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/Version-v1.8.6-blue.svg)](Cargo.toml)
 [![Rust](https://img.shields.io/badge/Language-Rust%202024-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
@@ -111,6 +111,8 @@ AGENT GUIDANCE SURGICAL RAG SLICING:
 🚀 ~83.3% CONTEXT SAVED PER SKILL CALL | < 0.2ms In-Memory Binary AGV1/AGS1
 ```
 
+- **Full Guidance for Standard Skills ($\le 250$ LOC)**: Compact skills preserve complete instructions, checklists, and code patterns without destructive slicing.
+- **Surgical Slicing for Reference Skills**: Large skill catalogs (> 250 LOC) are sliced to top 5 vector-ranked sections with YAML frontmatter and hollow parent headers filtered out.
 - **In-Memory Binary Runtime (`AGV1` & `AGS1`)**: Zero disk reads or live markdown parsing during queries.
 - **HTTP 304 Zero-Payload Caching**: Returns empty `304 Not Modified` when catalog ETag matches, cutting network round-trips to `<0.2 ms`.
 - **Local SQLite LRU Cache**: Repeated skill selections resolve locally from disk in `<1 ms`.
@@ -167,7 +169,7 @@ Agent Guidance forces autonomous agents to follow an enterprise engineering life
 
 ---
 
-## 🌐 Dual-Role Topology (v1.8.3)
+## 🌐 Dual-Role Topology (v1.8.6)
 
 Split your AI coding workloads to fit your development environment:
 
@@ -239,7 +241,7 @@ Daemon & Maintenance:
 | Tool Name | Role / Action | Key Capabilities |
 | :--- | :--- | :--- |
 | **`task_pipeline`** | **Entrypoint Orchestrator** | CALL FIRST. Unlocks priority gate, detects architecture, injects memorized learnings, and synthesizes upfront modular blueprints (<300 LOC mandate). |
-| **`select_skills`** | **Semantic Skill Loader** | Delivers vector-ranked surgical section slices (30–60 lines, ~350 tokens, ~80% token savings), records usage analytics, and injects language safety micro-rules. |
+| **`select_skills`** | **Semantic Skill Loader** | Delivers full instructions for standard skills ($\le 250$ LOC) and vector-ranked section slices for large reference skills (up to 5 sections, ~80% token savings), records usage analytics, and injects language safety micro-rules. |
 | **`workflow_gate`** | **Stage & Impact Guard** | Manages stage transitions (`Context` $\rightarrow$ `Plan` $\rightarrow$ `Build` $\rightarrow$ `Test` $\rightarrow$ `Fix` $\rightarrow$ `Review`), enforces 300 LOC hard ceiling, blocks compound plural containers, and controls fix circuit breakers. |
 | **`project_context`** | **GraphRAG & AST Search** | Hierarchical Leiden GraphRAG (`drift`, `global`, `local`), Subgraph Bundling (<250 LOC definition + 1-hop callers/callees), intra-procedural data flow, AST skeletonization, and 6-phase instant cascade (<100ms). |
 | **`guidance`** | **Standards & Skill Catalog** | 2-stage Candle BERT vector search + Cross-Encoder reranking over 279 embedded skills, pre-code architecture checklists, and empirical verification contracts. |
