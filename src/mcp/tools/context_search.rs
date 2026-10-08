@@ -82,8 +82,18 @@ pub(crate) fn handle_search(
         }
     }
 
-    // Auto-Learn: learn top result if resolved from non-alias source
-    if !results.is_empty() && source != "alias_cache" && !source.starts_with("linked_") {
+    // Auto-Learn: learn top result only if natural language multi-word conceptual query
+    let is_code_syntax = query.chars().any(|c| matches!(c, '@' | '(' | ')' | '{' | '}' | '[' | ']' | ';' | ':' | '<' | '>' | '=' | '.' | '/' | '\\' | '"' | '\'' | '!' | '$' | '%' | '^' | '&' | '*' | '+' | '~' | '`'));
+    let word_count = query.split_whitespace().count();
+    let can_auto_learn = !results.is_empty()
+        && source != "alias_cache"
+        && !source.starts_with("linked_")
+        && detected_intent != crate::context::search::SearchIntent::Logic
+        && !is_code_syntax
+        && word_count >= 2
+        && query.trim().len() >= 4;
+
+    if can_auto_learn {
         if let Some(ref db) = db_opt {
             let first_line = &results[0];
             if let Some(path_part) = first_line.strip_prefix("- ") {

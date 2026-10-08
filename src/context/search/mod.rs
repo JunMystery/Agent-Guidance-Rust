@@ -60,46 +60,55 @@ where
     let term_weights = analyze_query_terms(&db.conn, query);
     let ubiquitous_factor = compute_query_downweight_factor(&term_weights);
 
-    // 1. Alias cache lookup (Instant, highest confidence)
-    if let Ok(aliases) = db.lookup_aliases(query, limit) {
-        if !aliases.is_empty() {
-            let hits: Vec<RankedResult> = aliases
-                .into_iter()
-                .map(|a| {
-                    let score = calculate_hit_score(
-                        &a.resolved_path,
-                        a.confidence * 2.0,
-                        query,
-                        intent,
-                        ubiquitous_factor,
-                    );
-                    RankedResult {
-                        path: a.resolved_path,
-                        name: a.resolved_symbol.unwrap_or_else(|| "—".to_string()),
-                        line: a.resolved_line.unwrap_or(1),
-                        end_line: None,
-                        score,
-                        source: "alias_cache",
-                        snippet: None,
-                    }
-                })
-                .collect();
+    let mut candidate_hits = Vec::new();
+    let mut primary_source = "symbol_fts";
 
-            let sorted = sort_and_dedup_results(hits, limit);
-            if !sorted.is_empty() {
-                return SearchExecutionResult {
-                    results: sorted,
-                    intent,
-                    source: "alias_cache",
-                    term_weights,
-                    ubiquitous_factor,
-                };
+    // 1. Alias cache lookup (Instant, highest confidence for non-code queries)
+    let is_code_query = query.chars().any(|c| {
+        matches!(c, '@' | '(' | ')' | '{' | '}' | '[' | ']' | ';' | ':' | '<' | '>' | '=' | '/' | '\\' | '"' | '\'' | '`' | '.')
+    }) || query.contains("::") || query.contains("->");
+
+    if !is_code_query {
+        if let Ok(aliases) = db.lookup_aliases(query, limit) {
+            if !aliases.is_empty() {
+                let hits: Vec<RankedResult> = aliases
+                    .into_iter()
+                    .map(|a| {
+                        let score = calculate_hit_score(
+                            &a.resolved_path,
+                            a.confidence * 2.0,
+                            query,
+                            intent,
+                            ubiquitous_factor,
+                        );
+                        RankedResult {
+                            path: a.resolved_path,
+                            name: a.resolved_symbol.unwrap_or_else(|| "—".to_string()),
+                            line: a.resolved_line.unwrap_or(1),
+                            end_line: None,
+                            score,
+                            source: "alias_cache",
+                            snippet: None,
+                        }
+                    })
+                    .collect();
+
+                let sorted = sort_and_dedup_results(hits, limit);
+                if sorted.len() >= limit && intent != SearchIntent::Logic {
+                    return SearchExecutionResult {
+                        results: sorted,
+                        intent,
+                        source: "alias_cache",
+                        term_weights,
+                        ubiquitous_factor,
+                    };
+                } else if !sorted.is_empty() {
+                    primary_source = "alias_cache";
+                    candidate_hits.extend(sorted);
+                }
             }
         }
     }
-
-    let mut candidate_hits = Vec::new();
-    let mut primary_source = "symbol_fts";
 
     // 2. Symbols FTS with BM25 ranking
     let sym_results = db.search_symbols(query, limit * 2)
@@ -116,6 +125,9 @@ where
 
     if let Ok(syms) = sym_results {
         if !syms.is_empty() {
+            if candidate_hits.is_empty() {
+                primary_source = "symbol_fts";
+            }
             for (idx, (path, name, line)) in syms.into_iter().enumerate() {
                 let raw_score = 1.0 / (1.0 + idx as f64 * 0.1);
                 let score = calculate_hit_score(&path, raw_score, query, intent, ubiquitous_factor);
@@ -133,7 +145,8 @@ where
     }
 
     // 3. Content FTS5 with BM25 ranking (Fast lexical fallback before neural embedding)
-    if candidate_hits.is_empty() {
+    let has_symbol_hits = candidate_hits.iter().any(|r| r.source == "symbol_fts");
+    if candidate_hits.is_empty() || (!has_symbol_hits && candidate_hits.len() < limit) {
         let content_res = db.search_content_fts(query, limit * 2)
             .or_else(|_| Ok(Vec::new()))
             .and_then(|res| {
@@ -148,7 +161,9 @@ where
 
         if let Ok(content_hits) = content_res {
             if !content_hits.is_empty() {
-                primary_source = "content_fts";
+                if candidate_hits.is_empty() {
+                    primary_source = "content_fts";
+                }
                 for (idx, (path, start, end, snip)) in content_hits.into_iter().enumerate() {
                     let raw_score = 0.9 / (1.0 + idx as f64 * 0.1);
                     let score = calculate_hit_score(&path, raw_score, query, intent, ubiquitous_factor);

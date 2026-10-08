@@ -62,12 +62,14 @@ impl CodeGraphDb {
         let mut stmt = self.conn.prepare(
             "SELECT resolved_path, resolved_symbol, resolved_line, confidence, hit_count
              FROM aliases
-             WHERE alias_term LIKE ? OR ? LIKE ('%' || alias_term || '%')
+             WHERE alias_term = ? COLLATE NOCASE
+                OR (length(?) >= 3 AND alias_term LIKE ?)
+                OR (instr(alias_term, ' ') > 0 AND length(alias_term) >= 5 AND ? LIKE ('%' || alias_term || '%'))
              ORDER BY confidence DESC, hit_count DESC, last_used_at DESC
              LIMIT ?",
         )?;
 
-        let rows = stmt.query_map(params![pattern, trimmed, limit as i64], |row| {
+        let rows = stmt.query_map(params![trimmed, trimmed, pattern, trimmed, limit as i64], |row| {
             Ok(AliasResult {
                 resolved_path: row.get(0)?,
                 resolved_symbol: row.get(1)?,

@@ -166,3 +166,45 @@ fn test_execute_ranked_search_end_to_end() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn test_alias_no_reverse_substring_false_positive() {
+    use crate::context::db::CodeGraphDb;
+
+    let temp_dir = std::env::temp_dir().join(format!("test_alias_reverse_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let _ = std::fs::create_dir_all(&temp_dir);
+    let db = CodeGraphDb::open(&temp_dir.join("test.db")).unwrap();
+
+    db.upsert_alias("package", "app/Instrumented.kt", None, None).unwrap();
+
+    // Query containing 'package' as substring must NOT match alias 'package'
+    let hits = db.lookup_aliases("package com.example.project_beta", 5).unwrap();
+    assert!(hits.is_empty(), "Reverse substring match should be prohibited");
+
+    // Exact match must still work
+    let exact = db.lookup_aliases("package", 5).unwrap();
+    assert_eq!(exact.len(), 1);
+    assert_eq!(exact[0].resolved_path, "app/Instrumented.kt");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_execute_ranked_search_bypasses_alias_on_code_query() {
+    use super::execute_ranked_search;
+    use crate::context::db::CodeGraphDb;
+
+    let temp_dir = std::env::temp_dir().join(format!("test_code_bypass_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let _ = std::fs::create_dir_all(&temp_dir);
+    let db = CodeGraphDb::open(&temp_dir.join("test.db")).unwrap();
+
+    db.upsert_alias("@Composable", "app/FalseMatch.kt", None, None).unwrap();
+    db.upsert_file("app/RealComponent.kt", "h1", 100, 0).unwrap();
+    db.insert_symbol_full("s1", "MyButton", "function", "app/RealComponent.kt", None, 10, 20, Some("@Composable fun MyButton()"), Some("kotlin"), None, None).unwrap();
+
+    // Searching '@Composable' has code punctuation '@' and must not return alias_cache
+    let res = execute_ranked_search(&db, "@Composable", None, 5, |_| None);
+    assert_ne!(res.source, "alias_cache", "Code queries must not short-circuit via alias cache");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

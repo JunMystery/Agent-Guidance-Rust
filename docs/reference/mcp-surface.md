@@ -146,7 +146,7 @@ project_context(
 
 | Operation | Required Args | Description |
 |---|---|---|
-| `search` | `query` | 6-Phase Instant Cascade (<100ms): Alias Cache (<1ms) → Symbol FTS5 (<5ms) → Symbol Vectors (<50ms) → Content FTS5 (<5ms) → RAG Content Vectors (<100ms) → Linked Sibling Projects. Top matches auto-cached to alias index. |
+| `search` | `query` | 6-Phase Instant Cascade (<100ms): Alias Cache (<1ms) → Symbol FTS5 (<5ms) → Content FTS5 (<5ms) → Symbol Vectors (<50ms) → RAG Content Vectors (<100ms) → Linked Sibling Projects. Blends multi-result hits across cascade, bypasses alias cache short-circuiting on code syntax queries, and restricts auto-learning to natural multi-word phrases. |
 | `subgraph_bundle` | `target_symbol` (or `query` / `symbol`) | Single-turn multi-file context pack: Target symbol definition + 1-hop caller snippets + 1-hop callee snippets under token budget (default 250 LOC, clamped 50..=500). Single-pass 300-char line truncation and path normalization across OSes. (Alias: `context_bundle`). |
 | `tree` | -- | Repository directory tree scan. Accepts `max_depth` (default: 3, range: 1..=5). |
 | `read` | `relative_path` | Bounded file read with 300 LOC cap. Auto-skeletonizes files > 300 LOC unless line slice or `target_symbol` specified. Supports `start_line`/`end_line` slicing, `view_mode="zoom"` or `"slice"` (folds sibling function bodies). |
